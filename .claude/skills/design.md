@@ -1,6 +1,6 @@
 ---
 name: design-architecture
-description: 架构设计：组件结构→数据流→IPC/状态→技术决策→产出设计文档
+description: Design architecture: component tree, data flow, IPC contract, state design, tech decisions
 ---
 
 # 架构设计

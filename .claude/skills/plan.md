@@ -1,6 +1,6 @@
 ---
 name: write-plan
-description: 编写实现计划：依赖排序→垂直切片→精确任务（文件+操作+验证命令）→无占位符
+description: Write implementation plan: dependency order, vertical slices, precise tasks with file paths and verification commands
 ---
 
 # 编写实现计划
@@ -11,7 +11,7 @@ description: 编写实现计划：依赖排序→垂直切片→精确任务（�
 
 计划是**执行指令**——告诉实施者改哪个文件、做什么操作、如何验证。不是教程，不写实现代码。
 
-- 任务粒度：2-5 分钟可完成
+- 任务粒度：10-20 分钟可完成
 - 每个任务只改一个逻辑点
 - 按依赖排序——先底层后上层
 - 垂直切片优先——先交付端到端路径

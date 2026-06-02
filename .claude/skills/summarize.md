@@ -1,6 +1,6 @@
 ---
 name: summarize-changes
-description: 变更总结：改了什么→没改什么→风险→验证→下一步
+description: Summarize changes: what changed, what didn't, risks, verification, next steps
 ---
 
 # 变更总结
