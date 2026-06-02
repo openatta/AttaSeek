@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+out/
+build/
+
+# Electron builder output
+release/
+
+# Vite
+.vite/
+*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test
+coverage/
+test-results/
+playwright-report/
+
+# SQLite databases (runtime data)
+*.sqlite
+*.sqlite3
+*.db
+
+# Artifacts (user-generated)
+artifacts/
+
+# Temp
+tmp/
+temp/

@@ -1,0 +1,25 @@
+{
+  "skills": {
+    "analyze-requirements": {
+      "path": ".claude/skills/analyze.md"
+    },
+    "design-architecture": {
+      "path": ".claude/skills/design.md"
+    },
+    "write-plan": {
+      "path": ".claude/skills/plan.md"
+    },
+    "execute-plan": {
+      "path": ".claude/skills/implement.md"
+    },
+    "test-driven-development": {
+      "path": ".claude/skills/test.md"
+    },
+    "code-review": {
+      "path": ".claude/skills/review.md"
+    },
+    "summarize-changes": {
+      "path": ".claude/skills/summarize.md"
+    }
+  }
+}
