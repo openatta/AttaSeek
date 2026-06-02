@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+/* ── Design tokens ─────────────────────────────────────────────── */
+:root {
+  --brand-primary: #3b82f6;
+  --brand-primary-hover: #2563eb;
+  --activity-bar-width: 48px;
+  --sidebar-width: 260px;
+  --sidebar-min-width: 200px;
+  --sidebar-max-width: 400px;
+}
+
+/* ── Base resets ───────────────────────────────────────────────── */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Scrollbar styling ─────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ── macOS traffic lights spacing ──────────────────────────────── */
+/* When titleBarStyle is hiddenInset, macOS renders traffic lights
+   in the top-left corner. We offset content to sit below them. */
+.traffic-lights-spacer {
+  height: 28px; /* traffic lights vertical center on macOS */
+  -webkit-app-region: drag;
+}
