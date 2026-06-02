@@ -4,7 +4,7 @@ import Composer from './Composer'
 
 export default function Conversation() {
   return (
-    <div className="flex flex-col flex-1 min-w-0 border-r border-neutral-800">
+    <div className="flex flex-col flex-1 min-w-0">
       <SessionHeader />
       <MessageFlow />
       <Composer />

@@ -8,20 +8,22 @@ describe('SessionHeader', () => {
     expect(screen.getByText('New Session')).toBeInTheDocument()
   })
 
-  it('should display a model selector', () => {
+  it('should display a context usage percentage', () => {
     render(<SessionHeader />)
-    expect(screen.getByText(/Opus/)).toBeInTheDocument()
+    expect(screen.getByText('0%')).toBeInTheDocument()
   })
 
-  it('should display a permission mode selector', () => {
+  it('should render three action buttons', () => {
     render(<SessionHeader />)
-    expect(screen.getByText(/Auto/)).toBeInTheDocument()
+    expect(screen.getByLabelText('应用面板')).toBeInTheDocument()
+    expect(screen.getByLabelText('环境信息')).toBeInTheDocument()
+    expect(screen.getByLabelText('AI 输出区域')).toBeInTheDocument()
   })
 
-  it('should render app shortcut buttons (Terminal, Diff, Browser)', () => {
-    render(<SessionHeader />)
-    const buttons = screen.getAllByRole('button')
-    // Should have at least the 3 app buttons
-    expect(buttons.length).toBeGreaterThanOrEqual(3)
+  it('should have bottom border at 40px height', () => {
+    const { container } = render(<SessionHeader />)
+    const header = container.firstChild as HTMLElement
+    expect(header.className).toContain('h-[40px]')
+    expect(header.className).toContain('border-b')
   })
 })

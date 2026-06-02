@@ -4,7 +4,8 @@ import ActivityBar from '../components/ActivityBar/ActivityBar'
 import TitleBar from '../components/TitleBar/TitleBar'
 import Sidebar from '../components/Sidebar/Sidebar'
 import Conversation from '../components/Conversation/Conversation'
-import Artifact from '../components/Artifact/Artifact'
+import Settings from '../components/Settings/Settings'
+import OutputArea from '../components/OutputArea/OutputArea'
 
 export default function Shell() {
   const [activeActivity] = useAtom(activeActivityAtom)
@@ -23,13 +24,15 @@ export default function Shell() {
         <Sidebar activity={activeActivity} />
       </div>
 
-      {/* Main Canvas — flex-grow, split into Conversation + Artifact */}
-      <div className="flex flex-1 min-w-0">
-        {/* Conversation panel */}
-        <Conversation />
+      {/* Main Canvas */}
+      <div className="flex flex-col flex-1 min-w-0">
+        {/* Conversation + Settings area */}
+        <div className="flex-1 flex min-h-0">
+          {activeActivity === 'settings' ? <Settings /> : <Conversation />}
+        </div>
 
-        {/* Artifact panel */}
-        <Artifact />
+        {/* AI Output area (toggleable) */}
+        <OutputArea />
       </div>
     </div>
   )

@@ -16,6 +16,7 @@ describe('Shell', () => {
     renderShell()
     expect(screen.getByLabelText('Home')).toBeInTheDocument()
     expect(screen.getByLabelText('Settings')).toBeInTheDocument()
+    expect(screen.getByLabelText('Chats')).toBeInTheDocument()
   })
 
   it('should render the sidebar heading with the default activity', () => {
@@ -34,25 +35,23 @@ describe('Shell', () => {
     expect(screen.getByText(/@file/)).toBeInTheDocument()
   })
 
-  it('should render the Artifact empty state', () => {
+  it('should render OutputArea terminal tab', () => {
     renderShell()
-    expect(screen.getByText('No files open')).toBeInTheDocument()
+    expect(screen.getByText('Terminal')).toBeInTheDocument()
   })
 
-  it('should switch sidebar content when ActivityBar item is clicked', () => {
+  it('should render Settings when Settings ActivityBar item is clicked', () => {
     renderShell()
-    // Click settings in ActivityBar
     fireEvent.click(screen.getByLabelText('Settings'))
-    // Sidebar should now show settings
-    expect(screen.getByText('settings')).toBeInTheDocument()
+    // Sidebar should show Settings section, canvas shows Settings
+    expect(screen.getByText('Settings')).toBeInTheDocument()
   })
 
   it('should render four distinct layout regions', () => {
     renderShell()
-    // ActivityBar, Sidebar (title + heading), Conversation (header + composer), Artifact
-    expect(screen.getByLabelText('Home')).toBeInTheDocument()        // ActivityBar
-    expect(screen.getByText('chat')).toBeInTheDocument()             // Sidebar heading
-    expect(screen.getByText('New Session')).toBeInTheDocument()      // Conversation: SessionHeader
-    expect(screen.getByText('No files open')).toBeInTheDocument()     // Artifact
+    // ActivityBar, Sidebar (heading), Conversation (header + composer), OutputArea
+    expect(screen.getByLabelText('Home')).toBeInTheDocument() // ActivityBar
+    expect(screen.getByText('chat')).toBeInTheDocument() // Sidebar heading
+    expect(screen.getByText('New Session')).toBeInTheDocument() // SessionHeader
   })
 })
