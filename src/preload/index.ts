@@ -9,6 +9,18 @@ const api = {
   isWindows: process.platform === 'win32',
   isLinux: process.platform === 'linux',
 
+  theme: {
+    get: (): Promise<{ theme: string }> => ipcRenderer.invoke('theme:get'),
+    set: (theme: string): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('theme:set', { theme }),
+    onSystemChange: (cb: (theme: 'dark' | 'light') => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { theme: string }) =>
+        cb(data.theme as 'dark' | 'light')
+      ipcRenderer.on('theme:system-changed', listener)
+      return () => ipcRenderer.removeListener('theme:system-changed', listener)
+    }
+  },
+
   // IPC stubs — expand as features are built
   invoke: (channel: string, ...args: unknown[]) =>
     ipcRenderer.invoke(channel, ...args),

@@ -2,8 +2,12 @@ import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { platform } from 'os'
+import { registerThemeHandlers } from './ipc/theme'
 
 const isMac = platform() === 'darwin'
+
+// Register IPC handlers before creating windows
+registerThemeHandlers()
 
 function createWindow(): BrowserWindow {
   const mainWindow = new BrowserWindow({
