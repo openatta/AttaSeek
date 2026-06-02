@@ -10,9 +10,12 @@
  */
 export default function TitleBar() {
   return (
-    <div className="flex-shrink-0 h-[40px] flex items-center px-3">
-      {/* macOS traffic lights rendered by OS in this area */}
-      {/* Windows/Linux: overlay controls rendered by OS */}
+    <div
+      className="flex-shrink-0 h-[40px] flex items-center px-3"
+      style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+    >
+      {/* Draggable title bar region — macOS traffic lights rendered by OS,
+          Windows/Linux overlay controls rendered by OS */}
       <span className="text-[11px] text-neutral-600 select-none">AttaSeek</span>
     </div>
   )

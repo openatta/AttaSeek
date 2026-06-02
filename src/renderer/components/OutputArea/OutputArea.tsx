@@ -26,7 +26,6 @@ export default function OutputArea() {
 
   if (!visible) return null
 
-  // Use default tabs when uninitialized
   const displayTabs = tabs.length > 0 ? tabs : DEFAULT_TABS
   const activeTab =
     tabs.length > 0
@@ -49,13 +48,13 @@ export default function OutputArea() {
 
   return (
     <div
-      className="flex flex-col border-t border-neutral-800 bg-neutral-950"
-      style={{ height: '35%', minHeight: '200px' }}
+      className="flex flex-col flex-shrink-0 border-l border-neutral-800 bg-neutral-950"
+      style={{ width: '400px', minWidth: '280px', maxWidth: '600px' }}
     >
       {/* Tab bar */}
       <div className="flex-shrink-0 flex items-center border-b border-neutral-800 h-[32px]">
         {/* Tab list */}
-        <div className="flex items-center flex-1 min-w-0">
+        <div className="flex items-center flex-1 min-w-0 overflow-x-auto">
           {displayTabs.map((tab) => {
             const config = TAB_CONFIG[tab.type]
             const Icon = config.icon
@@ -66,7 +65,7 @@ export default function OutputArea() {
                 key={tab.id}
                 onClick={() => setActiveId(tab.id)}
                 className={`flex items-center gap-1.5 px-3 h-[32px] text-[11px] border-r border-neutral-800
-                  transition-colors
+                  transition-colors flex-shrink-0
                   ${
                     isActive
                       ? 'text-neutral-200 bg-neutral-900 border-b-2 border-b-blue-500'
@@ -79,10 +78,10 @@ export default function OutputArea() {
                   className="ml-0.5 text-neutral-700 hover:text-neutral-400 cursor-pointer"
                   onClick={(e) => {
                     e.stopPropagation()
-                    setTabs((prev) => prev.filter((t) => t.id !== tab.id))
-                    if (tab.id === activeId) {
-                      const remaining = tabs.filter((t) => t.id !== tab.id)
-                      if (remaining.length > 0) setActiveId(remaining[0].id)
+                    const remaining = tabs.filter((t) => t.id !== tab.id)
+                    setTabs(remaining)
+                    if (tab.id === activeId && remaining.length > 0) {
+                      setActiveId(remaining[0].id)
                     }
                   }}
                 >
