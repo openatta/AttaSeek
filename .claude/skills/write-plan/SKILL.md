@@ -46,7 +46,7 @@ description: Write implementation plan with dependency order, vertical slices, p
 # [功能名] 实现计划
 
 **目标：** 一句话
-**涉及进程：** main / preload / renderer  
+**涉及进程：** main / preload / renderer
 **预期任务数：** ~N
 ```
 
