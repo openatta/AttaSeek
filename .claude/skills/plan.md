@@ -1,6 +1,6 @@
 ---
 name: write-plan
-description: "Write implementation plan: dependency order, vertical slices, precise tasks with file paths and verification commands"
+description: Write implementation plan with dependency order, vertical slices, precise file paths and verify commands
 ---
 
 # 编写实现计划
@@ -31,7 +31,7 @@ description: "Write implementation plan: dependency order, vertical slices, prec
 - [ ] 提交: `git commit -m "scope: description"`
 ```
 
-每个 task 描述清楚**要写什么功能**（如"实现带 search input 和 filter chip 的 ChatsList 组件"），但**不写实现代码**。代码由实施阶段根据项目类型和代码风格自行编写。
+每个 task 描述清楚**要写什么功能**，但**不写实现代码**。
 
 ## 禁止
 

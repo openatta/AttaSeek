@@ -1,6 +1,6 @@
 ---
 name: design-architecture
-description: "Design architecture: component tree, data flow, IPC contract, state design, tech decisions"
+description: Design component tree, data flow, IPC contract, state atoms, and tech decisions
 ---
 
 # 架构设计

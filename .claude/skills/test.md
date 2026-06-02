@@ -1,6 +1,6 @@
 ---
 name: test-driven-development
-description: "TDD: write failing test first, then minimal implementation, then refactor"
+description: TDD cycle of write failing test first, see it fail, minimal fix, verify pass, then refactor
 ---
 
 # 测试驱动开发
