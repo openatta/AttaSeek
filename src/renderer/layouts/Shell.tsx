@@ -24,14 +24,14 @@ export default function Shell() {
         <Sidebar activity={activeActivity} />
       </div>
 
-      {/* Main Canvas */}
-      <div className="flex flex-col flex-1 min-w-0">
-        {/* Conversation + Settings area */}
-        <div className="flex-1 flex min-h-0">
+      {/* Main Canvas: Conversation (center) + AI OutputArea (right) */}
+      <div className="flex flex-1 min-w-0">
+        {/* Conversation / Settings — primary content area */}
+        <div className="flex flex-col flex-1 min-w-0">
           {activeActivity === 'settings' ? <Settings /> : <Conversation />}
         </div>
 
-        {/* AI Output area (toggleable) */}
+        {/* AI Output area — right panel */}
         <OutputArea />
       </div>
     </div>
