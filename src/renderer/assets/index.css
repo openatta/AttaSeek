@@ -2,8 +2,6 @@
 
 /* ── Design tokens ─────────────────────────────────────────────── */
 :root {
-  --brand-primary: #3b82f6;
-  --brand-primary-hover: #2563eb;
   --activity-bar-width: 48px;
   --sidebar-width: 260px;
   --sidebar-min-width: 200px;
@@ -20,8 +18,6 @@
   --text-tertiary: #a3a3a3;
   --border-primary: #e5e5e5;
   --border-secondary: #f0f0f0;
-  --brand: #2563eb;
-  --brand-hover: #1d4ed8;
   --scrollbar-thumb: rgba(0, 0, 0, 0.12);
   --scrollbar-thumb-hover: rgba(0, 0, 0, 0.2);
 }
@@ -35,8 +31,6 @@
   --text-tertiary: #737373;
   --border-primary: #262626;
   --border-secondary: #1f1f1f;
-  --brand: #3b82f6;
-  --brand-hover: #2563eb;
   --scrollbar-thumb: rgba(255, 255, 255, 0.12);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
 }
@@ -57,11 +51,11 @@ html, body, #root {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
+  background: var(--scrollbar-thumb, rgba(0, 0, 0, 0.12));
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--scrollbar-thumb-hover);
+  background: var(--scrollbar-thumb-hover, rgba(0, 0, 0, 0.2));
 }
 
 /* ── macOS traffic lights spacing ──────────────────────────────── */
