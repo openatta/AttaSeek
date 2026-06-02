@@ -112,15 +112,17 @@ src/
 
 ## Skill 调用名一览
 
-| 调用命令 | 文件名 | 用途 |
+Skill 是**思考模式**，不是代码模板——它们告诉 AI 如何思考、产出什么格式、遵循什么约束，而不是贴大段示例代码。项目知识（架构、技术栈、文件布局）已在 CLAUDE.md 中，skill 不重复。
+
+| 调用命令 | 文件 | 用途 |
 |----------|--------|------|
-| `/analyze-requirements` | `analyze.md` | 需求分析（Electron 三层探索） |
-| `/design-architecture` | `design.md` | 架构设计（三进程 + IPC + Jotai） |
-| `/write-plan` | `plan.md` | 编写实现计划（按进程层排序） |
-| `/execute-plan` | `implement.md` | 按计划增量实施（HMR + 主进程重启） |
-| `/test-driven-development` | `test.md` | TDD（Vitest + Playwright） |
-| `/code-review` | `review.md` | 代码审查（含 Electron 安全检查） |
-| `/summarize-changes` | `summarize.md` | 变更总结（按进程层分组） |
+| `/analyze-requirements` | `analyze.md` | 需求分析 → 产出需求说明（用户场景+范围+风险） |
+| `/design-architecture` | `design.md` | 架构设计 → 产出设计文档（组件结构+数据流+IPC） |
+| `/write-plan` | `plan.md` | 编写计划 → 产出精确任务列表（文件+操作+验证命令） |
+| `/execute-plan` | `implement.md` | 按计划增量实施 → 逐任务 TDD → 每步提交 |
+| `/test-driven-development` | `test.md` | TDD 循环：RED→GREEN→REFACTOR |
+| `/code-review` | `review.md` | 五维审查 → 分级反馈 |
+| `/summarize-changes` | `summarize.md` | 变更总结 → 改了什么/没改什么/风险/验证
 
 ## Electron 关键规则
 
