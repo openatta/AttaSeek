@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: 代码审查：正确性/可读性/架构/安全/性能五维审查→分级反馈
+description: Code review across 5 dimensions: correctness, readability, architecture, security, performance
 ---
 
 # 代码审查
@@ -13,6 +13,7 @@ description: 代码审查：正确性/可读性/架构/安全/性能五维审查
 2. 先审测试 — 测试是否覆盖关键行为？有没有边界？
 3. 审实现 — 按五维逐文件检查
 4. 给反馈 — 分级
+5. 审查架构设计是否合理，是否有已知的缺陷与不足
 
 ## 五维检查
 

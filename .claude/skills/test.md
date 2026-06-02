@@ -1,6 +1,6 @@
 ---
 name: test-driven-development
-description: TDD：先写失败测试→确认失败→最小实现→确认通过→重构
+description: TDD: write failing test first, then minimal implementation, then refactor
 ---
 
 # 测试驱动开发

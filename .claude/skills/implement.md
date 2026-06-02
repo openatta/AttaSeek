@@ -1,6 +1,6 @@
 ---
 name: execute-plan
-description: 按计划实施：审查计划→逐任务增量执行→每步可构建→每步提交
+description: Execute plan incrementally: review plan, implement task by task, keep buildable, commit each step
 ---
 
 # 按计划实施
@@ -14,9 +14,10 @@ description: 按计划实施：审查计划→逐任务增量执行→每步可�
 ```
 1. 理解任务 → 读相关代码
 2. 写代码  → 仅改任务要求的文件
-3. 验证    → 运行测试 + typecheck + build
-4. 提交    → git commit
-5. 下一个  →
+3. 检视   → 检视实现的代码有没有缺陷不足并修复
+4. 验证    → 运行测试 + typecheck + build
+5. 提交    → git commit
+6. 下一个  →
 ```
 
 每个增量后项目必须可构建。
