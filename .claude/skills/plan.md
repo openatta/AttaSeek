@@ -1,6 +1,6 @@
 ---
 name: write-plan
-description: Write implementation plan: dependency order, vertical slices, precise tasks with file paths and verification commands
+description: "Write implementation plan: dependency order, vertical slices, precise tasks with file paths and verification commands"
 ---
 
 # 编写实现计划
