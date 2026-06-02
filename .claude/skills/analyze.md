@@ -1,6 +1,6 @@
 ---
 name: analyze-requirements
-description: Understand requirements, explore code, define scope, produce requirement spec
+description: "Understand requirements, explore code, define scope, produce requirement spec"
 ---
 
 # 需求分析

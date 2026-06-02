@@ -1,6 +1,6 @@
 ---
 name: execute-plan
-description: Execute plan incrementally: review plan, implement task by task, keep buildable, commit each step
+description: "Execute plan incrementally: review plan, implement task by task, keep buildable, commit each step"
 ---
 
 # 按计划实施

@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: Code review across 5 dimensions: correctness, readability, architecture, security, performance
+description: "Code review across 5 dimensions: correctness, readability, architecture, security, performance"
 ---
 
 # 代码审查
