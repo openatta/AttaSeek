@@ -7,6 +7,9 @@ description: Execute a plan incrementally by reviewing the plan first then imple
 
 开始声明："正在使用 execute-plan。"
 
+> **注意**：此 skill 用于执行**已有的正式计划文档**（`docs/plans/*.md`）。
+> 日常开发请使用 `/implement`——它将轻量规划与执行合并为一次调用。
+
 ## 执行循环
 
 对每个 task：

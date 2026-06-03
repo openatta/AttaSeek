@@ -31,9 +31,7 @@ src/
                                      │
                               /design-architecture       架构设计（三进程 + IPC + Jotai）
                                      │
-                              /write-plan                计划编写（按进程层排序任务）
-                                     │
-                              /execute-plan              增量实施（Vite HMR + 主进程重启）
+                              /implement                 规划+实施（轻量内联计划 → 增量执行）
                                      │
                                      ├──→ /test-driven-development   TDD 循环（每增量内）
                                      │
@@ -48,11 +46,29 @@ src/
 |------|-------|------|------|
 | **需求分析** | `/analyze-requirements` | 需求模板 / spec / 用户反馈 | 需求说明：按 Electron 三层评估影响范围 |
 | **架构设计** | `/design-architecture` | 需求说明 | 设计文档：三进程结构、组件树、IPC contract、Jotai atoms |
-| **计划编写** | `/write-plan` | 设计文档 | 实现计划：依赖图→垂直切片→精确文件路径→验证命令 |
-| **增量实施** | `/execute-plan` | 实现计划 | 可工作代码：逐任务执行、区分 HMR/主进程重启 |
+| **规划+实施** | `/implement` | 设计文档或需求说明 | 内联任务列表 → 可工作代码：逐任务执行，每步可构建 |
 | **TDD** | `/test-driven-development` | 每个任务 | RED→GREEN→REFACTOR 循环，Vitest/Playwright |
 | **代码审查** | `/code-review` | 变更 diff | 审查结论：正确性/可读性/架构/Electron安全/性能 |
 | **变更总结** | `/summarize-changes` | 变更内容 | 结构化总结：按主进程/预加载/渲染进程分组 |
+
+### `/implement` 的两种路径
+
+`/implement` 是日常开发的主要入口，内部有两个阶段：
+
+| 路径 | 触发条件 | 行为 |
+|------|---------|------|
+| **轻量规划（默认）** | 设计文档已就绪，直接实施 | Phase 1 产出内联 task list（不写独立文档）→ 用户确认 → Phase 2 增量执行 |
+| **正式文档** | 大规模重构 / 多人审阅 / 需归档计划 | `/write-plan` 产出 `docs/plans/*.md` → `/execute-plan` 按文件执行 |
+
+何时用轻量 vs 正式：
+
+| 场景 | 用 |
+|------|----|
+| 日常功能开发（≤ 1 天） | `/implement` |
+| 小改动（单文件、几个文件） | `/implement` 或直接实施 |
+| 跨多模块大重构 | `/write-plan` → `/execute-plan` |
+| 需要团队审阅计划 | `/write-plan` → 审阅 → `/execute-plan` |
+| 已有正式计划文档，只需执行 | `/execute-plan` |
 
 ## 使用方式
 
@@ -66,8 +82,7 @@ src/
 # 2. SDLC 链路
 /analyze-requirements     # 理解需求，探索 main/preload/renderer 代码
 /design-architecture      # 设计三进程结构、组件树、IPC contract、Jotai atoms
-/write-plan               # 编写精确到文件的实现计划
-/execute-plan             # 增量实施（区分 HMR 和主进程重启）
+/implement                # 轻量计划+增量实施（区分 HMR 和主进程重启）
 /code-review              # 五维审查（重点 Electron 安全）
 /summarize-changes        # 按进程层分组总结
 ```
@@ -77,7 +92,7 @@ src/
 需求明确、单面板或少量文件改动：
 
 ```bash
-/write-plan → /execute-plan → /summarize-changes
+/implement → /summarize-changes
 ```
 
 ### Bug 修复
@@ -92,8 +107,7 @@ src/
 
 ```bash
 /analyze-requirements     # 理解现有代码、明确重构边界
-/write-plan               # 编写重构计划
-/execute-plan             # 增量实施（每步保持可构建）
+/implement                # 轻量计划 + 增量实施（每步保持可构建）
 /code-review              # 审查重构结果（检查是否引入死代码）
 /summarize-changes        # 总结变更
 ```
@@ -118,8 +132,9 @@ Skill 是**思考模式**，不是代码模板——它们告诉 AI 如何思考
 |----------|--------|------|
 | `/analyze-requirements` | `analyze.md` | 需求分析 → 产出需求说明（用户场景+范围+风险） |
 | `/design-architecture` | `design.md` | 架构设计 → 产出设计文档（组件结构+数据流+IPC） |
-| `/write-plan` | `plan.md` | 编写计划 → 产出精确任务列表（文件+操作+验证命令） |
-| `/execute-plan` | `implement.md` | 按计划增量实施 → 逐任务 TDD → 每步提交 |
+| `/implement` | `implement.md` | **规划+实施** → 轻量内联任务列表 → 增量执行（默认路径） |
+| `/write-plan` | `plan.md` | 编写正式计划文档 → 产出 `docs/plans/*.md`（大重构/审阅用） |
+| `/execute-plan` | `implement.md` | 按已有计划文档实施 → 逐任务 TDD → 每步提交 |
 | `/test-driven-development` | `test.md` | TDD 循环：RED→GREEN→REFACTOR |
 | `/code-review` | `review.md` | 五维审查 → 分级反馈 |
 | `/summarize-changes` | `summarize.md` | 变更总结 → 改了什么/没改什么/风险/验证
