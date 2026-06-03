@@ -5,7 +5,7 @@ import {
   outputAreaVisibleAtom
 } from '../../atoms/outputTabsAtom'
 import { outputFullscreenAtom } from '../../atoms/outputFullscreenAtom'
-import { Globe, FolderOpen, Terminal, GitCompare, Maximize2, X } from 'lucide-react'
+import { Globe, FolderOpen, Terminal, GitCompare, Maximize2, PanelRightClose } from 'lucide-react'
 import BrowserPanel from './BrowserPanel'
 import FilesPanel from './FilesPanel'
 import TerminalPanel from './TerminalPanel'
@@ -18,8 +18,6 @@ const TAB_CONFIG = {
   review: { icon: GitCompare, label: 'Review' }
 }
 
-const DEFAULT_TABS = [{ id: 'terminal', type: 'terminal' as const, label: 'Terminal' }]
-
 export default function OutputArea() {
   const [tabs, setTabs] = useAtom(outputTabsAtom)
   const [activeId, setActiveId] = useAtom(activeOutputTabAtom)
@@ -28,14 +26,17 @@ export default function OutputArea() {
 
   if (!visible) return null
 
-  const displayTabs = tabs.length > 0 ? tabs : DEFAULT_TABS
-  const activeTab =
-    tabs.length > 0
-      ? tabs.find((t) => t.id === activeId) || DEFAULT_TABS[0]
-      : DEFAULT_TABS[0]
+  const displayTabs = tabs
+  const activeTab = tabs.length > 0 ? tabs.find((t) => t.id === activeId) || tabs[0] : null
 
   const renderPanel = () => {
-    if (!activeTab) return null
+    if (!activeTab) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <p className="text-xs text-[var(--app-text-dim)]">No tabs open</p>
+        </div>
+      )
+    }
     switch (activeTab.type) {
       case 'browser':
         return <BrowserPanel />
@@ -58,22 +59,11 @@ export default function OutputArea() {
         className="flex-shrink-0 flex items-center border-b border-[var(--app-border)] h-[40px]"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
-        {/* Fullscreen toggle — left side of header */}
-        <button
-          onClick={() => setFullscreen(!fullscreen)}
-          className="w-6 h-6 flex items-center justify-center rounded text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors ml-1 flex-shrink-0"
-          title={fullscreen ? 'Restore' : 'Fullscreen'}
-          aria-label={fullscreen ? 'Restore' : 'Fullscreen'}
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        >
-          <Maximize2 className="w-3.5 h-3.5" />
-        </button>
-
-        {/* Tab list */}
+        {/* Tab list — left side */}
         <div className="flex items-center flex-1 min-w-0 overflow-x-auto">
           {displayTabs.map((tab) => {
             const config = TAB_CONFIG[tab.type]
-            const Icon = config.icon
+            const Icon = config?.icon
             const isActive = tab.id === activeId
 
             return (
@@ -89,7 +79,7 @@ export default function OutputArea() {
                   }`}
                 style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
               >
-                <Icon className="w-3.5 h-3.5" />
+                {Icon && <Icon className="w-3.5 h-3.5" />}
                 <span className="truncate max-w-[80px]">{tab.label}</span>
                 <span
                   className="ml-0.5 text-[var(--app-text-dim)] hover:text-[var(--app-text-secondary)] cursor-pointer"
@@ -109,16 +99,27 @@ export default function OutputArea() {
           })}
         </div>
 
-        {/* Hide button — right side */}
-        <button
-          onClick={() => setVisible(false)}
-          className="w-6 h-6 flex items-center justify-center rounded text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors mr-1 flex-shrink-0"
-          title="Hide"
-          aria-label="Hide"
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
+        {/* Right buttons: fullscreen toggle + hide panel */}
+        <div className="flex items-center flex-shrink-0 mr-1">
+          <button
+            onClick={() => setFullscreen(!fullscreen)}
+            className="w-6 h-6 flex items-center justify-center rounded text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors"
+            title={fullscreen ? 'Restore' : 'Fullscreen'}
+            aria-label={fullscreen ? 'Restore' : 'Fullscreen'}
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          >
+            <Maximize2 className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => setVisible(false)}
+            className="w-6 h-6 flex items-center justify-center rounded text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors"
+            title="Hide panel"
+            aria-label="Hide panel"
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          >
+            <PanelRightClose className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* Panel content */}

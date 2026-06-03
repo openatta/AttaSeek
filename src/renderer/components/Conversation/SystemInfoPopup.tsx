@@ -4,7 +4,7 @@ import { useAtom } from 'jotai'
 import { themeAtom } from '../../atoms/themeAtom'
 
 export default function SystemInfoPopup() {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   const [theme] = useAtom(themeAtom)
   const ref = useRef<HTMLDivElement>(null)
 

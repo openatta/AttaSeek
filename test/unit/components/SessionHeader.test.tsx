@@ -17,12 +17,20 @@ describe('SessionHeader', () => {
     expect(screen.getByText('New Session')).toBeInTheDocument()
   })
 
-  it('should render the three action buttons', () => {
+  it('should render Launch app and System info buttons', () => {
     renderHeader()
     expect(screen.getByLabelText('Launch app')).toBeInTheDocument()
     expect(screen.getByLabelText('System info')).toBeInTheDocument()
-    // outputAreaVisibleAtom defaults to true, so button label is "Hide output area"
-    expect(screen.getByLabelText('Hide output area')).toBeInTheDocument()
+  })
+
+  it('should show output area toggle when output is closed (default)', () => {
+    renderHeader()
+    expect(screen.getByLabelText('Show output area')).toBeInTheDocument()
+  })
+
+  it('should show system info popup open by default', () => {
+    renderHeader()
+    expect(screen.getByText('AttaSeek')).toBeInTheDocument()
   })
 
   it('should have bottom border at 40px height', () => {

@@ -1,6 +1,6 @@
 import { useAtom } from 'jotai'
 import { outputAreaVisibleAtom } from '../../atoms/outputTabsAtom'
-import { Info, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { PanelLeftClose } from 'lucide-react'
 import AppLauncher from './AppLauncher'
 import SystemInfoPopup from './SystemInfoPopup'
 
@@ -31,20 +31,17 @@ export default function SessionHeader() {
         {/* System info popup toggle */}
         <SystemInfoPopup />
 
-        {/* Toggle output area — hidden when output is visible */}
-        <button
-          onClick={() => setOutputVisible(!outputVisible)}
-          className={`w-6 h-6 flex items-center justify-center rounded text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors
-            ${outputVisible ? 'invisible' : ''}`}
-          title={outputVisible ? 'Hide output area' : 'Show output area'}
-          aria-label={outputVisible ? 'Hide output area' : 'Show output area'}
-        >
-          {outputVisible ? (
-            <PanelLeftOpen className="w-4 h-4" />
-          ) : (
+        {/* Toggle output area — hidden (removed from layout) when output is visible */}
+        {!outputVisible && (
+          <button
+            onClick={() => setOutputVisible(true)}
+            className="w-6 h-6 flex items-center justify-center rounded text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors"
+            title="Show output area"
+            aria-label="Show output area"
+          >
             <PanelLeftClose className="w-4 h-4" />
-          )}
-        </button>
+          </button>
+        )}
       </div>
     </div>
   )
