@@ -48,11 +48,11 @@ export default function OutputArea() {
 
   return (
     <div
-      className="flex flex-col flex-shrink-0 border-l border-neutral-800 bg-neutral-950"
+      className="flex flex-col flex-shrink-0 border-l border-[var(--app-border)] bg-[var(--app-bg)]"
       style={{ width: '400px', minWidth: '280px', maxWidth: '600px' }}
     >
       {/* Tab bar */}
-      <div className="flex-shrink-0 flex items-center border-b border-neutral-800 h-[32px]">
+      <div className="flex-shrink-0 flex items-center border-b border-[var(--app-border)] h-[32px]">
         {/* Tab list */}
         <div className="flex items-center flex-1 min-w-0 overflow-x-auto">
           {displayTabs.map((tab) => {
@@ -64,18 +64,18 @@ export default function OutputArea() {
               <button
                 key={tab.id}
                 onClick={() => setActiveId(tab.id)}
-                className={`flex items-center gap-1.5 px-3 h-[32px] text-[11px] border-r border-neutral-800
+                className={`flex items-center gap-1.5 px-3 h-[32px] text-[11px] border-r border-[var(--app-border)]
                   transition-colors flex-shrink-0
                   ${
                     isActive
-                      ? 'text-neutral-200 bg-neutral-900 border-b-2 border-b-blue-500'
-                      : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-900/50'
+                      ? 'text-[var(--app-text)] bg-[var(--app-bg-inset)] border-b-2 border-b-blue-500'
+                      : 'text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)]'
                   }`}
               >
                 <Icon className="w-3.5 h-3.5" />
                 <span className="truncate max-w-[80px]">{tab.label}</span>
                 <span
-                  className="ml-0.5 text-neutral-700 hover:text-neutral-400 cursor-pointer"
+                  className="ml-0.5 text-[var(--app-text-dim)] hover:text-[var(--app-text-secondary)] cursor-pointer"
                   onClick={(e) => {
                     e.stopPropagation()
                     const remaining = tabs.filter((t) => t.id !== tab.id)
@@ -95,14 +95,14 @@ export default function OutputArea() {
         {/* Expand / Hide */}
         <div className="flex items-center flex-shrink-0 mr-1">
           <button
-            className="w-6 h-6 flex items-center justify-center rounded text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800 transition-colors"
+            className="w-6 h-6 flex items-center justify-center rounded text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors"
             title="Expand"
           >
             <Maximize2 className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={() => setVisible(false)}
-            className="w-6 h-6 flex items-center justify-center rounded text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800 transition-colors"
+            className="w-6 h-6 flex items-center justify-center rounded text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors"
             title="Hide"
           >
             <X className="w-3.5 h-3.5" />

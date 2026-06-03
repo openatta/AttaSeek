@@ -32,7 +32,7 @@ export default function ActivityBar() {
 
   return (
     <div
-      className="flex flex-col items-center flex-shrink-0 h-full border-r border-neutral-800 select-none"
+      className="flex flex-col items-center flex-shrink-0 h-full border-r border-[var(--app-border)] select-none"
       style={{ width: 'var(--activity-bar-width)' }}
     >
       {/* Traffic lights spacer (macOS) */}
@@ -51,7 +51,7 @@ export default function ActivityBar() {
                 ${
                   isActive
                     ? 'text-blue-400 bg-blue-400/10'
-                    : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800/60'
+                    : 'text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)]'
                 }`}
               title={item.label}
               aria-label={item.label}
@@ -63,7 +63,7 @@ export default function ActivityBar() {
       </div>
 
       {/* Separator */}
-      <div className="w-6 h-px bg-neutral-700 my-3" />
+      <div className="w-6 h-px bg-[var(--app-border-muted)] my-3" />
 
       {/* Plugin slots (placeholder) */}
       <div className="flex-1" />
@@ -76,7 +76,7 @@ export default function ActivityBar() {
             ${
               active === 'settings'
                 ? 'text-blue-400 bg-blue-400/10'
-                : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800/60'
+                : 'text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)]'
             }`}
           title="Settings"
           aria-label="Settings"

@@ -21,7 +21,7 @@ export default function AgentPlanCard({ summary, steps }: AgentPlanCardProps) {
       {expanded && (
         <div className="mt-2 ml-5 space-y-1">
           {steps.map((s, i) => (
-            <div key={i} className="text-xs text-neutral-400">
+            <div key={i} className="text-xs text-[var(--app-text-secondary)]">
               {i + 1}. {s}
             </div>
           ))}

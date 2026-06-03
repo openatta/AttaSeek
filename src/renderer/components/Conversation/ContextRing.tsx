@@ -14,7 +14,10 @@ export default function ContextRing({ used, total }: ContextRingProps) {
   return (
     <div className="flex items-center gap-1.5 group cursor-default" title="上下文用量">
       <svg width={24} height={24} viewBox="0 0 24 24" className="-rotate-90">
-        <circle cx="12" cy="12" r={radius} fill="none" stroke="#333" strokeWidth="2" />
+        <circle
+          cx="12" cy="12" r={radius} fill="none"
+          stroke="var(--app-border-muted)" strokeWidth="2"
+        />
         <circle
           cx="12"
           cy="12"
@@ -29,7 +32,7 @@ export default function ContextRing({ used, total }: ContextRingProps) {
           opacity={used > 0 ? 1 : 0}
         />
       </svg>
-      <span className="text-[11px] text-neutral-500 tabular-nums">{pct}%</span>
+      <span className="text-[11px] text-[var(--app-text-secondary)] tabular-nums">{pct}%</span>
     </div>
   )
 }

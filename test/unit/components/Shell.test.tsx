@@ -21,8 +21,8 @@ describe('Shell', () => {
 
   it('should render the sidebar heading with the default activity', () => {
     renderShell()
-    // Default activity is 'chat'
-    expect(screen.getByText('chat')).toBeInTheDocument()
+    // Default activity is 'chat' → WorkspaceSidebar shows 'Chats' heading
+    expect(screen.getByText('Chats')).toBeInTheDocument()
   })
 
   it('should render the SessionHeader', () => {
@@ -51,7 +51,7 @@ describe('Shell', () => {
     renderShell()
     // ActivityBar, Sidebar (heading), Conversation (header + composer), OutputArea
     expect(screen.getByLabelText('Home')).toBeInTheDocument() // ActivityBar
-    expect(screen.getByText('chat')).toBeInTheDocument() // Sidebar heading
+    expect(screen.getByText('Chats')).toBeInTheDocument() // Sidebar heading
     expect(screen.getByText('New Session')).toBeInTheDocument() // SessionHeader
   })
 })
