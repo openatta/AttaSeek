@@ -38,12 +38,14 @@ export default function ChatWorkspace() {
           <WorkspaceLayout.Main>
             <Conversation />
           </WorkspaceLayout.Main>
-          <WorkspaceLayout.Right
-            width={outputWidth}
-            onResize={(d) => setOutputWidth((w) => Math.min(600, Math.max(280, w + d)))}
-          >
-            <OutputArea />
-          </WorkspaceLayout.Right>
+          {outputVisible && (
+            <WorkspaceLayout.Right
+              width={outputWidth}
+              onResize={(d) => setOutputWidth((w) => Math.min(600, Math.max(280, w + d)))}
+            >
+              <OutputArea />
+            </WorkspaceLayout.Right>
+          )}
         </>
       )}
     </div>

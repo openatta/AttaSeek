@@ -51,7 +51,7 @@ export default function OutputArea() {
 
   return (
     <div
-      className="flex flex-col flex-shrink-0 border-l border-[var(--app-border)] bg-[var(--app-bg)]"
+      className="flex flex-col flex-shrink-0 bg-[var(--app-bg)]"
       style={{ width: fullscreen ? undefined : '400px', minWidth: fullscreen ? undefined : '280px', maxWidth: fullscreen ? undefined : '600px' }}
     >
       {/* Title bar — 40px, draggable */}

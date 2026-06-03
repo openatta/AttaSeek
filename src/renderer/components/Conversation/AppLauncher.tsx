@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Monitor, Globe, Terminal, FolderOpen } from 'lucide-react'
+import { Monitor, ChevronDown, Globe, Terminal, FolderOpen } from 'lucide-react'
 
 const MENU_ITEMS = [
   { id: 'browser', label: 'Browser', icon: Globe },
@@ -26,12 +26,13 @@ export default function AppLauncher() {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="w-6 h-6 flex items-center justify-center rounded text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors"
+        className="flex items-center gap-0.5 px-1 h-6 rounded text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors"
         title="Launch app"
         aria-label="Launch app"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
-        <Monitor className="w-4 h-4" />
+        <Monitor className="w-3.5 h-3.5" />
+        <ChevronDown className="w-3 h-3 opacity-60" />
       </button>
 
       {open && (
