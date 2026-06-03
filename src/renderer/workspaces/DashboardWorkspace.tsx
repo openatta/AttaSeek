@@ -20,8 +20,8 @@ export default function DashboardWorkspace() {
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       />
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto px-8 py-6">
+      {/* Content — vertically centered */}
+      <div className="flex-1 flex items-center justify-center overflow-y-auto px-8 py-6">
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Stat cards row */}
           <div className="grid grid-cols-5 gap-3">
