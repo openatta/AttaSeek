@@ -1,19 +1,23 @@
 /**
  * Search workspace — 2-zone:
  *   [Left: search facets]  [Main: results]
- * No output area.
  */
 export default function SearchWorkspace() {
   return (
     <div className="flex flex-1 min-w-0">
       <div
-        className="flex-shrink-0 border-r border-[var(--app-border)] overflow-y-auto p-4"
-        style={{ width: '220px' }}
+        className="flex-shrink-0 border-r border-[var(--app-border)] overflow-y-auto flex flex-col"
+        style={{ width: 220 }}
       >
-        <h2 className="text-xs font-semibold text-[var(--app-text-secondary)] uppercase tracking-wider mb-3">
-          Search
-        </h2>
-        <div className="space-y-2">
+        <div
+          className="flex-shrink-0 h-[40px] flex items-center px-4"
+          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+        >
+          <h2 className="text-xs font-semibold text-[var(--app-text-secondary)] uppercase tracking-wider">
+            SEARCH
+          </h2>
+        </div>
+        <div className="p-4 space-y-2">
           {['All', 'Sessions', 'Files', 'Commands', 'Plugins'].map((f) => (
             <button
               key={f}

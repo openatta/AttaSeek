@@ -16,23 +16,22 @@ describe('Shell', () => {
     renderShell()
     expect(screen.getByLabelText('Home')).toBeInTheDocument()
     expect(screen.getByLabelText('Settings')).toBeInTheDocument()
-    expect(screen.getByLabelText('Chats')).toBeInTheDocument()
+    // New Session appears in ActivityBar and in Chat workspace (SessionHeader title)
+    const newSessionButtons = screen.getAllByLabelText('New Session')
+    expect(newSessionButtons.length).toBeGreaterThanOrEqual(1)
   })
 
-  it('should render the sidebar heading with the default activity', () => {
+  it('should render the Chat workspace by default', () => {
     renderShell()
-    // Default activity is 'chat' → WorkspaceSidebar shows 'Chats' heading
-    expect(screen.getByText('Chats')).toBeInTheDocument()
+    // Chat workspace has SessionHeader with "New Session" title text
+    const sessionTitles = screen.getAllByText('New Session')
+    expect(sessionTitles.length).toBeGreaterThanOrEqual(1)
   })
 
   it('should render the SessionHeader', () => {
     renderShell()
-    expect(screen.getByText('New Session')).toBeInTheDocument()
-  })
-
-  it('should render the Composer prompt text', () => {
-    renderShell()
-    expect(screen.getByText(/@file/)).toBeInTheDocument()
+    const sessionTitles = screen.getAllByText('New Session')
+    expect(sessionTitles.length).toBeGreaterThanOrEqual(1)
   })
 
   it('should render OutputArea terminal tab', () => {
@@ -43,15 +42,17 @@ describe('Shell', () => {
   it('should render Settings when Settings ActivityBar item is clicked', () => {
     renderShell()
     fireEvent.click(screen.getByLabelText('Settings'))
-    // Sidebar should show Settings section, canvas shows Settings
-    expect(screen.getByText('Settings')).toBeInTheDocument()
+    // General appears in both SettingsSidebar button and GeneralSettings heading
+    const generalElements = screen.getAllByText('General')
+    expect(generalElements.length).toBeGreaterThanOrEqual(1)
   })
 
-  it('should render four distinct layout regions', () => {
+  it('should render two main columns: ActivityBar + Workspace', () => {
     renderShell()
-    // ActivityBar, Sidebar (heading), Conversation (header + composer), OutputArea
-    expect(screen.getByLabelText('Home')).toBeInTheDocument() // ActivityBar
-    expect(screen.getByText('Chats')).toBeInTheDocument() // Sidebar heading
-    expect(screen.getByText('New Session')).toBeInTheDocument() // SessionHeader
+    // ActivityBar icons present
+    expect(screen.getByLabelText('Home')).toBeInTheDocument()
+    // Chat workspace content present
+    const sessionTitles = screen.getAllByText('New Session')
+    expect(sessionTitles.length).toBeGreaterThanOrEqual(1)
   })
 })

@@ -3,7 +3,6 @@ import { activeActivityAtom, type Activity } from '../../atoms/activityAtom'
 import {
   Command,
   SquarePen,
-  MessageSquareText,
   Search,
   Zap,
   Plug2,
@@ -20,7 +19,6 @@ type NavItem = {
 const TOP_ITEMS: NavItem[] = [
   { id: 'home', icon: Command, label: 'Home' },
   { id: 'chat', icon: SquarePen, label: 'New Session' },
-  { id: 'chats', icon: MessageSquareText, label: 'Chats' },
   { id: 'search', icon: Search, label: 'Search' },
   { id: 'automation', icon: Zap, label: 'Automation' },
   { id: 'plugin', icon: Plug2, label: 'Plugins' },
@@ -32,14 +30,14 @@ export default function ActivityBar() {
 
   return (
     <div
-      className="flex flex-col items-center flex-shrink-0 h-full border-r border-[var(--app-border)] select-none"
+      className="flex flex-col items-center flex-shrink-0 h-full border-r border-[var(--app-border)] select-none bg-[var(--app-bg-inset)]"
       style={{ width: 'var(--activity-bar-width)' }}
     >
-      {/* Traffic lights spacer (macOS) */}
-      <div className="traffic-lights-spacer w-full" />
+      {/* Title bar region — aligns with workspace header (traffic lights on macOS) */}
+      <div className="h-[40px] w-full" />
 
       {/* Primary nav items */}
-      <div className="flex flex-col items-center gap-1 pt-2">
+      <div className="flex flex-col items-center gap-1 pt-1">
         {TOP_ITEMS.map((item) => {
           const Icon = item.icon
           const isActive = active === item.id
@@ -62,8 +60,7 @@ export default function ActivityBar() {
         })}
       </div>
 
-      {/* Separator */}
-      <div className="w-6 h-px bg-[var(--app-border-muted)] my-3" />
+      {/* Natural gap replaces explicit separator line */}
 
       {/* Plugin slots (placeholder) */}
       <div className="flex-1" />
