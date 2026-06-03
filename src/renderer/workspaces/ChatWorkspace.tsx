@@ -23,7 +23,7 @@ export default function ChatWorkspace() {
     <div className="flex flex-1 min-w-0">
       <WorkspaceLayout.Left
         width={sidebarWidth}
-        onResize={(d) => setSidebarWidth((w) => Math.min(400, Math.max(200, w + d)))}
+        onResize={(d) => setSidebarWidth((w) => Math.min(500, Math.max(160, w + d)))}
       >
         <ChatsSidebar />
       </WorkspaceLayout.Left>
@@ -41,7 +41,7 @@ export default function ChatWorkspace() {
           {outputVisible && (
             <WorkspaceLayout.Right
               width={outputWidth}
-              onResize={(d) => setOutputWidth((w) => Math.min(600, Math.max(280, w + d)))}
+              onResize={(d) => setOutputWidth((w) => Math.min(800, Math.max(240, w + d)))}
             >
               <OutputArea />
             </WorkspaceLayout.Right>

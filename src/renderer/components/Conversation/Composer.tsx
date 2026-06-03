@@ -12,7 +12,7 @@ import {
 } from '../../atoms/composerSettingsAtom'
 import ContextChip from './ContextChip'
 import ModelSelector from './ModelSelector'
-import { Plus, Mic } from 'lucide-react'
+import { Plus, Mic, ArrowUp } from 'lucide-react'
 
 const PERMISSION_LABELS: Record<PermissionMode, string> = {
   default: 'Default Review',
@@ -48,8 +48,8 @@ export default function Composer() {
   }
 
   return (
-    <div className="flex-shrink-0 px-4 py-3 bg-[var(--app-bg)]">
-      {/* Context chips */}
+    <div className="flex-shrink-0 px-4 pt-2 pb-3 bg-[var(--app-bg)]">
+      {/* Context chips — above the input card */}
       {chips.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 mb-2">
           {chips.map((chip) => (
@@ -58,71 +58,50 @@ export default function Composer() {
         </div>
       )}
 
-      {/* Input textarea — CODEX style: transparent bg, no border box */}
-      <div className="bg-[var(--app-bg-inset)] border border-[var(--app-border)] rounded-lg px-3 py-2 focus-within:border-[var(--app-accent)] focus-within:ring-1 focus-within:ring-[var(--app-accent-border)] transition-colors">
+      {/* Input card — CODEX style: textarea + toolbar together in a bordered box */}
+      <div className="bg-[var(--app-bg-inset)] border border-[var(--app-border)] rounded-xl focus-within:border-[var(--app-accent)] focus-within:ring-1 focus-within:ring-[var(--app-accent-border)] transition-colors">
+        {/* Textarea */}
         <textarea
           value={value}
           onChange={(e) => setValue(e.target.value)}
           className="w-full bg-transparent text-sm text-[var(--app-text)] placeholder:text-[var(--app-text-dim)]
-                     resize-none outline-none border-none ring-0 focus:ring-0"
-          placeholder="Message AttaSeek…"
-          rows={Math.min(8, Math.max(2, value.split('\n').length))}
+                     resize-none outline-none border-none ring-0 focus:ring-0 px-3 pt-2.5"
+          placeholder="Ask anything…"
+          rows={Math.min(10, Math.max(3, value.split('\n').length))}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault()
             }
           }}
         />
-      </div>
 
-      {/* Toolbar — CODEX style: + / permission / reasoning / mic / model / ⌘Enter */}
-      <div className="flex items-center gap-1.5 mt-2">
-        {/* + Add context button */}
-        <button
-          className="w-6 h-6 flex items-center justify-center rounded text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors"
-          title="Add context"
-          aria-label="Add context"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
+        {/* Toolbar row — inside the card, at the bottom */}
+        <div className="flex items-center gap-0.5 px-2 pb-2">
+          {/* + Add context */}
+          <button
+            className="w-7 h-7 flex items-center justify-center rounded-md text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors"
+            title="Add context"
+            aria-label="Add context"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
 
-        {/* Permission mode tag */}
-        <button
-          onClick={cyclePermission}
-          className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-[var(--app-border)] text-[11px] text-[var(--app-text-secondary)] cursor-pointer hover:border-[var(--app-text-dim)] hover:text-[var(--app-text)] transition-colors select-none"
-        >
-          {PERMISSION_LABELS[permissionMode]} ▾
-        </button>
+          {/* Mic button */}
+          <button
+            className="w-7 h-7 flex items-center justify-center rounded-md text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors"
+            title="Voice input"
+            aria-label="Voice input"
+          >
+            <Mic className="w-4 h-4" />
+          </button>
 
-        {/* Reasoning effort tag */}
-        <button
-          onClick={cycleReasoning}
-          className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-[var(--app-border)] text-[11px] text-[var(--app-text-secondary)] cursor-pointer hover:border-[var(--app-text-dim)] hover:text-[var(--app-text)] transition-colors select-none"
-        >
-          Reasoning ▾
-        </button>
+          {/* Spacer */}
+          <div className="flex-1" />
 
-        {/* Mic button */}
-        <button
-          className="w-6 h-6 flex items-center justify-center rounded text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors"
-          title="Voice input"
-          aria-label="Voice input"
-        >
-          <Mic className="w-3.5 h-3.5" />
-        </button>
-
-        {/* Spacer */}
-        <div className="flex-1" />
-
-        {/* Model selector */}
-        <ModelSelector />
-
-        {/* Send button or stop button */}
-        <div className="flex items-center gap-1">
-          <span className="text-[10px] text-[var(--app-text-dim)] hidden sm:block">⌘Enter</span>
+          {/* Send / Stop button */}
           {isRunning ? (
             <button
-              className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-md
+              className="w-7 h-7 flex items-center justify-center rounded-md
                          bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors"
               title="Stop"
               aria-label="Stop"
@@ -131,20 +110,42 @@ export default function Composer() {
             </button>
           ) : (
             <button
-              className={`flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-md transition-colors
-                ${
-                  value.trim()
-                    ? 'bg-blue-600 text-white hover:bg-blue-500'
-                    : 'bg-[var(--app-bg-active)] text-[var(--app-text-dim)] cursor-not-allowed'
+              className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors
+                ${value.trim()
+                  ? 'bg-[var(--app-accent)] text-white hover:opacity-90'
+                  : 'bg-[var(--app-bg-active)] text-[var(--app-text-dim)] cursor-not-allowed'
                 }`}
               disabled={!value.trim()}
               title="Send"
               aria-label="Send"
             >
-              <span className="text-xs">→</span>
+              <ArrowUp className="w-4 h-4" />
             </button>
           )}
         </div>
+      </div>
+
+      {/* Metadata row — below the input card: permission / reasoning / model */}
+      <div className="flex items-center gap-1.5 mt-1.5 px-1">
+        <button
+          onClick={cyclePermission}
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-[var(--app-text-secondary)] cursor-pointer hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors select-none"
+        >
+          {PERMISSION_LABELS[permissionMode]}
+        </button>
+
+        <button
+          onClick={cycleReasoning}
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-[var(--app-text-dim)] cursor-pointer hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors select-none"
+        >
+          Reasoning ▾
+        </button>
+
+        <div className="flex-1" />
+
+        <ModelSelector />
+
+        <span className="text-[10px] text-[var(--app-text-dim)] hidden sm:inline ml-1">⌘⏎</span>
       </div>
     </div>
   )

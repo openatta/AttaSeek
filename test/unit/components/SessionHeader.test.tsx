@@ -28,9 +28,10 @@ describe('SessionHeader', () => {
     expect(screen.getByLabelText('Show output area')).toBeInTheDocument()
   })
 
-  it('should show system info popup open by default', () => {
+  it('should not show system info panel by default (closed on startup)', () => {
     renderHeader()
-    expect(screen.getByText('AttaSeek')).toBeInTheDocument()
+    // System info is floated, closed by default — AttaSeek label only appears in the panel
+    expect(screen.queryByText('Version')).toBeNull()
   })
 
   it('should have bottom border at 40px height', () => {
