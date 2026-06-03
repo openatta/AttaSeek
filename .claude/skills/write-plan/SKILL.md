@@ -7,6 +7,9 @@ description: Write implementation plan with dependency order, vertical slices, p
 
 开始声明："正在使用 write-plan。"
 
+> **注意**：此 skill 产出**正式的独立计划文档**（`docs/plans/*.md`），适用于需要多人审阅或存档的大规模重构。
+> 日常开发请使用 `/implement`——它用轻量内联任务列表替代独立文档，更高效。
+
 ## 核心原则
 
 计划是**执行指令**——告诉实施者改哪个文件、做什么操作、如何验证。不是教程，不写实现代码。
