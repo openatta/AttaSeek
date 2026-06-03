@@ -10,4 +10,4 @@ export interface OutputTab {
 
 export const outputTabsAtom = atom<OutputTab[]>([])
 export const activeOutputTabAtom = atom<string | null>(null)
-export const outputAreaVisibleAtom = atom(true)
+export const outputAreaVisibleAtom = atom(false)

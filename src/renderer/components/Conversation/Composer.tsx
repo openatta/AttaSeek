@@ -58,13 +58,15 @@ export default function Composer() {
         </div>
       )}
 
-      {/* Input textarea — no top border, natural spacing from messages */}
+      {/* Input textarea — boxed with border */}
       <textarea
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        className="w-full bg-transparent text-sm text-[var(--app-text)] placeholder:text-[var(--app-text-dim)]
+        className="w-full bg-[var(--app-bg-inset)] border border-[var(--app-border)] rounded-lg
+                   px-3 py-2 text-sm text-[var(--app-text)] placeholder:text-[var(--app-text-dim)]
                    resize-none outline-none
-                   focus:ring-0"
+                   focus:border-[var(--app-accent)] focus:ring-1 focus:ring-[var(--app-accent-border)]
+                   transition-colors"
         placeholder="Message AttaSeek…"
         rows={Math.min(8, Math.max(2, value.split('\n').length))}
         onKeyDown={(e) => {

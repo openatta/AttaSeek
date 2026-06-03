@@ -16,14 +16,12 @@ describe('Shell', () => {
     renderShell()
     expect(screen.getByLabelText('Home')).toBeInTheDocument()
     expect(screen.getByLabelText('Settings')).toBeInTheDocument()
-    // New Session appears in ActivityBar and in Chat workspace (SessionHeader title)
     const newSessionButtons = screen.getAllByLabelText('New Session')
     expect(newSessionButtons.length).toBeGreaterThanOrEqual(1)
   })
 
   it('should render the Chat workspace by default', () => {
     renderShell()
-    // Chat workspace has SessionHeader with "New Session" title text
     const sessionTitles = screen.getAllByText('New Session')
     expect(sessionTitles.length).toBeGreaterThanOrEqual(1)
   })
@@ -34,25 +32,21 @@ describe('Shell', () => {
     expect(sessionTitles.length).toBeGreaterThanOrEqual(1)
   })
 
-  it('should render OutputArea terminal tab', () => {
+  it('should NOT render OutputArea by default (output initially hidden)', () => {
     renderShell()
-    expect(screen.getByText('Terminal')).toBeInTheDocument()
+    // Terminal tab should not be in the document when output is closed
+    expect(screen.queryByText('Terminal')).not.toBeInTheDocument()
+  })
+
+  it('should show output area toggle button when output is closed', () => {
+    renderShell()
+    expect(screen.getByLabelText('Show output area')).toBeInTheDocument()
   })
 
   it('should render Settings when Settings ActivityBar item is clicked', () => {
     renderShell()
     fireEvent.click(screen.getByLabelText('Settings'))
-    // General appears in both SettingsSidebar button and GeneralSettings heading
     const generalElements = screen.getAllByText('General')
     expect(generalElements.length).toBeGreaterThanOrEqual(1)
-  })
-
-  it('should render two main columns: ActivityBar + Workspace', () => {
-    renderShell()
-    // ActivityBar icons present
-    expect(screen.getByLabelText('Home')).toBeInTheDocument()
-    // Chat workspace content present
-    const sessionTitles = screen.getAllByText('New Session')
-    expect(sessionTitles.length).toBeGreaterThanOrEqual(1)
   })
 })
