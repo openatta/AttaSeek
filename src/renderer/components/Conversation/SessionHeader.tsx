@@ -1,41 +1,49 @@
-import { Monitor, Info, PanelBottom } from 'lucide-react'
-import ContextRing from './ContextRing'
+import { useAtom } from 'jotai'
+import { outputAreaVisibleAtom } from '../../atoms/outputTabsAtom'
+import { Info, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import AppLauncher from './AppLauncher'
+import SystemInfoPopup from './SystemInfoPopup'
 
 export default function SessionHeader() {
+  const [outputVisible, setOutputVisible] = useAtom(outputAreaVisibleAtom)
+
   return (
-    <div className="flex-shrink-0 h-[40px] flex items-center gap-3 px-4 border-b border-[var(--app-border)] bg-[var(--app-bg-elevated)]">
+    <div
+      className="flex-shrink-0 h-[40px] flex items-center gap-3 px-4 border-b border-[var(--app-border)] bg-[var(--app-bg-elevated)]"
+      style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+    >
       {/* Left — editable session title */}
       <div className="flex items-center gap-1.5 min-w-0">
         <span className="text-sm font-medium text-[var(--app-text)] truncate">New Session</span>
       </div>
 
-      {/* Center — context ring */}
-      <div className="flex-1 flex justify-center">
-        <ContextRing used={0} total={200000} />
-      </div>
+      {/* Center — spacer */}
+      <div className="flex-1" />
 
-      {/* Right — three action buttons */}
-      <div className="flex items-center gap-0.5">
+      {/* Right — action buttons (fixed-width container to prevent layout shift) */}
+      <div
+        className="flex items-center gap-0.5 flex-shrink-0"
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+      >
+        {/* App launcher dropdown */}
+        <AppLauncher />
+
+        {/* System info popup toggle */}
+        <SystemInfoPopup />
+
+        {/* Toggle output area — hidden when output is visible */}
         <button
-          className="w-6 h-6 flex items-center justify-center rounded text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors"
-          title="应用面板"
-          aria-label="应用面板"
+          onClick={() => setOutputVisible(!outputVisible)}
+          className={`w-6 h-6 flex items-center justify-center rounded text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors
+            ${outputVisible ? 'invisible' : ''}`}
+          title={outputVisible ? 'Hide output area' : 'Show output area'}
+          aria-label={outputVisible ? 'Hide output area' : 'Show output area'}
         >
-          <Monitor className="w-4 h-4" />
-        </button>
-        <button
-          className="w-6 h-6 flex items-center justify-center rounded text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors"
-          title="环境信息"
-          aria-label="环境信息"
-        >
-          <Info className="w-4 h-4" />
-        </button>
-        <button
-          className="w-6 h-6 flex items-center justify-center rounded text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors"
-          title="AI 输出区域"
-          aria-label="AI 输出区域"
-        >
-          <PanelBottom className="w-4 h-4" />
+          {outputVisible ? (
+            <PanelLeftOpen className="w-4 h-4" />
+          ) : (
+            <PanelLeftClose className="w-4 h-4" />
+          )}
         </button>
       </div>
     </div>

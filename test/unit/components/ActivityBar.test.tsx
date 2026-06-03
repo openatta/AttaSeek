@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { Provider } from 'jotai'
 import ActivityBar from '@/components/ActivityBar/ActivityBar'
@@ -12,7 +12,7 @@ function renderBar() {
 }
 
 describe('ActivityBar', () => {
-  it('should render all top-level navigation items', () => {
+  it('should render 6 top-level nav items and Settings', () => {
     renderBar()
     expect(screen.getByLabelText('Home')).toBeInTheDocument()
     expect(screen.getByLabelText('New Session')).toBeInTheDocument()

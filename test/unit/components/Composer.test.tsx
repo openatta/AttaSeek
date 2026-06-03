@@ -27,23 +27,23 @@ describe('Composer', () => {
     expect(screen.getByPlaceholderText(/Message AttaSeek/)).toBeInTheDocument()
   })
 
-  it('should display mention (@) hint text', () => {
-    renderComposer()
-    expect(screen.getByText(/@file.*@folder.*@agent.*@plugin/)).toBeInTheDocument()
-  })
-
-  it('should display slash command hint text', () => {
-    renderComposer()
-    expect(screen.getByText(/\/plan.*\/review.*\/explain.*\/fix.*\/diff/)).toBeInTheDocument()
-  })
-
   it('should render model selector', () => {
     renderComposer()
     expect(screen.getByText(/Opus/)).toBeInTheDocument()
   })
 
-  it('should render a textarea (enabled for interactive use)', () => {
+  it('should render permission mode tag', () => {
     renderComposer()
-    expect(screen.getByRole('textbox')).toBeInTheDocument()
+    expect(screen.getByText('Default Review ▾')).toBeInTheDocument()
+  })
+
+  it('should render reasoning effort tag', () => {
+    renderComposer()
+    expect(screen.getByText(/Reasoning/)).toBeInTheDocument()
+  })
+
+  it('should render ⌘Enter hint', () => {
+    renderComposer()
+    expect(screen.getByText('⌘Enter')).toBeInTheDocument()
   })
 })

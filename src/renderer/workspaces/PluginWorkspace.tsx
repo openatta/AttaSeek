@@ -6,12 +6,15 @@ export default function PluginWorkspace() {
   return (
     <div className="flex flex-1 min-w-0">
       <div
-        className="flex-shrink-0 border-r border-[var(--app-border)] overflow-y-auto"
-        style={{ width: '260px' }}
+        className="flex-shrink-0 border-r border-[var(--app-border)] overflow-y-auto flex flex-col"
+        style={{ width: 260 }}
       >
-        <div className="h-[40px] flex items-center px-4">
+        <div
+          className="flex-shrink-0 h-[40px] flex items-center px-4"
+          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+        >
           <h2 className="text-xs font-semibold text-[var(--app-text-secondary)] uppercase tracking-wider">
-            Plugins
+            PLUGINS
           </h2>
         </div>
         <div className="flex-1 flex items-center justify-center p-4">

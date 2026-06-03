@@ -3,7 +3,6 @@ import { atom } from 'jotai'
 export type Activity =
   | 'home'
   | 'chat'
-  | 'chats'
   | 'projects'
   | 'search'
   | 'automation'

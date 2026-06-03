@@ -4,6 +4,7 @@ import {
   activeOutputTabAtom,
   outputAreaVisibleAtom
 } from '../../atoms/outputTabsAtom'
+import { outputFullscreenAtom } from '../../atoms/outputFullscreenAtom'
 import { Globe, FolderOpen, Terminal, GitCompare, Maximize2, X } from 'lucide-react'
 import BrowserPanel from './BrowserPanel'
 import FilesPanel from './FilesPanel'
@@ -23,6 +24,7 @@ export default function OutputArea() {
   const [tabs, setTabs] = useAtom(outputTabsAtom)
   const [activeId, setActiveId] = useAtom(activeOutputTabAtom)
   const [visible, setVisible] = useAtom(outputAreaVisibleAtom)
+  const [fullscreen, setFullscreen] = useAtom(outputFullscreenAtom)
 
   if (!visible) return null
 
@@ -49,10 +51,24 @@ export default function OutputArea() {
   return (
     <div
       className="flex flex-col flex-shrink-0 border-l border-[var(--app-border)] bg-[var(--app-bg)]"
-      style={{ width: '400px', minWidth: '280px', maxWidth: '600px' }}
+      style={{ width: fullscreen ? undefined : '400px', minWidth: fullscreen ? undefined : '280px', maxWidth: fullscreen ? undefined : '600px' }}
     >
-      {/* Tab bar */}
-      <div className="flex-shrink-0 flex items-center border-b border-[var(--app-border)] h-[32px]">
+      {/* Title bar — 40px, draggable */}
+      <div
+        className="flex-shrink-0 flex items-center border-b border-[var(--app-border)] h-[40px]"
+        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      >
+        {/* Fullscreen toggle — left side of header */}
+        <button
+          onClick={() => setFullscreen(!fullscreen)}
+          className="w-6 h-6 flex items-center justify-center rounded text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors ml-1 flex-shrink-0"
+          title={fullscreen ? 'Restore' : 'Fullscreen'}
+          aria-label={fullscreen ? 'Restore' : 'Fullscreen'}
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        >
+          <Maximize2 className="w-3.5 h-3.5" />
+        </button>
+
         {/* Tab list */}
         <div className="flex items-center flex-1 min-w-0 overflow-x-auto">
           {displayTabs.map((tab) => {
@@ -64,13 +80,14 @@ export default function OutputArea() {
               <button
                 key={tab.id}
                 onClick={() => setActiveId(tab.id)}
-                className={`flex items-center gap-1.5 px-3 h-[32px] text-[11px] border-r border-[var(--app-border)]
+                className={`flex items-center gap-1.5 px-3 h-[40px] text-[11px] border-r border-[var(--app-border)]
                   transition-colors flex-shrink-0
                   ${
                     isActive
                       ? 'text-[var(--app-text)] bg-[var(--app-bg-inset)] border-b-2 border-b-blue-500'
                       : 'text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)]'
                   }`}
+                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
               >
                 <Icon className="w-3.5 h-3.5" />
                 <span className="truncate max-w-[80px]">{tab.label}</span>
@@ -92,22 +109,16 @@ export default function OutputArea() {
           })}
         </div>
 
-        {/* Expand / Hide */}
-        <div className="flex items-center flex-shrink-0 mr-1">
-          <button
-            className="w-6 h-6 flex items-center justify-center rounded text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors"
-            title="Expand"
-          >
-            <Maximize2 className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => setVisible(false)}
-            className="w-6 h-6 flex items-center justify-center rounded text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors"
-            title="Hide"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
+        {/* Hide button — right side */}
+        <button
+          onClick={() => setVisible(false)}
+          className="w-6 h-6 flex items-center justify-center rounded text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors mr-1 flex-shrink-0"
+          title="Hide"
+          aria-label="Hide"
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
       </div>
 
       {/* Panel content */}

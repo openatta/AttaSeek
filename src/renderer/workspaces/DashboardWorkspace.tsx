@@ -1,38 +1,35 @@
 /**
- * Dashboard workspace — single scrollable view.
- * No zone split — a freeform content page.
+ * Dashboard workspace — single view, full width.
+ * No sidebars, no output area — just a centered Quick Start.
  */
 export default function DashboardWorkspace() {
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-8">
-      <div className="max-w-3xl mx-auto space-y-6">
-        <div>
-          <h2 className="text-sm font-semibold text-[var(--app-text)] mb-1">Dashboard</h2>
-          <p className="text-xs text-[var(--app-text-dim)]">Project overview and quick actions</p>
-        </div>
+    <div className="flex flex-col flex-1 min-w-0">
+      {/* Draggable header */}
+      <div
+        className="flex-shrink-0 h-[40px] flex items-center px-4"
+        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      >
+        <span className="text-[11px] text-[var(--app-text-dim)] select-none">AttaSeek</span>
+      </div>
 
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            { label: 'Active Sessions', value: '—' },
-            { label: 'Pending Reviews', value: '—' },
-            { label: 'Automations', value: '—' }
-          ].map((s) => (
-            <div
-              key={s.label}
-              className="rounded-lg border border-[var(--app-border)] bg-[var(--app-bg-inset)] px-4 py-3"
-            >
-              <p className="text-[11px] text-[var(--app-text-secondary)]">{s.label}</p>
-              <p className="text-lg font-semibold text-[var(--app-text)] mt-0.5">{s.value}</p>
-            </div>
-          ))}
+      {/* Centered content */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 pb-20">
+        <div className="w-16 h-16 rounded-2xl bg-[var(--app-bg-hover)] flex items-center justify-center mb-6">
+          <span className="text-2xl text-[var(--app-text-dim)]">◈</span>
         </div>
+        <h2 className="text-lg font-semibold text-[var(--app-text)] mb-1">AttaSeek</h2>
+        <p className="text-xs text-[var(--app-text-dim)] mb-8">Agent Workspace</p>
 
-        <div className="rounded-lg border border-[var(--app-border)] bg-[var(--app-bg-inset)] p-4">
-          <h3 className="text-xs font-medium text-[var(--app-text)] mb-2">Quick Start</h3>
+        <div className="w-full max-w-lg">
           <textarea
-            className="w-full bg-[var(--app-bg)] border border-[var(--app-border)] rounded-md px-3 py-2 text-sm text-[var(--app-text)] placeholder:text-[var(--app-text-dim)] resize-none outline-none focus:border-[var(--app-accent)] transition-colors"
-            placeholder="What do you want to work on?"
-            rows={2}
+            className="w-full bg-[var(--app-bg-inset)] border border-[var(--app-border)] rounded-lg
+                       px-4 py-3 text-sm text-[var(--app-text)] placeholder:text-[var(--app-text-dim)]
+                       resize-none outline-none
+                       focus:border-[var(--app-accent)] focus:ring-1 focus:ring-[var(--app-accent-border)]
+                       transition-colors"
+            placeholder="What do you want to build?"
+            rows={3}
           />
         </div>
       </div>
