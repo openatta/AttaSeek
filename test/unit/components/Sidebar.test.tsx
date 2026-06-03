@@ -1,37 +1,42 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import Sidebar from '@/components/Sidebar/Sidebar'
+import { WorkspaceSidebar } from '@/layouts/WorkspaceRouter'
 import type { Activity } from '@/atoms/activityAtom'
 
-describe('Sidebar', () => {
-  it('should display the current activity name as a heading', () => {
-    render(<Sidebar activity="chat" />)
-    expect(screen.getByText('chat')).toBeInTheDocument()
+describe('WorkspaceSidebar', () => {
+  it('should display the Chats heading for "chat" activity', () => {
+    render(<WorkspaceSidebar activity="chat" />)
+    expect(screen.getByText('Chats')).toBeInTheDocument()
   })
 
-  it('should display a placeholder message for the chat activity', () => {
-    render(<Sidebar activity="chat" />)
-    expect(screen.getByText('Sessions — coming soon')).toBeInTheDocument()
+  it('should display the Chats heading for "chats" activity', () => {
+    render(<WorkspaceSidebar activity="chats" />)
+    expect(screen.getByText('Chats')).toBeInTheDocument()
   })
 
   it('should render SettingsSidebar when activity is "settings"', () => {
-    render(<Sidebar activity="settings" />)
+    render(<WorkspaceSidebar activity="settings" />)
     expect(screen.getByText('Settings')).toBeInTheDocument()
     expect(screen.getByText('General')).toBeInTheDocument()
     expect(screen.getByText('Appearance')).toBeInTheDocument()
   })
 
   it('should render ChatsList when activity is "chats"', () => {
-    render(<Sidebar activity="chats" />)
+    render(<WorkspaceSidebar activity="chats" />)
     expect(screen.getByPlaceholderText(/搜索/)).toBeInTheDocument()
-    expect(screen.getByText('Chats')).toBeInTheDocument()
   })
 
-  it.each(['home', 'projects', 'search', 'automation', 'plugin'] as Activity[])(
-    'should render a placeholder for activity: %s',
-    (activity) => {
-      render(<Sidebar activity={activity} />)
-      expect(screen.getByText(activity)).toBeInTheDocument()
+  it.each([
+    { activity: 'home' as Activity, heading: 'Dashboard' },
+    { activity: 'projects' as Activity, heading: 'Projects' },
+    { activity: 'search' as Activity, heading: 'Search' },
+    { activity: 'automation' as Activity, heading: 'Automation' },
+    { activity: 'plugin' as Activity, heading: 'Plugins' }
+  ])(
+    'should render a placeholder for activity: $activity',
+    ({ activity, heading }) => {
+      render(<WorkspaceSidebar activity={activity} />)
+      expect(screen.getByText(heading)).toBeInTheDocument()
     }
   )
 })

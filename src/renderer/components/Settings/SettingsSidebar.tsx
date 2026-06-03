@@ -13,8 +13,8 @@ export default function SettingsSidebar() {
           className={`text-left px-3 py-1.5 rounded-md text-xs transition-colors
             ${
               active === section.id
-                ? 'bg-neutral-800 text-neutral-200'
-                : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800/50'
+                ? 'bg-[var(--app-bg-active)] text-[var(--app-text)]'
+                : 'text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)]'
             }`}
         >
           {section.label}

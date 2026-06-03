@@ -27,13 +27,13 @@ export default function PermissionInline({
               </button>
               <button
                 onClick={onAllowSession}
-                className="text-[11px] px-2.5 py-1 rounded border border-neutral-600 text-neutral-300 hover:bg-neutral-800 transition-colors"
+                className="text-[11px] px-2.5 py-1 rounded border border-[var(--app-border)] text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors"
               >
                 Allow this session
               </button>
               <button
                 onClick={onDeny}
-                className="text-[11px] px-2.5 py-1 rounded border border-neutral-600 text-neutral-400 hover:bg-neutral-800 transition-colors"
+                className="text-[11px] px-2.5 py-1 rounded border border-[var(--app-border)] text-[var(--app-text-secondary)] hover:bg-[var(--app-bg-hover)] transition-colors"
               >
                 Deny
               </button>

@@ -15,9 +15,9 @@ export default function InlineDiffCard({
 }: InlineDiffCardProps) {
   return (
     <div className="px-4 py-1">
-      <div className="border border-neutral-700 rounded-lg bg-neutral-900/50 px-3 py-2">
+      <div className="border border-[var(--app-border-muted)] rounded-lg bg-[var(--app-bg-inset)] px-3 py-2">
         <div className="flex items-center gap-3">
-          <span className="text-xs text-neutral-300">📄 {filename}</span>
+          <span className="text-xs text-[var(--app-text)]">📄 {filename}</span>
           <span className="text-xs text-green-500">+{additions}</span>
           <span className="text-xs text-red-500">-{deletions}</span>
           <div className="flex-1" />

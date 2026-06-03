@@ -2,38 +2,39 @@ import { useAtom } from 'jotai'
 import { activeActivityAtom } from '../atoms/activityAtom'
 import ActivityBar from '../components/ActivityBar/ActivityBar'
 import TitleBar from '../components/TitleBar/TitleBar'
-import Sidebar from '../components/Sidebar/Sidebar'
-import Conversation from '../components/Conversation/Conversation'
-import Settings from '../components/Settings/Settings'
-import OutputArea from '../components/OutputArea/OutputArea'
+import { WorkspaceSidebar, WorkspaceMain } from './WorkspaceRouter'
 
+/**
+ * Top-level Shell layout.
+ *
+ * Three fixed columns:
+ *   1. ActivityBar (48px left rail — always present)
+ *   2. Sidebar column (TitleBar + activity-specific sidebar content)
+ *   3. Main canvas (dispatched by WorkspaceRouter per activity)
+ *
+ * Each workspace IS free to compose its main canvas however it wants
+ * (3-zone, 2-zone, single scrollable view, etc.). The sidebar column
+ * is routed separately so TitleBar + traffic lights are always aligned.
+ */
 export default function Shell() {
   const [activeActivity] = useAtom(activeActivityAtom)
 
   return (
     <div className="flex h-screen w-screen overflow-hidden">
-      {/* Activity Bar — 48px left rail */}
+      {/* 1. Activity Bar — 48px left rail */}
       <ActivityBar />
 
-      {/* Sidebar region: title bar (traffic lights area) + sidebar content */}
+      {/* 2. Sidebar column — traffic lights region + activity sidebar */}
       <div
-        className="flex flex-col flex-shrink-0 border-r border-neutral-800"
+        className="flex flex-col flex-shrink-0 border-r border-[var(--app-border)]"
         style={{ width: 'var(--sidebar-width)' }}
       >
         <TitleBar />
-        <Sidebar activity={activeActivity} />
+        <WorkspaceSidebar activity={activeActivity} />
       </div>
 
-      {/* Main Canvas: Conversation (center) + AI OutputArea (right) */}
-      <div className="flex flex-1 min-w-0">
-        {/* Conversation / Settings — primary content area */}
-        <div className="flex flex-col flex-1 min-w-0 min-h-0">
-          {activeActivity === 'settings' ? <Settings /> : <Conversation />}
-        </div>
-
-        {/* AI Output area — right panel */}
-        <OutputArea />
-      </div>
+      {/* 3. Main canvas — workspace-controlled layout */}
+      <WorkspaceMain activity={activeActivity} />
     </div>
   )
 }

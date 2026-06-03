@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* ── Design tokens ─────────────────────────────────────────────── */
+/* ── Layout tokens ─────────────────────────────────────────────── */
 :root {
   --activity-bar-width: 48px;
   --sidebar-width: 260px;
@@ -8,30 +8,54 @@
   --sidebar-max-width: 400px;
 }
 
-/* ── Theme tokens (Light by default) ────────────────────────────── */
+/* ── Theme tokens ─────────────────────────────────────────────────
+   Syntax: bg-[var(--app-bg)] text-[var(--app-text)] border-[var(--app-border)]
+   Each token maps to the correct value for the active data-theme. */
+
+/* ── Light theme (default) ─────────────────────────────────────── */
 :root {
-  --bg-primary: #ffffff;
-  --bg-secondary: #f5f5f5;
-  --bg-tertiary: #e5e5e5;
-  --text-primary: #171717;
-  --text-secondary: #737373;
-  --text-tertiary: #a3a3a3;
-  --border-primary: #e5e5e5;
-  --border-secondary: #f0f0f0;
-  --scrollbar-thumb: rgba(0, 0, 0, 0.12);
+  /* Surfaces (by depth — deepest first) */
+  --app-bg:              #ffffff;   /* primary page background */
+  --app-bg-elevated:     #fafafa;   /* header, elevated panels */
+  --app-bg-inset:        #f5f5f5;   /* input fields, inset sections */
+  --app-bg-hover:        rgba(0, 0, 0, 0.04);
+  --app-bg-active:       rgba(0, 0, 0, 0.06);
+
+  /* Text */
+  --app-text:            #171717;   /* primary content */
+  --app-text-secondary:  #737373;   /* labels, muted info */
+  --app-text-dim:        #a3a3a3;   /* placeholders, disabled */
+
+  /* Borders */
+  --app-border:          #e5e5e5;   /* panel edges, input borders */
+  --app-border-muted:    #f0f0f0;   /* subtle separators */
+
+  /* Scrollbar */
+  --scrollbar-thumb:       rgba(0, 0, 0, 0.12);
   --scrollbar-thumb-hover: rgba(0, 0, 0, 0.2);
+
+  /* Accent (brand — constant across themes) */
+  --app-accent:          #3b82f6;
+  --app-accent-subtle:   rgba(59, 130, 246, 0.1);
+  --app-accent-border:   rgba(59, 130, 246, 0.3);
 }
 
+/* ── Dark theme ────────────────────────────────────────────────── */
 [data-theme="dark"] {
-  --bg-primary: #0a0a0a;
-  --bg-secondary: #171717;
-  --bg-tertiary: #1f1f1f;
-  --text-primary: #f5f5f5;
-  --text-secondary: #a3a3a3;
-  --text-tertiary: #737373;
-  --border-primary: #262626;
-  --border-secondary: #1f1f1f;
-  --scrollbar-thumb: rgba(255, 255, 255, 0.12);
+  --app-bg:              #0a0a0a;
+  --app-bg-elevated:     #171717;
+  --app-bg-inset:        #1f1f1f;
+  --app-bg-hover:        rgba(255, 255, 255, 0.05);
+  --app-bg-active:       rgba(255, 255, 255, 0.08);
+
+  --app-text:            #e5e5e5;
+  --app-text-secondary:  #a3a3a3;
+  --app-text-dim:        #737373;
+
+  --app-border:          #262626;
+  --app-border-muted:    #1f1f1f;
+
+  --scrollbar-thumb:       rgba(255, 255, 255, 0.12);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
 }
 
@@ -40,6 +64,8 @@ html, body, #root {
   height: 100%;
   margin: 0;
   padding: 0;
+  background: var(--app-bg);
+  color: var(--app-text);
 }
 
 /* ── Scrollbar styling ─────────────────────────────────────────── */
@@ -51,17 +77,15 @@ html, body, #root {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb, rgba(0, 0, 0, 0.12));
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--scrollbar-thumb-hover, rgba(0, 0, 0, 0.2));
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* ── macOS traffic lights spacing ──────────────────────────────── */
-/* When titleBarStyle is hiddenInset, macOS renders traffic lights
-   in the top-left corner. We offset content to sit below them. */
 .traffic-lights-spacer {
-  height: 28px; /* traffic lights vertical center on macOS */
+  height: 28px;
   -webkit-app-region: drag;
 }

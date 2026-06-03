@@ -17,11 +17,11 @@ export default function AppearanceSettings() {
 
   return (
     <div>
-      <h3 className="text-sm font-semibold text-neutral-200 mb-4">Appearance</h3>
+      <h3 className="text-sm font-semibold text-[var(--app-text)] mb-4">Appearance</h3>
       <div className="space-y-4">
         {/* Theme selector */}
         <div>
-          <p className="text-xs text-neutral-300 mb-2">Base theme</p>
+          <p className="text-xs text-[var(--app-text-secondary)] mb-2">Base theme</p>
           <div className="flex gap-2">
             {THEME_OPTIONS.map(({ value, label, icon: Icon }) => (
               <button
@@ -31,7 +31,7 @@ export default function AppearanceSettings() {
                   ${
                     theme === value
                       ? 'border-blue-500 bg-blue-500/10 text-blue-400'
-                      : 'border-neutral-700 text-neutral-500 hover:border-neutral-600 hover:text-neutral-400'
+                      : 'border-[var(--app-border)] text-[var(--app-text-secondary)] hover:border-[var(--app-text-dim)] hover:text-[var(--app-text)]'
                   }`}
               >
                 <Icon className="w-5 h-5" />
@@ -43,19 +43,19 @@ export default function AppearanceSettings() {
         {/* Font selectors */}
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs text-neutral-300">UI font</p>
-            <p className="text-[11px] text-neutral-500">SF Pro (system)</p>
+            <p className="text-xs text-[var(--app-text-secondary)]">UI font</p>
+            <p className="text-[11px] text-[var(--app-text-dim)]">SF Pro (system)</p>
           </div>
-          <span className="text-[11px] text-neutral-400 border border-neutral-700 rounded px-2 py-0.5">
+          <span className="text-[11px] text-[var(--app-text-secondary)] border border-[var(--app-border)] rounded px-2 py-0.5">
             System ▾
           </span>
         </div>
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs text-neutral-300">Code font</p>
-            <p className="text-[11px] text-neutral-500">JetBrains Mono</p>
+            <p className="text-xs text-[var(--app-text-secondary)]">Code font</p>
+            <p className="text-[11px] text-[var(--app-text-dim)]">JetBrains Mono</p>
           </div>
-          <span className="text-[11px] text-neutral-400 border border-neutral-700 rounded px-2 py-0.5">
+          <span className="text-[11px] text-[var(--app-text-secondary)] border border-[var(--app-border)] rounded px-2 py-0.5">
             JetBrains ▾
           </span>
         </div>
