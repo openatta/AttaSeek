@@ -5,26 +5,25 @@ import MessageFlow from '@/components/Conversation/MessageFlow'
 describe('MessageFlow', () => {
   it('should display the app name', () => {
     render(<MessageFlow />)
-    expect(screen.getByText('AttaSeek Agent')).toBeInTheDocument()
+    expect(screen.getByText('AttaSeek Agent Workbench')).toBeInTheDocument()
   })
 
   it('should display an empty-state prompt', () => {
     render(<MessageFlow />)
     expect(
-      screen.getByText(/Start a conversation/)
+      screen.getByText(/Type a message below/)
     ).toBeInTheDocument()
   })
 
   it('should display instructions on what the agent can do', () => {
     render(<MessageFlow />)
     expect(
-      screen.getByText(/read code, write patches, run commands, or review changes/)
+      screen.getByText(/plan, execute tools, and generate artifacts/)
     ).toBeInTheDocument()
   })
 
   it('should render an icon placeholder', () => {
     render(<MessageFlow />)
-    // The diamond icon ◈
     const icon = document.querySelector('.rounded-2xl')
     expect(icon).toBeInTheDocument()
   })

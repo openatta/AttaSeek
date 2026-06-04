@@ -23,10 +23,10 @@ describe('ActivityBar', () => {
     expect(screen.getByLabelText('Settings')).toBeInTheDocument()
   })
 
-  it('should mark the default activity (chat) as active', () => {
+  it('should mark the default activity (home) as active', () => {
     renderBar()
-    const chatBtn = screen.getByLabelText('New Session')
-    expect(chatBtn.className).toContain('text-blue-400')
+    const homeBtn = screen.getByLabelText('Home')
+    expect(homeBtn.className).toContain('text-blue-400')
   })
 
   it('should switch to settings when settings button is clicked', () => {
@@ -45,12 +45,12 @@ describe('ActivityBar', () => {
 
   it('should deactivate the previous item when a new one is clicked', () => {
     renderBar()
-    const chatBtn = screen.getByLabelText('New Session')
     const homeBtn = screen.getByLabelText('Home')
+    const chatBtn = screen.getByLabelText('New Session')
 
-    expect(chatBtn.className).toContain('text-blue-400')
-    fireEvent.click(homeBtn)
-    expect(chatBtn.className).not.toContain('text-blue-400')
     expect(homeBtn.className).toContain('text-blue-400')
+    fireEvent.click(chatBtn)
+    expect(homeBtn.className).not.toContain('text-blue-400')
+    expect(chatBtn.className).toContain('text-blue-400')
   })
 })

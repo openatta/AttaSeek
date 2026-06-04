@@ -23,9 +23,9 @@ const ALL_ACTIVITIES: Activity[] = [
 ]
 
 describe('activityAtom', () => {
-  it('should default to "chat"', () => {
+  it('should default to "home"', () => {
     const { result } = useActivityAtom()
-    expect(result.current[0]).toBe('chat')
+    expect(result.current[0]).toBe('home')
   })
 
   it.each(ALL_ACTIVITIES)('should switch activity to %s', (target) => {

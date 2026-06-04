@@ -13,6 +13,7 @@
     "src/main/**/*.ts",
     "src/preload/**/*.ts",
     "src/preload/**/*.d.ts",
+    "src/renderer/core/types/**/*.ts",
     "electron.vite.config.ts"
   ]
 }

@@ -1,6 +1,6 @@
 /**
- * Dashboard workspace — full-width view with stats and Quick Start.
- * Header is a bare draggable region.
+ * Dashboard workspace — home page with stats and Quick Start.
+ * Content is vertically and horizontally centered.
  */
 
 const MOCK_STATS = {
@@ -13,16 +13,16 @@ const MOCK_STATS = {
 
 export default function DashboardWorkspace() {
   return (
-    <div className="flex flex-col flex-1 min-w-0">
-      {/* Draggable header — empty, just for window drag */}
+    <div className="flex flex-col h-full">
+      {/* Drag region — part of the content, not a separate bar */}
       <div
         className="flex-shrink-0 h-[40px]"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       />
 
-      {/* Content — vertically centered */}
+      {/* Content — centered vertically and horizontally */}
       <div className="flex-1 flex items-center justify-center overflow-y-auto px-8 py-6">
-        <div className="max-w-4xl mx-auto space-y-6">
+        <div className="max-w-4xl mx-auto space-y-6 w-full">
           {/* Stat cards row */}
           <div className="grid grid-cols-5 gap-3">
             {[
