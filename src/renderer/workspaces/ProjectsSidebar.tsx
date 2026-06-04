@@ -32,13 +32,7 @@ export default function ProjectsSidebar({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Draggable header */}
-      <div
-        className="flex-shrink-0 h-[40px]"
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-      />
-
-      {/* Title row */}
+      {/* Title row — drag header provided by SidebarSlot */}
       <div className="flex items-center px-4 pb-2">
         {selectedProject ? (
           <button

@@ -4,13 +4,7 @@ import { Plus } from 'lucide-react'
 export default function ChatsSidebar() {
   return (
     <div className="flex flex-col h-full">
-      {/* Draggable header — empty, just for window drag */}
-      <div
-        className="flex-shrink-0 h-[40px]"
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-      />
-
-      {/* Content header: CHATS title + + button */}
+      {/* Title: CHATS + + button — drag header provided by SidebarSlot */}
       <div className="flex items-center px-4 pb-2">
         <h2 className="text-xs font-semibold text-[var(--app-text-secondary)] uppercase tracking-wider">
           CHATS

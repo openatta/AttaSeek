@@ -1,4 +1,4 @@
-import { useAtom } from 'jotai'
+import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import {
   composerValueAtom,
   composerChipsAtom,
@@ -10,6 +10,8 @@ import {
   type PermissionMode,
   type ReasoningEffort
 } from '../../atoms/composerSettingsAtom'
+import { currentSessionIdAtom, agentTasksAtom } from '../../atoms/sessionAtom'
+import type { AgentTask } from '../../core/types/AgentTask'
 import ContextChip from './ContextChip'
 import ModelSelector from './ModelSelector'
 import { Plus, Mic, ArrowUp } from 'lucide-react'
@@ -29,10 +31,11 @@ const REASONING_LABELS: Record<ReasoningEffort, string> = {
 export default function Composer() {
   const [value, setValue] = useAtom(composerValueAtom)
   const [chips, setChips] = useAtom(composerChipsAtom)
-  const [isRunning] = useAtom(isAgentRunningAtom)
+  const [isRunning, setIsRunning] = useAtom(isAgentRunningAtom)
   const [permissionMode, setPermissionMode] = useAtom(permissionModeAtom)
   const [reasoningEffort, setReasoningEffort] = useAtom(reasoningEffortAtom)
-
+  const sessionId = useAtomValue(currentSessionIdAtom)
+  const setTasks = useSetAtom(agentTasksAtom)
   const removeChip = (id: string) => setChips((prev) => prev.filter((c) => c.id !== id))
 
   const cyclePermission = () => {
@@ -45,6 +48,34 @@ export default function Composer() {
     const efforts: ReasoningEffort[] = ['low', 'medium', 'high']
     const idx = efforts.indexOf(reasoningEffort)
     setReasoningEffort(efforts[(idx + 1) % efforts.length])
+  }
+
+  const handleSend = async () => {
+    const trimmed = value.trim()
+    if (!trimmed || isRunning) return
+
+    setValue('')
+    setIsRunning(true)
+
+    try {
+      if (window.api?.agent?.createTask) {
+        const result = await window.api.agent.createTask(trimmed, sessionId)
+        if (result.success && result.task) {
+          setTasks((prev: AgentTask[]) => [...prev, result.task as AgentTask])
+        }
+      }
+    } catch (err) {
+      console.error('[Composer] send error:', err)
+    } finally {
+      setIsRunning(false)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
+    }
   }
 
   return (
@@ -64,15 +95,11 @@ export default function Composer() {
         <textarea
           value={value}
           onChange={(e) => setValue(e.target.value)}
+          onKeyDown={handleKeyDown}
           className="w-full bg-transparent text-sm text-[var(--app-text)] placeholder:text-[var(--app-text-dim)]
                      resize-none outline-none border-none ring-0 focus:ring-0 px-3 pt-2.5"
           placeholder="Ask anything…"
           rows={Math.min(10, Math.max(3, value.split('\n').length))}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-            }
-          }}
         />
 
         {/* Toolbar row — inside the card, at the bottom */}
@@ -110,6 +137,7 @@ export default function Composer() {
             </button>
           ) : (
             <button
+              onClick={handleSend}
               className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors
                 ${value.trim()
                   ? 'bg-[var(--app-accent)] text-white hover:opacity-90'

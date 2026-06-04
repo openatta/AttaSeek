@@ -3,11 +3,31 @@ import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { platform } from 'os'
 import { registerThemeHandlers } from './ipc/theme'
+import { registerAgentHandlers, setAgentWindow } from './ipc/agent'
+import { registerArtifactHandlers } from './ipc/artifact'
+import { registerToolHandlers } from './ipc/tool'
+import { registerSkillHandlers } from './ipc/skill'
+import { registerPermissionHandlers } from './ipc/permission'
+import { registerAuditHandlers } from './ipc/audit'
+import { registerMemoryHandlers } from './ipc/memory'
+import { registerPluginHandlers } from './ipc/plugin'
+import { boot } from './boot'
 
 const isMac = platform() === 'darwin'
 
+// Boot sequence: register skills, tools, plugins
+boot()
+
 // Register IPC handlers before creating windows
 registerThemeHandlers()
+registerAgentHandlers()
+registerArtifactHandlers()
+registerToolHandlers()
+registerSkillHandlers()
+registerPermissionHandlers()
+registerAuditHandlers()
+registerMemoryHandlers()
+registerPluginHandlers()
 
 function createWindow(): BrowserWindow {
   const mainWindow = new BrowserWindow({
@@ -27,6 +47,9 @@ function createWindow(): BrowserWindow {
       contextIsolation: true
     }
   })
+
+  // Wire agent event bus to this window
+  setAgentWindow(mainWindow)
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()

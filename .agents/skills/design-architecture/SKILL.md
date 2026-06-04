@@ -1,0 +1,53 @@
+---
+name: design-architecture
+description: Design component tree, data flow, IPC contract, state atoms, and tech decisions
+---
+
+# 架构设计
+
+开始声明："正在使用 design-architecture。"
+
+## 流程
+
+1. **确认输入**：需求分析结论已就绪
+2. **组件/模块划分**：每个模块单一职责，接口清晰，遵循项目已有模式
+3. **数据流**：状态在哪（Jotai atom/组件本地）、数据如何传递（props/IPC/context）、错误如何传播
+4. **IPC 设计**（如涉及）：channel 名、方向（renderer→main / main→renderer）、请求/响应类型、错误类型
+5. **技术决策**：每个选择给出理由和替代方案
+
+## 关键约束
+
+- 不写实现代码——描述"什么做什么"，不写"怎么做"
+- 类型/接口只给签名不给实现体
+- 设计原则：简单优先、遵循现有模式、边界清晰
+
+## 产出格式
+
+```markdown
+# [功能名] 架构设计
+
+**日期：** YYYY-MM-DD
+**基于需求：** [链接]
+
+## 组件结构
+[组件树：标注新/改/删，每个组件一行职责说明]
+
+## 数据流
+[状态在哪 → 如何传递 → 何时更新 → 错误路径]
+
+## IPC Contract（如涉及）
+[channel 名 | 方向 | 请求类型 | 响应类型 | 错误类型]
+
+## Jotai Atoms（如涉及）
+[atom 名 | 类型 | 作用范围 | 是否持久化]
+
+## 技术决策
+[决策 | 方案 | 理由 | 替代方案]
+
+## 实现顺序
+[Phase 1 → Phase 2 → ... 依赖关系]
+```
+
+## 交接
+
+完成后 → `/write-plan`

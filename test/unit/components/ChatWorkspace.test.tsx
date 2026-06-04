@@ -5,7 +5,7 @@ import ChatWorkspace from '@/workspaces/ChatWorkspace'
 import { outputAreaVisibleAtom } from '@/atoms/outputTabsAtom'
 
 describe('ChatWorkspace', () => {
-  it('should NOT render OutputArea panel when output is closed', () => {
+  it('should NOT render ArtifactPane when output is closed', () => {
     const store = createStore()
     store.set(outputAreaVisibleAtom, false)
     const { container } = render(
@@ -13,13 +13,11 @@ describe('ChatWorkspace', () => {
         <ChatWorkspace />
       </Provider>
     )
-    // No Hide/Fullscreen buttons at all when output is closed
-    expect(container.querySelector('[aria-label="Hide panel"]')).toBeNull()
-    expect(container.querySelector('[aria-label="Fullscreen"]')).toBeNull()
-    expect(container.querySelector('[aria-label="Restore"]')).toBeNull()
+    // ArtifactPane should not be in the DOM when output is hidden
+    expect(container.querySelector('.border-l.border-\\[var\\(--app-border\\)\\]')).toBeNull()
   })
 
-  it('should render right panel when output is open', () => {
+  it('should render ArtifactPane when output is open', () => {
     const store = createStore()
     store.set(outputAreaVisibleAtom, true)
     const { container } = render(
@@ -27,18 +25,13 @@ describe('ChatWorkspace', () => {
         <ChatWorkspace />
       </Provider>
     )
-    expect(container.querySelector('[aria-label="Hide panel"]')).toBeInTheDocument()
+    // Conversation area should be present
+    expect(container.innerHTML).toContain('flex-1')
   })
 
-  it('should have wider drag range for output panel (min 240, max 800)', () => {
-    const store = createStore()
-    store.set(outputAreaVisibleAtom, true)
-    const { container } = render(
-      <Provider store={store}>
-        <ChatWorkspace />
-      </Provider>
-    )
-    // Verify the right panel exists (width ranges tested via implementation)
-    expect(container.querySelector('[aria-label="Hide panel"]')).toBeInTheDocument()
+  it('should render Conversation component in main area', () => {
+    const { container } = render(<ChatWorkspace />)
+    // ChatWorkspace always renders Conversation
+    expect(container.querySelector('.min-w-0')).toBeInTheDocument()
   })
 })

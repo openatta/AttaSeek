@@ -16,31 +16,23 @@ describe('Shell', () => {
     renderShell()
     expect(screen.getByLabelText('Home')).toBeInTheDocument()
     expect(screen.getByLabelText('Settings')).toBeInTheDocument()
-    const newSessionButtons = screen.getAllByLabelText('New Session')
-    expect(newSessionButtons.length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByLabelText('New Session')).toBeInTheDocument()
   })
 
-  it('should render the Chat workspace by default', () => {
+  it('should render the Dashboard (home) workspace by default', () => {
     renderShell()
-    const sessionTitles = screen.getAllByText('New Session')
-    expect(sessionTitles.length).toBeGreaterThanOrEqual(1)
+    // Dashboard shows stat cards
+    expect(screen.getByText('Conversations')).toBeInTheDocument()
   })
 
-  it('should render the SessionHeader', () => {
+  it('should show Quick Start on dashboard', () => {
     renderShell()
-    const sessionTitles = screen.getAllByText('New Session')
-    expect(sessionTitles.length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByPlaceholderText('What do you want to build?')).toBeInTheDocument()
   })
 
-  it('should NOT render OutputArea by default (output initially hidden)', () => {
+  it('should NOT render ArtifactPane by default (output initially hidden)', () => {
     renderShell()
-    // Terminal tab should not be in the document when output is closed
-    expect(screen.queryByText('Terminal')).not.toBeInTheDocument()
-  })
-
-  it('should show output area toggle button when output is closed', () => {
-    renderShell()
-    expect(screen.getByLabelText('Show output area')).toBeInTheDocument()
+    expect(screen.queryByText('Hide panel')).not.toBeInTheDocument()
   })
 
   it('should render Settings when Settings ActivityBar item is clicked', () => {

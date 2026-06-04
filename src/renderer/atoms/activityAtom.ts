@@ -9,4 +9,4 @@ export type Activity =
   | 'plugin'
   | 'settings'
 
-export const activeActivityAtom = atom<Activity>('chat')
+export const activeActivityAtom = atom<Activity>('home')
