@@ -25,6 +25,8 @@ export interface AgentTask {
   id: string
   sessionId: string
   projectId?: string
+  modelConfigId?: string
+  modelName?: string
   goal: string
   domain?: string
   status: AgentTaskStatus

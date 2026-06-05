@@ -3,7 +3,7 @@
  *
  * Activities are platform-level navigation targets. Each activity specifies:
  * - sidebarView: component rendered in SidebarSlot
- * - defaultLayoutMode: Standard / ArtifactFocus / Review / ChatOnly
+ * - workspaceComponent: main content component
  * - defaultArtifactTabs: ArtifactPane tabs shown by default
  *
  * Plugins contribute activities via registerActivity().
@@ -11,12 +11,10 @@
 
 import type { ComponentType } from 'react'
 
-export type LayoutMode = 'standard' | 'artifactFocus' | 'review' | 'chatOnly'
-
 export interface ActivityRegistration {
   activity: string
   sidebarView?: ComponentType
-  defaultLayoutMode: LayoutMode
+  workspaceComponent?: ComponentType  // main content rendered by WorkspaceRouter
   defaultArtifactTabs: string[]
   pluginId?: string // undefined = built-in
 }

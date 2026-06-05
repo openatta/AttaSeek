@@ -1,8 +1,15 @@
-import { contextBridge, ipcRenderer } from 'electron'
+/**
+ * Preload — secure IPC bridge between main and renderer.
+ *
+ * IPC channel naming convention: `feature:action` (e.g., `agent:create-task`).
+ * - All channels follow this pattern.
+ * - When a channel is superseded, mark the old handler with @deprecated
+ *   and keep it for one release cycle before removal.
+ * - Never change the request/response shape of an existing channel;
+ *   create a new channel instead.
+ */
 
-// Minimal secure API surface exposed to the renderer process.
-// All system capabilities go through here — the renderer never
-// accesses Node.js or Electron APIs directly.
+import { contextBridge, ipcRenderer } from 'electron'
 
 const api = {
   platform: process.platform,
@@ -24,8 +31,8 @@ const api = {
 
   // Agent API
   agent: {
-    createTask: (goal: string, sessionId: string, projectId?: string): Promise<{ success: boolean; task?: unknown; error?: string }> =>
-      ipcRenderer.invoke('agent:create-task', { goal, sessionId, projectId }),
+    createTask: (goal: string, sessionId: string, projectId?: string, modelConfigId?: string, modelName?: string): Promise<{ success: boolean; task?: unknown; error?: string }> =>
+      ipcRenderer.invoke('agent:create-task', { goal, sessionId, projectId, modelConfigId, modelName }),
     cancelTask: (taskId: string): Promise<{ success: boolean }> =>
       ipcRenderer.invoke('agent:cancel-task', { taskId }),
     getTask: (taskId: string): Promise<{ task: unknown | null }> =>
@@ -87,21 +94,56 @@ const api = {
       ipcRenderer.invoke('audit:list', filters || {}),
   },
 
+  // Model config API
+  model: {
+    list: (): Promise<{ configs: unknown[] }> =>
+      ipcRenderer.invoke('model:list'),
+    get: (id: string): Promise<{ config: unknown | null }> =>
+      ipcRenderer.invoke('model:get', { id }),
+    create: (config: Record<string, unknown>): Promise<{ config: unknown }> =>
+      ipcRenderer.invoke('model:create', { config }),
+    update: (id: string, patch: Record<string, unknown>): Promise<{ config: unknown | null }> =>
+      ipcRenderer.invoke('model:update', { id, patch }),
+    delete: (id: string): Promise<{ success: boolean; needNewDefault?: boolean }> =>
+      ipcRenderer.invoke('model:delete', { id }),
+    setDefault: (id: string): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('model:set-default', { id }),
+    test: (id: string): Promise<{ success: boolean; latencyMs?: number; model?: string; error?: string }> =>
+      ipcRenderer.invoke('model:test', { id }),
+    usage: (configId?: string, periodDays?: number): Promise<{ stats: unknown }> =>
+      ipcRenderer.invoke('model:usage', { configId, periodDays }),
+    hasConfig: (): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('model:has-config'),
+  },
+
+  // Session API
+  session: {
+    create: (title?: string, activity?: string, id?: string): Promise<{ session: unknown }> =>
+      ipcRenderer.invoke('session:create', { title, activity, id }),
+    list: (): Promise<{ sessions: unknown[] }> =>
+      ipcRenderer.invoke('session:list'),
+    get: (id: string): Promise<{ session: unknown | null }> =>
+      ipcRenderer.invoke('session:get', { id }),
+    update: (id: string, patch: Record<string, unknown>): Promise<{ session: unknown | null }> =>
+      ipcRenderer.invoke('session:update', { id, ...patch }),
+    delete: (id: string): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('session:delete', { id }),
+  },
+
   // Plugin API
   plugin: {
     list: (): Promise<{ plugins: unknown[] }> =>
       ipcRenderer.invoke('plugin:list'),
   },
 
-  // Generic IPC stub — expand as features are built
-  invoke: (channel: string, ...args: unknown[]) =>
-    ipcRenderer.invoke(channel, ...args),
-  on: (channel: string, callback: (...args: unknown[]) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, ...args: unknown[]) =>
-      callback(...args)
-    ipcRenderer.on(channel, listener)
-    return () => ipcRenderer.removeListener(channel, listener)
-  }
+  // App state persistence
+  app: {
+    getState: (key: string): Promise<{ success: boolean; value: string | null }> =>
+      ipcRenderer.invoke('app:get-state', key),
+    setState: (key: string, value: string): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('app:set-state', { key, value }),
+  },
+
 }
 
 contextBridge.exposeInMainWorld('api', api)

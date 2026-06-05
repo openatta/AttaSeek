@@ -1,153 +1,98 @@
 /**
  * PermissionService — unified permission checking with three-state decisions.
- * Check order: tool-level policy > plugin-level > risk-level > global default.
+ * Policies are persisted in SQLite; pending requests are in-memory (request lifetime only).
  */
 
-import type { PermissionContext, PermissionDecision, PermissionPolicy, PermissionRequest as PermReq, PermissionScope } from '../../renderer/core/types/Permission'
+import { getDb } from '../store/db'
+import { newId } from '../store/id'
+import type { PermissionContext, PermissionDecision, PermissionPolicy, PermissionRequest as PermReq } from '../../renderer/core/types/Permission'
 import type { ToolRiskLevel } from '../../renderer/core/types/Tool'
 
 export class PermissionService {
-  private policies: PermissionPolicy[] = []
-  private pendingRequests: Map<string, PermReq> = new Map()
-  private nextId = 1
+  private pendingRequests = new Map<string, PermReq>()
 
-  // --- Policy Management ---
+  // --- Policy Management (SQLite) ---
 
   savePolicy(policy: Omit<PermissionPolicy, 'id' | 'createdAt' | 'updatedAt'>): PermissionPolicy {
+    const db = getDb()
     const now = Date.now()
-    const existing = this.policies.find(
-      (p) =>
-        p.scope === policy.scope &&
-        p.scopeId === policy.scopeId &&
-        p.toolId === policy.toolId &&
-        p.pluginId === policy.pluginId,
-    )
+    // Check for existing policy covering the same scope
+    const row = db.prepare(
+      'SELECT id FROM permission_policies WHERE scope=? AND scope_id=? AND (tool_id=? OR tool_id IS NULL) AND (plugin_id=? OR plugin_id IS NULL)'
+    ).get(policy.scope, policy.scopeId, policy.toolId || null, policy.pluginId || null) as any
 
-    if (existing) {
-      existing.decision = policy.decision
-      existing.updatedAt = now
-      return existing
+    if (row) {
+      const id = row.id
+      db.prepare('UPDATE permission_policies SET decision=?, updated_at=? WHERE id=?').run(policy.decision, now, id)
+      const r = db.prepare('SELECT * FROM permission_policies WHERE id=?').get(id) as any
+      return this.rowToPolicy(r)
     }
 
-    const newPolicy: PermissionPolicy = {
-      ...policy,
-      id: `perm_${this.nextId++}`,
-      createdAt: now,
-      updatedAt: now,
-    }
-    this.policies.push(newPolicy)
-    return newPolicy
+    const id = `perm_${newId().slice(0, 8)}`
+    db.prepare(`INSERT INTO permission_policies (id, scope, scope_id, tool_id, plugin_id, decision, created_at, updated_at)
+      VALUES (?,?,?,?,?,?,?,?)`).run(id, policy.scope, policy.scopeId, policy.toolId || null, policy.pluginId || null, policy.decision, now, now)
+    return { id, ...policy, createdAt: now, updatedAt: now }
   }
 
   listPolicies(): PermissionPolicy[] {
-    return [...this.policies]
+    return (getDb().prepare('SELECT * FROM permission_policies ORDER BY updated_at DESC').all() as any[])
+      .map((r: any) => this.rowToPolicy(r))
   }
 
   updatePolicy(id: string, decision: PermissionDecision): PermissionPolicy | null {
-    const policy = this.policies.find((p) => p.id === id)
-    if (!policy) return null
-    policy.decision = decision
-    policy.updatedAt = Date.now()
-    return policy
+    const db = getDb()
+    const now = Date.now()
+    db.prepare('UPDATE permission_policies SET decision=?, updated_at=? WHERE id=?').run(decision, now, id)
+    const r = db.prepare('SELECT * FROM permission_policies WHERE id=?').get(id) as any
+    return r ? this.rowToPolicy(r) : null
   }
 
   deletePolicy(id: string): boolean {
-    const idx = this.policies.findIndex((p) => p.id === id)
-    if (idx === -1) return false
-    this.policies.splice(idx, 1)
-    return true
+    return getDb().prepare('DELETE FROM permission_policies WHERE id=?').run(id).changes > 0
   }
 
   // --- Permission Checking ---
 
-  /** Check permission for a tool in context. Returns the effective decision. */
   check(context: PermissionContext): PermissionDecision {
-    // 1. Tool-level policy (most specific)
-    const toolPolicy = this.findPolicy('tool', context.toolId, context.toolId)
-    if (toolPolicy) return toolPolicy.decision
-
-    // 2. Plugin-level policy
-    const pluginPolicy = this.findPolicy('plugin', context.pluginId, context.pluginId)
-    if (pluginPolicy) return pluginPolicy.decision
-
-    // 3. Project-level policy
-    if (context.projectId) {
-      const projectPolicy = this.findPolicy('project', context.projectId, context.projectId)
-      if (projectPolicy) return projectPolicy.decision
+    const db = getDb()
+    const scopes = [
+      { scope: 'tool', id: context.toolId },
+      { scope: 'plugin', id: context.pluginId },
+      { scope: 'project', id: context.projectId },
+      { scope: 'session', id: context.sessionId },
+    ].filter(s => s.id)
+    const rows = db.prepare(
+      `SELECT scope, decision FROM permission_policies WHERE (scope, scope_id) IN (${scopes.map(() => '(?,?)').join(',')})`
+    ).all(...scopes.flatMap(s => [s.scope, s.id])) as any[]
+    // Priority: tool > plugin > project > session
+    const priorities = ['tool', 'plugin', 'project', 'session']
+    for (const p of priorities) {
+      const match = rows.find((r: any) => r.scope === p)
+      if (match) return match.decision as PermissionDecision
     }
-
-    // 4. Session-level policy
-    const sessionPolicy = this.findPolicy('session', context.sessionId, context.sessionId)
-    if (sessionPolicy) return sessionPolicy.decision
-
-    // 5. Risk-level default
-    const riskPolicy = this.policies.find((p) => p.scope === 'risk_level' && p.scopeId === context.riskLevel)
-    if (riskPolicy) return riskPolicy.decision
-
-    // 6. Global default
-    const globalPolicy = this.policies.find((p) => p.scope === 'global')
-    if (globalPolicy) return globalPolicy.decision
-
-    // 7. Fallback: risky tools ask, others allow
     return context.riskLevel === 'risky' ? 'ask' : 'allow'
   }
 
-  /** Create a permission request for user confirmation */
-  requestPermission(
-    taskId: string,
-    toolCallId: string,
-    toolId: string,
-    toolName: string,
-    riskLevel: ToolRiskLevel,
-    action: string,
-    preview: string,
-    impact: string,
-    rollbackable: boolean,
-  ): PermReq {
-    const id = `permreq_${this.nextId++}`
-    const request: PermReq = {
-      id,
-      taskId,
-      toolCallId,
-      toolId,
-      toolName,
-      riskLevel,
-      action,
-      preview,
-      impact,
-      rollbackable,
-      status: 'pending',
-      createdAt: Date.now(),
-    }
-    this.pendingRequests.set(id, request)
-    return request
+  // --- Permission Requests ---
+
+  requestPermission(taskId: string, toolCallId: string, toolId: string, toolName: string, riskLevel: ToolRiskLevel, action: string, preview: string, impact: string, rollbackable: boolean): PermReq {
+    const id = `permreq_${newId().slice(0, 8)}`
+    const req: PermReq = { id, taskId, toolCallId, toolId, toolName, riskLevel, action, preview, impact, rollbackable, status: 'pending', createdAt: Date.now() }
+    this.pendingRequests.set(id, req)
+    return req
   }
 
-  /** Resolve a pending permission request */
   resolveRequest(requestId: string, decision: 'allow' | 'deny'): PermReq | null {
-    const request = this.pendingRequests.get(requestId)
-    if (!request) return null
-    request.status = decision === 'allow' ? 'allowed' : 'denied'
-    request.resolvedAt = Date.now()
-    return request
+    const req = this.pendingRequests.get(requestId)
+    if (!req) return null
+    req.status = decision === 'allow' ? 'allowed' : 'denied'
+    req.resolvedAt = Date.now()
+    return req
   }
 
-  /** Get a pending request */
-  getRequest(id: string): PermReq | undefined {
-    return this.pendingRequests.get(id)
-  }
-
-  /** List all pending requests for a task */
-  getPendingForTask(taskId: string): PermReq[] {
-    return Array.from(this.pendingRequests.values()).filter((r) => r.taskId === taskId && r.status === 'pending')
-  }
-
-  // --- Helpers ---
-
-  private findPolicy(scope: PermissionScope, scopeId: string, _searchId?: string): PermissionPolicy | undefined {
-    return this.policies.find((p) => p.scope === scope && p.scopeId === scopeId)
+  private rowToPolicy(r: any): PermissionPolicy {
+    return { id: r.id, scope: r.scope, scopeId: r.scope_id, toolId: r.tool_id, pluginId: r.plugin_id, riskLevel: r.risk_level, decision: r.decision as PermissionDecision, createdAt: r.created_at, updatedAt: r.updated_at }
   }
 }
 
-/** Singleton */
 export const permissionService = new PermissionService()

@@ -5,7 +5,7 @@ export {
   listBuiltInActivities,
   unregisterByPlugin as unregisterActivityByPlugin,
 } from './activityRegistry'
-export type { ActivityRegistration, LayoutMode } from './activityRegistry'
+export type { ActivityRegistration } from './activityRegistry'
 
 export {
   registerSidebarView,

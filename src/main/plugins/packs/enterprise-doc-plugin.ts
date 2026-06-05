@@ -18,10 +18,12 @@ export const EnterpriseDocPlugin: PluginManifest = {
   activityEntries: [
     { id: 'documents', label: 'Documents', icon: 'file-text', order: 10 },
   ],
+  // sidebarViews: declared as string keys — actual React components registered via sidebarRegistry
+  // when this plugin activates (MVP: component resolvable when 'documents' activity is registered)
   sidebarViews: [
     {
       activityId: 'documents',
-      component: 'DocumentSidebar',
+      component: 'DocumentSidebar', // resolved via sidebarRegistry.registerSidebarView() at activation
       title: 'Documents',
     },
   ],

@@ -5,7 +5,9 @@
  * managed by workspace components. Each wrapper is self-contained via useState.
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSetAtom } from 'jotai'
+import { selectedProjectIdAtom } from '../atoms/sessionAtom'
 import AutomationSidebar from './AutomationSidebar'
 import PluginSidebarComponent from './PluginSidebar'
 import ProjectsSidebarComponent from './ProjectsSidebar'
@@ -28,20 +30,24 @@ export function PluginSidebarConnected() {
 }
 
 export function ProjectsSidebarConnected() {
-  const [projectId, setProjectId] = useState<string | null>(null)
+  const [selectedProject, setSelectedProject] = useState<ProjectItem | null>(null)
   const [sessionId, setSessionId] = useState<string | null>(null)
+  const setSelectedProjectId = useSetAtom(selectedProjectIdAtom)
+
+  useEffect(() => { setSelectedProjectId(selectedProject?.id || null) }, [selectedProject])
 
   return (
     <ProjectsSidebarComponent
-      selectedProject={null}
+      selectedProject={selectedProject}
       selectedSessionId={sessionId}
       onSelectProject={(project: ProjectItem) => {
-        setProjectId(project.id)
+        setSelectedProject(project)
         setSessionId(null)
+        setSelectedProjectId(project.id)
       }}
       onSelectSession={(_pid: string, sid: string) => setSessionId(sid)}
       onBackToProjects={() => {
-        setProjectId(null)
+        setSelectedProject(null)
         setSessionId(null)
       }}
     />

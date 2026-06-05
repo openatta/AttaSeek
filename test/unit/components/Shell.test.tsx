@@ -27,7 +27,7 @@ describe('Shell', () => {
 
   it('should show Quick Start on dashboard', () => {
     renderShell()
-    expect(screen.getByPlaceholderText('What do you want to build?')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/What do you want to build/)).toBeInTheDocument()
   })
 
   it('should NOT render ArtifactPane by default (output initially hidden)', () => {

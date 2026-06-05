@@ -12,18 +12,18 @@
 
 ## 缺失项总览
 
-| # | 缺失项 | 严重程度 | 阻塞 Phase |
-|---|---|---|---|
-| G1 | ContextBuilder 设计 | 高 | Phase 2-4 |
-| G2 | ToolRouter 实现细节（embedding 模型、sqlite-vec） | 高 | Phase 4 |
-| G3 | 插件生命周期管理 | 高 | Phase 6 |
-| G4 | 错误处理策略（跨层） | 中 | Phase 2+ |
-| G5 | 会话恢复 / 跨启动状态保存 | 中 | Phase 2+ |
-| G6 | Artifact 版本管理语义 | 中 | Phase 3 |
-| G7 | 测试策略 | 中 | 全 Phase |
-| G8 | 性能约束与目标 | 低 | Phase 3+ |
-| G9 | IPC 版本兼容与废弃策略 | 低 | Phase 2+ |
-| G10 | CSS/样式迁移方案 | 低 | Phase 1 |
+| # | 缺失项 | 严重程度 | 阻塞 Phase | v0.2.0 状态 |
+|---|---|---|---|---|---|
+| G1 | ContextBuilder 设计 | 高 | Phase 2-4 | 🔵 延后（接入 LLM 时重建） |
+| G2 | ToolRouter 实现细节 | 高 | Phase 4 | 🟡 Stage A 完成，Stage B 延后 |
+| G3 | 插件生命周期管理 | 高 | Phase 6 | ✅ PluginLoader 已实现 |
+| G4 | 错误处理策略（跨层） | 中 | Phase 2+ | ✅ IPC try/catch + 决策校验 |
+| G5 | 会话恢复 / 跨启动状态保存 | 中 | Phase 2+ | 🔵 延后（依赖 SQLite） |
+| G6 | Artifact 版本管理语义 | 中 | Phase 3 | 🟡 逻辑完成，SQLite 持久化延后 |
+| G7 | 测试策略 | 中 | 全 Phase | 🟡 单测 74 tests，集成/E2E 空白 |
+| G8 | 性能约束与目标 | 低 | Phase 3+ | 🔵 延后（需真实 LLM） |
+| G9 | IPC 版本兼容与废弃策略 | 低 | Phase 2+ | 🔵 延后（接口迭代中） |
+| G10 | CSS/样式迁移方案 | 低 | Phase 1 | ✅ 已完成 |
 
 ---
 
