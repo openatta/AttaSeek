@@ -40,46 +40,52 @@ Agent 工作台桌面应用。视觉与功能以 Codex Desktop 为源头参考�
 
 ```
 AttaSeek/
-├── CLAUDE.md                    # 本文件 —— 项目指南 + 开发工作流
+├── CLAUDE.md                         # 本文件 —— 项目指南 + 开发工作流
 ├── docs/
-│   ├── ui.md                    # UI/UX 设计规格
-│   ├── design/                  # 架构设计文档（由 /atta-design-architecture 产出）
-│   ├── reqs/                    # 需求规格文档（由 /atta-analyze-requirements 产出）
-│   └── plans/                   # 正式实现计划文档（可选，日常用轻量内联任务列表）
+│   ├── design/                       # 架构设计文档（/atta-design-architecture 产出）
+│   ├── reqs/                         # 需求规格文档（/atta-analyze-requirements 产出）
+│   └── plans/                        # 正式实现计划文档（可选）
 ├── .claude/
-│   └── skills/                  # AI 开发工作流 skill 定义（10 个 atta-* skills）
+│   └── skills/                       # 12 个 atta-* 开发工作流 skill
 ├── package.json
 ├── electron-builder.yml
-├── tsconfig.json
-├── tailwind.config.ts
+├── tsconfig.json / tsconfig.web.json / tsconfig.node.json
 ├── src/
-│   ├── main/                    # Electron 主进程
-│   │   ├── index.ts             # BrowserWindow 创建、窗口管理
-│   │   ├── ipc/                 # IPC 处理：文件系统、终端、MCP、Bridge
-│   │   └── store/               # SQLite 持久化
-│   ├── preload/                 # contextBridge 暴露的安全 API
+│   ├── shared/types/                 # 主进程+渲染进程共享类型（唯一跨层依赖）
+│   │   ├── model.ts                  # ModelConfig, UsageSummary
+│   │   ├── AgentTask.ts / SessionEvent.ts / Artifact.ts / Audit.ts
+│   │   ├── Memory.ts / Permission.ts / Plugin.ts / Skill.ts / Tool.ts
+│   ├── main/                         # Electron 主进程
+│   │   ├── index.ts                  # BrowserWindow 创建、生命周期
+│   │   ├── boot.ts                   # 启动序列（插件、服务）
+│   │   ├── perf.ts                   # 性能埋点与监控
+│   │   ├── ipc/                      # IPC handler（agent/artifact/model/session/…）
+│   │   ├── agent/                    # Agent 运行时（AgentRuntime, AgentLoop, LLMProvider, ContextBuilder）
+│   │   ├── model/                    # 模型配置与 Provider（ModelConfigService, ProviderFactory, OpenAICompatibleProvider）
+│   │   ├── tools/                    # 工具执行（ToolExecutor, ToolImplementations, ToolRegistry）
+│   │   ├── permission/              # 权限服务（PermissionService, PermissionBridge）
+│   │   ├── memory/ / audit/ / artifacts/ / plugins/ / skills/
+│   │   └── store/                    # SQLite 持久化、ID 生成、密钥存储、工具函数
+│   ├── preload/                      # contextBridge 安全桥接（类型化 API）
 │   │   └── index.ts
-│   └── renderer/                # React 渲染进程
-│       ├── App.tsx              # 根组件：Activity Bar + Main Canvas 布局
-│       ├── layouts/
-│       │   └── Shell.tsx        # 整体 Shell 布局（titlebar + sidebar + canvas）
+│   └── renderer/                     # React 渲染进程
+│       ├── main.tsx                  # 入口
+│       ├── App.tsx                   # 根组件 + IPC 事件订阅
+│       ├── layouts/                  # Shell, AppSpace, AgentPane, WorkspaceRouter, SidebarSlot
+│       ├── atoms/                    # Jotai 状态原子（session/composer/settings/theme/…）
+│       ├── registries/               # Registry<T> 泛型基类 + 4 注册表
+│       ├── hooks/                    # useDragResize
+│       ├── core/types/               # 渲染端类型 re-export（→ src/shared/types/）
 │       ├── components/
-│       │   ├── ActivityBar/     # 48px 左轨导航
-│       │   ├── TitleBar/        # Sidebar 区域标题栏（traffic lights 区域）
-│       │   ├── Sidebar/         # 上下文面板（260px，内容随 Activity 切换）
-│       │   ├── Conversation/    # Agent 对话面板
-│       │   │   ├── SessionHeader.tsx    # 会话标题栏（内联）
-│       │   │   ├── MessageFlow.tsx      # 消息流
-│       │   │   ├── AgentStatusBar.tsx   # AI 输出区状态指示器
-│       │   │   ├── ToolCallCard.tsx     # 工具调用卡片（可折叠，带撤销按钮）
-│       │   │   ├── PermissionInline.tsx # 权限确认内联
-│       │   │   └── Composer.tsx         # 输入区
-│       │   ├── Artifact/        # 产物面板
-│       │   ├── Terminal/        # 集成终端
-│       │   └── Diff/            # Diff 查看器
-│       └── panels/              # 可拖拽面板系统
-├── resources/                   # 图标、字体等静态资源
-└── test/
+│       │   ├── ActivityBar/ / Sidebar/ / Artifact/ / Settings/
+│       │   └── Conversation/         # Agent 对话面板
+│       │       ├── Composer / MessageFlow / SessionHeader / ModelSelector
+│       │       ├── MarkdownRenderer / InlineArtifactPreview / NoModelPrompt
+│       │       └── events/           # 事件渲染组件（9 种事件类型）
+│       ├── renderers/                # 产物渲染器（code/diff/html/markdown/svg/table）
+│       └── workspaces/               # 工作区组件（Dashboard/Chat/Projects/…）
+├── resources/                        # 图标、字体等静态资源
+└── test/                             # Vitest 单元测试
 ```
 
 ## 本地开发
@@ -160,6 +166,7 @@ npm run package
 | Skill | 用途 |
 |-------|------|
 | `/atta-status` | 项目状态评估 —— 审计代码库与文档的一致性，只读不写 |
+| `/atta-refactor` | 重构优化 —— 七维分析+决策门+逐项重构+回归，不增功能不修 bug |
 | `/atta-help` | 工作流帮助 —— 展示 skill 全景、选径指南、单 skill 详情 |
 
 ### 选哪条路径
@@ -173,6 +180,7 @@ npm run package
 | bug 定位后快捷修复 | `describe-problem` → `design-fix` → `implement` |
 | 可快速修复的 bug | `bug-fix`（修复前会确认） |
 | 了解项目状态 | `status` |
+| 优化代码质量、消除技术债 | `refactor`（分析后确认再动手） |
 
 ### 阶段隔离原则
 

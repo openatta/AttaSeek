@@ -12,14 +12,16 @@
  *   system: ~8K | tools: ~12K | messages: ~60K | reserve: ~20K
  */
 
-import type { LLMMessage, LLMToolDef } from './LLMProvider'
+import type { LLMMessage, LLMToolDef } from './llm/LLMProvider'
 import { toolRegistry } from '../tools/ToolRegistry'
 import { toolRouter } from '../tools/ToolRouter'
 import { memoryService } from '../memory/MemoryService'
 import { skillRegistry } from '../skills/SkillRegistry'
 import { artifactService } from '../artifacts/ArtifactService'
 import { agentEventBus } from './AgentEventBus'
-import type { SessionEvent } from '../../renderer/core/types/SessionEvent'
+import { estimateTokens } from './compact/token-counter'
+import { loadFileMemories, toMemoryEntries } from './memory/FileMemory'
+import type { SessionEvent } from '../../shared/types/SessionEvent'
 
 // ── Types ──
 
@@ -57,11 +59,6 @@ const BUDGET = {
   reserve: 20000,
   total: 100000,
   maxHistoryRounds: 20,
-}
-
-/** Simple token estimator: ~4 chars = 1 token for English text. Conservative for code. */
-function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4)
 }
 
 function estimateMessagesTokens(messages: LLMMessage[]): number {
@@ -209,15 +206,30 @@ export class ContextBuilder {
   }
 
   private getMemoryContext(sessionId: string, projectId?: string, goal?: string): string {
+    const parts: string[] = []
+
+    // L2: SQLite memory
     const entries = memoryService.recall({
       scopeId: projectId || sessionId,
       limit: 10,
       query: goal,
     })
-    if (entries.length === 0) return ''
-    return entries
-      .map((e) => `- [${e.type}] ${e.content}`)
-      .join('\n')
+    if (entries.length > 0) {
+      parts.push(entries.map((e) => `- [${e.type}] ${e.content}`).join('\n'))
+    }
+
+    // L0: File system memory (CLAUDE.md + .attaseek/memory/*.md)
+    if (projectId) {
+      try {
+        const fileEntries = loadFileMemories(projectId)
+        if (fileEntries.length > 0) {
+          const memEntries = toMemoryEntries(fileEntries, 'project', projectId)
+          parts.push(memEntries.map((e) => `- [${e.type}] ${e.content.slice(0, 500)}`).join('\n'))
+        }
+      } catch { /* file memory is best-effort */ }
+    }
+
+    return parts.join('\n')
   }
 
   private getProjectConstraints(_projectId?: string): string[] {

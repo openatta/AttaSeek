@@ -6,6 +6,7 @@
  */
 
 import type { ComponentType } from 'react'
+import { Registry } from './Registry'
 
 export interface InlineRendererRegistration {
   type: string
@@ -19,13 +20,10 @@ export interface InlineRendererProps {
   metadata?: Record<string, unknown>
 }
 
-const registry = new Map<string, InlineRendererRegistration>()
+const registry = new Registry<InlineRendererRegistration>()
 
 export function registerInlineRenderer(config: InlineRendererRegistration): void {
-  if (registry.has(config.type)) {
-    console.warn(`[inlineRendererRegistry] overwriting renderer for: ${config.type}`)
-  }
-  registry.set(config.type, config)
+  registry.register(config.type, config)
 }
 
 export function getInlineRenderer(type: string): InlineRendererRegistration | undefined {
@@ -33,13 +31,9 @@ export function getInlineRenderer(type: string): InlineRendererRegistration | un
 }
 
 export function listInlineRenderers(): InlineRendererRegistration[] {
-  return Array.from(registry.values())
+  return registry.list()
 }
 
 export function unregisterByPlugin(pluginId: string): void {
-  for (const [key, reg] of registry) {
-    if (reg.pluginId === pluginId) {
-      registry.delete(key)
-    }
-  }
+  registry.unregisterByPlugin(pluginId)
 }

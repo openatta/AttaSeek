@@ -9,7 +9,7 @@
  * clicks Allow or Deny in the PermissionRequestedEvent UI.
  */
 
-import type { PermissionDecision } from '../../renderer/core/types/Permission'
+import type { PermissionDecision } from '../../shared/types/Permission'
 
 interface PendingRequest {
   resolve: (decision: 'allow' | 'deny') => void

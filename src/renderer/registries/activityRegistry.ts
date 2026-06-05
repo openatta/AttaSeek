@@ -10,6 +10,7 @@
  */
 
 import type { ComponentType } from 'react'
+import { Registry } from './Registry'
 
 export interface ActivityRegistration {
   activity: string
@@ -19,13 +20,10 @@ export interface ActivityRegistration {
   pluginId?: string // undefined = built-in
 }
 
-const registry = new Map<string, ActivityRegistration>()
+const registry = new Registry<ActivityRegistration>()
 
 export function registerActivity(config: ActivityRegistration): void {
-  if (registry.has(config.activity)) {
-    console.warn(`[activityRegistry] overwriting activity: ${config.activity}`)
-  }
-  registry.set(config.activity, config)
+  registry.register(config.activity, config)
 }
 
 export function getActivityConfig(activity: string): ActivityRegistration | undefined {
@@ -33,17 +31,13 @@ export function getActivityConfig(activity: string): ActivityRegistration | unde
 }
 
 export function listActivities(): ActivityRegistration[] {
-  return Array.from(registry.values())
+  return registry.list()
 }
 
 export function listBuiltInActivities(): ActivityRegistration[] {
-  return Array.from(registry.values()).filter((a) => !a.pluginId)
+  return registry.list((a) => !a.pluginId)
 }
 
 export function unregisterByPlugin(pluginId: string): void {
-  for (const [key, config] of registry) {
-    if (config.pluginId === pluginId) {
-      registry.delete(key)
-    }
-  }
+  registry.unregisterByPlugin(pluginId)
 }

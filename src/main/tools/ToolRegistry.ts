@@ -3,7 +3,7 @@
  * Tools are registered by plugins or built-in capability packs.
  */
 
-import type { ToolManifest, ToolRiskLevel } from '../../renderer/core/types/Tool'
+import type { ToolManifest, ToolRiskLevel } from '../../shared/types/Tool'
 
 export class ToolRegistry {
   private tools: Map<string, ToolManifest> = new Map()

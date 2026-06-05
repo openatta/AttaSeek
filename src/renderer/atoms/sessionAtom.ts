@@ -17,8 +17,8 @@ function ensureSession(activity: string): string {
     const sid = `session_${activity}_${Date.now()}`
     activitySessionMap[activity] = sid
     // Persist to DB asynchronously with the same ID
-    if (typeof window !== 'undefined' && (window as any).api?.session?.create) {
-      ;(window as any).api.session.create('New Session', activity, sid).catch(() => {})
+    if (typeof window !== 'undefined' && window.api?.session?.create) {
+      window.api.session.create('New Session', activity, sid).catch((err: unknown) => { console.warn('[session] failed to create session:', err) })
     }
   }
   return activitySessionMap[activity]
@@ -87,12 +87,15 @@ export const streamingBuffersAtom = atom<Record<string, string>>({})
  */
 export function handleAgentEvent(
   event: SessionEvent,
-  setSessionEvents: (update: (prev: SessionEvent[]) => SessionEvent[]) => void,
-  setAgentTasks: (update: (prev: AgentTask[]) => AgentTask[]) => void,
-  setStreamingBuffers?: (update: (prev: Record<string, string>) => Record<string, string>) => void,
-  messageBufRef?: { current: Map<string, string> },
-  setSessionTitle?: (sid: string, title: string) => void,
+  setters: {
+    setSessionEvents: (update: (prev: SessionEvent[]) => SessionEvent[]) => void
+    setAgentTasks: (update: (prev: AgentTask[]) => AgentTask[]) => void
+    setStreamingBuffers?: (update: (prev: Record<string, string>) => Record<string, string>) => void
+    messageBufRef?: { current: Map<string, string> }
+    setSessionTitle?: (sid: string, title: string) => void
+  },
 ): void {
+  const { setSessionEvents, setAgentTasks, setStreamingBuffers, messageBufRef, setSessionTitle } = setters
   // Handle streaming chunks — accumulate in buffer and ref, don't add to event list yet
   if (event.type === 'AgentMessageChunk') {
     const payload = event.payload as { content: string; isFinal: boolean; messageId: string }
@@ -143,8 +146,8 @@ export function handleAgentEvent(
         // Update atom (triggers SessionHeader re-render)
         if (setSessionTitle) setSessionTitle(event.sessionId, payload.title)
         // Persist to DB
-        if (typeof window !== 'undefined' && (window as any).api?.session?.update) {
-          ;(window as any).api.session.update(event.sessionId, { title: payload.title }).catch(() => {})
+        if (typeof window !== 'undefined' && window.api?.session?.update) {
+          window.api.session.update(event.sessionId, { title: payload.title }).catch((err: unknown) => { console.warn('[session] failed to update title:', err) })
         }
       }
     }

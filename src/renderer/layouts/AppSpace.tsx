@@ -1,6 +1,7 @@
-import { type ReactNode, useCallback, useRef } from 'react'
+import { type ReactNode } from 'react'
 import { useAtom } from 'jotai'
 import { artifactWidthAtom } from '../atoms/shellAtom'
+import { useDragResize } from '../hooks/useDragResize'
 
 interface AppSpaceProps {
   fullscreen: boolean
@@ -10,52 +11,41 @@ interface AppSpaceProps {
 
 export default function AppSpace({ agentPane, artifactPane, fullscreen }: AppSpaceProps) {
   const [artifactWidth, setArtifactWidth] = useAtom(artifactWidthAtom)
-  const draggingRef = useRef(false)
 
-  const onMouseDown = useCallback(() => {
-    draggingRef.current = true
-    const onMove = (e: MouseEvent) => {
-      if (!draggingRef.current) return
-      setArtifactWidth((w) => Math.min(800, Math.max(240, w - e.movementX)))
-    }
-    const cleanup = () => {
-      draggingRef.current = false
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', cleanup)
-      document.removeEventListener('pointercancel', cleanup)
-      document.removeEventListener('pointerleave', cleanup)
-    }
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', cleanup)
-    document.addEventListener('pointercancel', cleanup)
-    document.addEventListener('pointerleave', cleanup)
-  }, [setArtifactWidth])
+  const onArtifactResize = useDragResize(setArtifactWidth, { min: 240, max: 800 })
 
   const hasArtifact = artifactPane !== null
 
   // Fullscreen: artifact fills entire AppSpace, agent pane hidden
-  if (fullscreen && hasArtifact) {
-    return <div className="flex flex-1 min-w-0">{artifactPane}</div>
+  if (fullscreen && artifactPane) {
+    return (
+      <div className="flex flex-1 min-w-0 overflow-hidden h-full">{artifactPane}</div>
+    )
   }
 
   return (
-    <div className="flex flex-1 min-w-0">
-      <div className={`flex-1 min-w-0 ${hasArtifact ? 'border-r border-[var(--app-border)]' : ''}`}>
+    <div className="flex flex-1 min-w-0 overflow-hidden h-full">
+      {/* Agent pane — hides when fullscreen */}
+      <div className="flex flex-col flex-1 min-w-[320px] overflow-hidden border-r border-[var(--app-border)]">
         {agentPane}
       </div>
+
       {hasArtifact && (
-        <div
-          onMouseDown={onMouseDown}
-          className="w-[5px] -ml-[4px] flex-shrink-0 cursor-col-resize hover:bg-[var(--app-accent)]/30 transition-colors z-10"
-        />
-      )}
-      {hasArtifact && (
-        <div className="flex-shrink-0" style={{ width: artifactWidth }}>
-          {artifactPane}
-        </div>
+        <>
+          <div
+            className="w-1.5 cursor-col-resize hover:bg-[var(--app-accent)] active:bg-[var(--app-accent)] transition-colors shrink-0 group relative z-10"
+            onMouseDown={onArtifactResize}
+          >
+            <div className="absolute inset-y-0 -left-1 -right-1" />
+          </div>
+          <div
+            className="overflow-hidden shrink-0"
+            style={{ width: artifactWidth, minWidth: 240, maxWidth: 800 }}
+          >
+            {artifactPane}
+          </div>
+        </>
       )}
     </div>
   )
 }
-
-

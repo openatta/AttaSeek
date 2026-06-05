@@ -31,6 +31,7 @@ description: AttaSeek 开发工作流帮助 — 展示 skill 体系全景、选�
 | 修不确定根因的 bug，快捷版 | `/atta-describe-problem` → `/atta-design-fix` → `/atta-implement` |
 | 修能快速定位的 bug | `/atta-bug-fix`（修复前会让你确认） |
 | 了解项目整体状态 | `/atta-status` |
+| 优化代码质量、消除技术债 | `/atta-refactor`（分析后让你确认） |
 ```
 
 ### 2. 全景图（用户想了解 skill 体系架构）
@@ -76,6 +77,19 @@ description: AttaSeek 开发工作流帮助 — 展示 skill 体系全景、选�
 | 独立审查 | ✅ 有 | ❌ 内嵌 | ❌ 内嵌 |
 | 用户决策门 | 每步后 | 每步后 | 实施前 1 次 |
 | 适用 | 大特性、需审阅 | 中等、设计已清 | 小到中等、快速迭代 |
+
+### 重构优化（1 skill，不增功能不修 bug）
+
+`/atta-refactor` 分析代码质量并实施重构。内部有**决策门**：分析完成后输出简报（7 维度评分 + 重构清单），用户确认后才动手。
+
+```
+  /atta-refactor  =  七维分析 + [决策门] + 逐项重构 + 回归测试
+```
+
+### 辅助
+
+  /atta-status   —  项目状态评估（只读审计）
+  /atta-help     —  本帮助（你正在看）
 
 ### 阶段隔离原则
 

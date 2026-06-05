@@ -1,8 +1,8 @@
-import { useRef, useState, useEffect, useCallback, memo } from 'react'
+import { useRef, useState, useEffect, useMemo, useCallback, memo } from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
 import { sessionEventsAtom, currentSessionIdAtom, agentTasksAtom, streamingBuffersAtom } from '../../atoms/sessionAtom'
 import { editTextAtom } from '../../atoms/composerAtom'
-import AgentStatusBar from './AgentStatusBar'
+
 import type { SessionEvent } from '../../core/types/SessionEvent'
 import UserMessageEvent from './events/UserMessageEvent'
 import AgentMessageEvent from './events/AgentMessageEvent'
@@ -24,10 +24,17 @@ export default function MessageFlow() {
   const streamingBuffers = useAtomValue(streamingBuffersAtom)
   const setEditText = useSetAtom(editTextAtom)
 
-  const sessionEvents = events.filter((e) => e.sessionId === sessionId)
-  const streamingKeys = Object.keys(streamingBuffers).filter((k) => streamingBuffers[k])
-  const streamingMessageId = streamingKeys.length > 0 ? streamingKeys[streamingKeys.length - 1] : undefined
-  const lastAgentIdx = [...sessionEvents].reverse().findIndex((e) => e.type === 'AgentMessage')
+  const { sessionEvents, streamingMessageId, lastAgentIdx, streamTotalLen } = useMemo(() => {
+    const filtered = events.filter((e) => e.sessionId === sessionId)
+    const keys = Object.keys(streamingBuffers).filter((k) => streamingBuffers[k])
+    const msgId = keys.length > 0 ? keys[keys.length - 1] : undefined
+    let agentIdx = -1
+    for (let i = filtered.length - 1; i >= 0; i--) {
+      if (filtered[i].type === 'AgentMessage') { agentIdx = filtered.length - 1 - i; break }
+    }
+    const totalLen = keys.reduce((sum, k) => sum + (streamingBuffers[k]?.length || 0), 0)
+    return { sessionEvents: filtered, streamingMessageId: msgId, lastAgentIdx: agentIdx, streamTotalLen: totalLen }
+  }, [events, sessionId, streamingBuffers])
 
   const handleScroll = useCallback(() => {
     const el = containerRef.current
@@ -41,7 +48,6 @@ export default function MessageFlow() {
   }
 
   // Auto-scroll when new events arrive OR streaming buffer changes
-  const streamTotalLen = streamingKeys.reduce((sum, k) => sum + (streamingBuffers[k]?.length || 0), 0)
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -49,10 +55,9 @@ export default function MessageFlow() {
     if (dist < 150) el.scrollTop = el.scrollHeight
   }, [sessionEvents.length, streamTotalLen])
 
-  if (sessionEvents.length === 0 && streamingKeys.length === 0) {
+  if (sessionEvents.length === 0 && streamTotalLen === 0) {
     return (
       <div className="flex-1 overflow-y-auto min-h-0">
-        <AgentStatusBar />
         <div className="flex flex-col items-center justify-center h-full px-6 pb-20 text-center">
           <p className="text-xl text-[var(--app-text)] mb-6 font-medium">What can I help with?</p>
           <div className="flex flex-wrap justify-center gap-2 max-w-lg">
@@ -69,7 +74,6 @@ export default function MessageFlow() {
 
   return (
     <div className="flex-1 overflow-y-auto min-h-0 relative" ref={containerRef} onScroll={handleScroll}>
-      <AgentStatusBar />
       <div className="px-6 py-2 max-w-[48rem] mx-auto">
         {sessionEvents.map((event, idx) => {
           const isLastAgent = event.type === 'AgentMessage' && lastAgentIdx >= 0 && idx === sessionEvents.length - 1 - lastAgentIdx

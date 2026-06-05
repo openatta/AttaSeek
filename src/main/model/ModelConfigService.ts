@@ -6,16 +6,17 @@
 import { getDb } from '../store/db'
 import { newId } from '../store/id'
 import { storeApiKey, getApiKey, deleteApiKey } from '../store/secrets'
-import { llmProviderRegistry } from '../agent/LLMProvider'
-import { AnthropicProvider } from '../agent/LLMProvider'
+import { llmProviderRegistry } from '../agent/llm/LLMProviderRegistry'
+import { createProvider } from '../agent/llm/ProviderFactory'
 import * as https from 'https'
 import * as http from 'http'
-import type { LLMProvider } from '../agent/LLMProvider'
 import type { ModelConfig, CreateModelConfig } from '../../shared/types/model'
 
 function keyId(configId: string): string {
   return `model:${configId}`
 }
+
+const DEFAULT_ANTHROPIC_MODELS = DEFAULT_ANTHROPIC_MODELS
 
 export interface TestStep {
   step: number
@@ -50,7 +51,7 @@ export class ModelConfigService {
       // Instantiate provider
       const apiKey = getApiKey(keyId(row.id))
       if (apiKey) {
-        const provider = this.createProvider(config, apiKey)
+        const provider = createProvider(config, apiKey)
         if (provider) {
           llmProviderRegistry.registerById(config.id, provider, {
             name: config.name,
@@ -94,7 +95,7 @@ export class ModelConfigService {
     // Default models per interface type
     const models = params.models.length > 0 ? params.models
       : params.interfaceType === 'anthropic'
-        ? ['claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-opus-4-8']
+        ? DEFAULT_ANTHROPIC_MODELS
         : [params.defaultModel]
     const defaultModel = params.defaultModel || models[0]
 
@@ -113,7 +114,7 @@ export class ModelConfigService {
 
     // Instantiate and register provider
     const config: ModelConfig = { id, name: params.name, interfaceType: params.interfaceType, endpointUrl: params.endpointUrl, models, defaultModel, extraParams: params.extraParams, isDefault: isDefault === 1, createdAt: now, updatedAt: now }
-    const provider = this.createProvider(config, params.apiKey)
+    const provider = createProvider(config, params.apiKey)
     if (provider) {
       llmProviderRegistry.registerById(id, provider, {
         name: config.name,
@@ -129,7 +130,7 @@ export class ModelConfigService {
   /** Get default models for an interface type */
   static defaultModels(interfaceType: string): string[] {
     if (interfaceType === 'anthropic') {
-      return ['claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-opus-4-8']
+      return DEFAULT_ANTHROPIC_MODELS
     }
     return []
   }
@@ -164,7 +165,7 @@ export class ModelConfigService {
     const apiKey = getApiKey(keyId(id))
     if (apiKey) {
       const config = this.rowToConfig({ ...row, name, interface_type: itype, endpoint_url: endpoint, models, default_model: model, extra_params: extra, updated_at: now })
-      const provider = this.createProvider(config, apiKey)
+      const provider = createProvider(config, apiKey)
       if (provider) {
         llmProviderRegistry.registerById(id, provider, {
           name: config.name, interfaceType: config.interfaceType, models: config.models,
@@ -332,19 +333,6 @@ export class ModelConfigService {
     }
   }
 
-  private createProvider(config: ModelConfig, apiKey: string): LLMProvider | null {
-    try {
-      if (config.interfaceType === 'anthropic') {
-        return new AnthropicProvider(apiKey)
-      }
-      // OpenAI compatible — lazy import to avoid circular deps
-      const { OpenAICompatibleProvider } = require('./OpenAICompatibleProvider')
-      return new OpenAICompatibleProvider(config.endpointUrl, apiKey, config.defaultModel, config.extraParams)
-    } catch (err) {
-      console.error(`[ModelConfigService] failed to create provider for ${config.id}:`, err)
-      return null
-    }
-  }
 }
 
 export const modelConfigService = new ModelConfigService()

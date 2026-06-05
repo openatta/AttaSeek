@@ -5,18 +5,19 @@ import remarkGfm from 'remark-gfm'
 import { Copy, Check } from 'lucide-react'
 
 /** Basic regex-based syntax highlighting. Covers common language keywords, strings, comments, numbers. */
-function highlightCode(code: string, lang: string): string {
+const KEYWORD_RE = /\b(function|const|let|var|return|if|else|for|while|class|import|export|from|async|await|try|catch|throw|new|this|true|false|null|undefined|def|print|self|endif|end|begin|rescue|ensure|do|end|module|private|protected|public|static|int|float|double|string|boolean|void|interface|type|enum|extends|implements|package|fn|mut|pub|use|mod|struct|impl|match|where|in|not|and|or|is|lambda|elif|except|finally|raise|with|yield|switch|case|break|continue|default|goto)\b/g
+const STRING_RE = /("[^"]*"|'[^']*'|`[^`]*`)/g
+const COMMENT_RE = /(\/\/[^\n]*|#[^\n]*)/g
+const NUMBER_RE = /\b(\d+\.?\d*)\b/g
+
+function highlightCode(code: string, _lang: string): string {
   const escaped = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  const keywords = /\b(function|const|let|var|return|if|else|for|while|class|import|export|from|async|await|try|catch|throw|new|this|true|false|null|undefined|def|print|self|endif|end|begin|rescue|ensure|do|end|module|private|protected|public|static|int|float|double|string|boolean|void|interface|type|enum|extends|implements|package|fn|mut|pub|use|mod|struct|impl|match|where|in|not|and|or|is|lambda|elif|except|finally|raise|with|yield|switch|case|break|continue|default|goto)\b/g
-  const strings = /("[^"]*"|'[^']*'|`[^`]*`)/g
-  const comments = /(\/\/[^\n]*|#[^\n]*)/g
-  const numbers = /\b(\d+\.?\d*)\b/g
 
   let html = escaped
-  html = html.replace(comments, '<span style="color:#6a9955">$1</span>')
-  html = html.replace(strings, '<span style="color:#ce9178">$1</span>')
-  html = html.replace(keywords, '<span style="color:#569cd6">$1</span>')
-  html = html.replace(numbers, '<span style="color:#b5cea8">$1</span>')
+  html = html.replace(COMMENT_RE, '<span style="color:#6a9955">$1</span>')
+  html = html.replace(STRING_RE, '<span style="color:#ce9178">$1</span>')
+  html = html.replace(KEYWORD_RE, '<span style="color:#569cd6">$1</span>')
+  html = html.replace(NUMBER_RE, '<span style="color:#b5cea8">$1</span>')
   return html
 }
 

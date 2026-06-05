@@ -29,7 +29,7 @@ export function registerSessionHandlers(): void {
     return ipcWrap(() => {
       const db = getDb()
       const sessions = db
-        .prepare('SELECT * FROM sessions ORDER BY updated_at DESC')
+        .prepare('SELECT * FROM sessions ORDER BY updated_at DESC LIMIT 200')
         .all() as any[]
       return {
         sessions: sessions.map((r: any) => ({
@@ -123,7 +123,7 @@ export function registerSessionHandlers(): void {
     return ipcWrap(() => {
       const db = getDb()
       const rows = db
-        .prepare('SELECT * FROM session_events WHERE session_id = ? ORDER BY created_at ASC')
+        .prepare('SELECT * FROM session_events WHERE session_id = ? ORDER BY created_at ASC LIMIT 5000')
         .all(p.sessionId) as any[]
       const events = rows.map((r: any) => ({
         id: r.id,

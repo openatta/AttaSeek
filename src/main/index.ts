@@ -18,7 +18,7 @@ import { boot } from './boot'
 import { getDb, closeDb } from './store/db'
 import { agentEventBus } from './agent/AgentEventBus'
 import { permissionBridge } from './permission/PermissionBridge'
-import { agentLoop } from './agent/AgentLoop'
+import { subAgentManager } from './agent/subagent/SubAgentManager'
 import { startTimer } from './perf'
 
 const isMac = platform() === 'darwin'
@@ -117,12 +117,8 @@ app.on('before-quit', () => {
   // Cancel all pending permission requests
   permissionBridge.cancelAll()
 
-  // Cancel all running agent tasks
-  agentEventBus.getHistory('*').forEach((event) => {
-    if (event.type === 'UserMessage') {
-      agentLoop.cancel(event.taskId)
-    }
-  })
+  // Cancel all running agent tasks and sub-agents
+  subAgentManager.cancelAll()
 })
 
 app.on('will-quit', () => {

@@ -14,7 +14,7 @@ import { permissionBridge } from '../permission/PermissionBridge'
 import { agentEventBus } from '../agent/AgentEventBus'
 import { newId } from '../store/id'
 import { TOOL_IMPLS, type ToolImpl } from './ToolImplementations'
-import type { ToolRiskLevel } from '../../renderer/core/types/Tool'
+import type { ToolRiskLevel } from '../../shared/types/Tool'
 
 // ── Types ──
 
@@ -80,14 +80,15 @@ export class ToolExecutor {
 
     if (decision === 'ask') {
       // Emit permission request event and wait for user response
-      const permReq = permissionService.requestPermission(
-        taskId, toolCallId, toolId, manifest.name,
-        manifest.riskLevel,
-        `Execute ${manifest.name}`,
-        JSON.stringify(input).slice(0, 1000),
-        manifest.riskLevel === 'risky' ? 'This action cannot be undone' : 'This action can be reviewed',
-        manifest.riskLevel !== 'risky',
-      )
+      const permReq = permissionService.requestPermission({
+        taskId, toolCallId, toolId,
+        toolName: manifest.name,
+        riskLevel: manifest.riskLevel,
+        action: `Execute ${manifest.name}`,
+        preview: JSON.stringify(input).slice(0, 1000),
+        impact: manifest.riskLevel === 'risky' ? 'This action cannot be undone' : 'This action can be reviewed',
+        rollbackable: manifest.riskLevel !== 'risky',
+      })
 
       agentEventBus.emit({
         id: newId(), sessionId, taskId,

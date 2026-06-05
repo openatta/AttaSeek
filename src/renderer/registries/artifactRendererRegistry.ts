@@ -8,6 +8,7 @@
 
 import type { ComponentType } from 'react'
 import type { ArtifactType, ArtifactRendererHint } from '../core/types/Artifact'
+import { Registry } from './Registry'
 
 export interface ArtifactRendererRegistration {
   /** The artifact type or renderer hint this handles */
@@ -28,13 +29,10 @@ export interface ArtifactRendererProps {
   onContentChange?: (content: string) => void
 }
 
-const registry = new Map<string, ArtifactRendererRegistration>()
+const registry = new Registry<ArtifactRendererRegistration>()
 
 export function registerArtifactRenderer(config: ArtifactRendererRegistration): void {
-  if (registry.has(config.type)) {
-    console.warn(`[artifactRendererRegistry] overwriting renderer for: ${config.type}`)
-  }
-  registry.set(config.type, config)
+  registry.register(config.type, config)
 }
 
 export function getRenderer(type: string): ArtifactRendererRegistration | undefined {
@@ -42,13 +40,9 @@ export function getRenderer(type: string): ArtifactRendererRegistration | undefi
 }
 
 export function listRenderers(): ArtifactRendererRegistration[] {
-  return Array.from(registry.values())
+  return registry.list()
 }
 
 export function unregisterByPlugin(pluginId: string): void {
-  for (const [key, reg] of registry) {
-    if (reg.pluginId === pluginId) {
-      registry.delete(key)
-    }
-  }
+  registry.unregisterByPlugin(pluginId)
 }

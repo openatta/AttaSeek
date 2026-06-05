@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useRef } from 'react'
+import { useDragResize } from '../hooks/useDragResize'
 import { useAtomValue, useAtom, useSetAtom } from 'jotai'
 import { activeActivityAtom, type Activity } from '../atoms/activityAtom'
 import { sidebarWidthAtom, artifactStateByActivityAtom, getArtifactSnapshot } from '../atoms/shellAtom'
@@ -10,7 +11,6 @@ import SidebarSlot from './SidebarSlot'
 import AppSpace from './AppSpace'
 import ArtifactPane from '../components/Artifact/ArtifactPane'
 import WorkspaceRouter from './WorkspaceRouter'
-import ToastContainer from '../components/Toast'
 
 export default function Shell() {
   const activeActivity = useAtomValue(activeActivityAtom)
@@ -26,7 +26,6 @@ export default function Shell() {
   const setFullscreen = useSetAtom(outputFullscreenAtom)
   const [artifactState, setArtifactState] = useAtom(artifactStateByActivityAtom)
   const prevActivityRef = useRef(activeActivity)
-  const draggingRef = useRef(false)
   const restoredRef = useRef(false)
 
   useEffect(() => { initializeRegistries() }, [])
@@ -73,24 +72,7 @@ export default function Shell() {
     prevActivityRef.current = activeActivity
   }, [activeActivity])
 
-  const onSidebarResize = useCallback(() => {
-    draggingRef.current = true
-    const onMove = (e: MouseEvent) => {
-      if (!draggingRef.current) return
-      setSidebarWidth((w) => Math.min(500, Math.max(160, w + e.movementX)))
-    }
-    const cleanup = () => {
-      draggingRef.current = false
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', cleanup)
-      document.removeEventListener('pointercancel', cleanup)
-      document.removeEventListener('pointerleave', cleanup)
-    }
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', cleanup)
-    document.addEventListener('pointercancel', cleanup)
-    document.addEventListener('pointerleave', cleanup)
-  }, [setSidebarWidth])
+  const onSidebarResize = useDragResize(setSidebarWidth, { min: 160, max: 500 })
 
   const showArtifact = outputVisible && activeActivity !== 'settings'
 
@@ -109,7 +91,6 @@ export default function Shell() {
         agentPane={<WorkspaceRouter activity={activeActivity} />}
         artifactPane={showArtifact ? <ArtifactPane /> : null}
       />
-      <ToastContainer />
     </div>
   )
 }

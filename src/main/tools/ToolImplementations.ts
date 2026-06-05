@@ -13,7 +13,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { app } from 'electron'
 import { artifactService } from '../artifacts/ArtifactService'
-import type { ArtifactType } from '../../renderer/core/types/Artifact'
+import type { ArtifactType } from '../../shared/types/Artifact'
 
 export type ToolImpl = (input: Record<string, unknown>) => Promise<unknown>
 

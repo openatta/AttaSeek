@@ -7,7 +7,7 @@ import { ipcMain, type BrowserWindow } from 'electron'
 import { agentRuntime } from '../agent/AgentRuntime'
 import { agentEventBus } from '../agent/AgentEventBus'
 import { perf } from '../perf'
-import { validateRequiredString } from '../store/util'
+import { validateRequiredString, ipcWrap } from '../store/util'
 
 let mainWindow: BrowserWindow | null = null
 let unsubscribeAgentEvents: (() => void) | null = null
@@ -47,21 +47,27 @@ export function registerAgentHandlers(): void {
   })
 
   ipcMain.handle('agent:cancel-task', async (_event, params: { taskId: string }) => {
-    validateRequiredString(params, 'taskId', 'taskId')
-    const cancelled = agentRuntime.cancelTask(params.taskId)
-    return { success: cancelled }
+    try {
+      validateRequiredString(params, 'taskId', 'taskId')
+      const cancelled = agentRuntime.cancelTask(params.taskId)
+      return { success: cancelled }
+    } catch (err) { return { success: false, error: err instanceof Error ? err.message : 'Internal error' } }
   })
 
   ipcMain.handle('agent:get-task', async (_event, params: { taskId: string }) => {
-    validateRequiredString(params, 'taskId', 'taskId')
-    const task = agentRuntime.getTask(params.taskId)
-    return { task: task || null }
+    try {
+      validateRequiredString(params, 'taskId', 'taskId')
+      const task = agentRuntime.getTask(params.taskId)
+      return { task: task || null }
+    } catch (err) { return { task: null, error: err instanceof Error ? err.message : 'Internal error' } }
   })
 
   ipcMain.handle('agent:list-events', async (_event, params: { sessionId: string }) => {
-    validateRequiredString(params, 'sessionId', 'sessionId')
-    const events = agentEventBus.getHistory(params.sessionId)
-    return { events }
+    try {
+      validateRequiredString(params, 'sessionId', 'sessionId')
+      const events = agentEventBus.getHistory(params.sessionId)
+      return { events }
+    } catch (err) { return { events: [], error: err instanceof Error ? err.message : 'Internal error' } }
   })
 
   console.log('[IPC:agent] handlers registered')

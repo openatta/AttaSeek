@@ -115,7 +115,7 @@ export default function Composer() {
       console.error('[Composer] send error:', err)
       setIsRunning(false)
     }
-    // Note: setIsRunning(false) is NOT here — AgentStatusBar listens to TaskCompleted/TaskFailed events
+    // Note: setIsRunning(false) is NOT here — isRunning resolves via agentTasksAtom status change
   }
 
   const handleStop = async () => {

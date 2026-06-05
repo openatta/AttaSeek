@@ -5,7 +5,7 @@
  * Phase 5+: sqlite-vec semantic embedding routing (see gap supplement G2).
  */
 
-import type { ToolManifest } from '../../renderer/core/types/Tool'
+import type { ToolManifest } from '../../shared/types/Tool'
 
 export interface ToolMatch {
   tool: ToolManifest

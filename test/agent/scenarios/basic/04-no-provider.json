@@ -1,0 +1,1 @@
+{"name":"no-provider-error","description":"No LLM provider configured → immediate TaskFailed","profile":"test","turns":[{"userMessage":"Do something","mockResponses":[],"assert":{"terminalReason":"no_provider","eventsContain":["TaskFailed"],"eventsNotContain":["AgentMessage","TaskCompleted"]}}]}

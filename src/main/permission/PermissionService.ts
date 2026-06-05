@@ -5,8 +5,8 @@
 
 import { getDb } from '../store/db'
 import { newId } from '../store/id'
-import type { PermissionContext, PermissionDecision, PermissionPolicy, PermissionRequest as PermReq } from '../../renderer/core/types/Permission'
-import type { ToolRiskLevel } from '../../renderer/core/types/Tool'
+import type { PermissionContext, PermissionDecision, PermissionPolicy, PermissionRequest as PermReq } from '../../shared/types/Permission'
+import type { ToolRiskLevel } from '../../shared/types/Tool'
 
 export class PermissionService {
   private pendingRequests = new Map<string, PermReq>()
@@ -35,7 +35,7 @@ export class PermissionService {
   }
 
   listPolicies(): PermissionPolicy[] {
-    return (getDb().prepare('SELECT * FROM permission_policies ORDER BY updated_at DESC').all() as any[])
+    return (getDb().prepare('SELECT * FROM permission_policies ORDER BY updated_at DESC LIMIT 200').all() as any[])
       .map((r: any) => this.rowToPolicy(r))
   }
 
@@ -75,9 +75,12 @@ export class PermissionService {
 
   // --- Permission Requests ---
 
-  requestPermission(taskId: string, toolCallId: string, toolId: string, toolName: string, riskLevel: ToolRiskLevel, action: string, preview: string, impact: string, rollbackable: boolean): PermReq {
+  requestPermission(params: {
+    taskId: string; toolCallId: string; toolId: string; toolName: string
+    riskLevel: ToolRiskLevel; action: string; preview: string; impact: string; rollbackable: boolean
+  }): PermReq {
     const id = `permreq_${newId().slice(0, 8)}`
-    const req: PermReq = { id, taskId, toolCallId, toolId, toolName, riskLevel, action, preview, impact, rollbackable, status: 'pending', createdAt: Date.now() }
+    const req: PermReq = { ...params, id, status: 'pending', createdAt: Date.now() }
     this.pendingRequests.set(id, req)
     return req
   }
@@ -87,6 +90,7 @@ export class PermissionService {
     if (!req) return null
     req.status = decision === 'allow' ? 'allowed' : 'denied'
     req.resolvedAt = Date.now()
+    this.pendingRequests.delete(requestId) // Evict resolved requests
     return req
   }
 

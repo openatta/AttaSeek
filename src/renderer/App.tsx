@@ -11,7 +11,7 @@ import {
   handleAgentEvent,
 } from './atoms/sessionAtom'
 import { modelConfigsAtom } from './atoms/modelConfigAtom'
-import type { SessionEvent } from './core/types/SessionEvent'
+
 
 /**
  * Global agent event subscription hook.
@@ -37,23 +37,19 @@ function useAgentEventBridge() {
     // Subscribe to agent events
     let unsubEvent: (() => void) | undefined
     if (window.api?.agent?.onEvent) {
-      unsubEvent = window.api.agent.onEvent((event: unknown) => {
-        handleAgentEvent(
-          event as SessionEvent,
-          setSessionEvents,
-          setAgentTasks,
-          setStreamingBuffers,
-          messageBufRef,
-          handleSessionTitle,
-        )
+      unsubEvent = window.api.agent.onEvent((event) => {
+        handleAgentEvent(event, {
+          setSessionEvents, setAgentTasks, setStreamingBuffers, messageBufRef,
+          setSessionTitle: handleSessionTitle,
+        })
       })
     }
 
     // Load model configs at startup
     if (window.api?.model) {
-      window.api.model.list().then((res: any) => {
+      window.api.model.list().then((res) => {
         if (res.configs) setModelConfigs(res.configs)
-      }).catch(() => {})
+      }).catch((err: unknown) => { console.warn('[App] failed to load model configs:', err) })
     }
 
     return () => {

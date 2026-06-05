@@ -4,8 +4,8 @@
 
 import { getDb } from '../store/db'
 import { newId } from '../store/id'
-import type { AuditLog, AuditEventType, AuditFilters } from '../../renderer/core/types/Audit'
-import type { ToolRiskLevel } from '../../renderer/core/types/Tool'
+import type { AuditLog, AuditEventType, AuditFilters } from '../../shared/types/Audit'
+import type { ToolRiskLevel } from '../../shared/types/Tool'
 
 export class AuditService {
   log(params: {

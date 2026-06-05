@@ -3,7 +3,7 @@
  * Main process emits; renderers subscribe via IPC.
  */
 
-import type { SessionEvent, SessionEventType } from '../../renderer/core/types/SessionEvent'
+import type { SessionEvent, SessionEventType } from '../../shared/types/SessionEvent'
 
 type EventListener = (event: SessionEvent) => void
 

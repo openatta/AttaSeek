@@ -10,10 +10,9 @@
 import type {
   LLMProvider, LLMChatParams, LLMChatResult,
   LLMContentBlock, LLMToolDef, LLMMessage,
-  LLMChunkCallback, LLMChunk, LLMToolUseBlock,
-  LLMProviderConfig,
-} from '../agent/LLMProvider'
-import { LLMError } from '../agent/LLMProvider'
+  LLMChunkCallback,
+} from './LLMProvider'
+import { LLMError } from './LLMProvider'
 
 interface OpenAIMessage {
   role: string
@@ -56,9 +55,9 @@ export class OpenAICompatibleProvider implements LLMProvider {
         method: 'POST', headers: this.headers(), body: JSON.stringify(body),
       })
       const json = await res.json() as OpenAIResponse
-      if (!res.ok) throw this.toLLMError(res.status, json as any)
+      if (!res.ok) throw this.toLLMError(res.status, json as OpenAIResponse)
       return this.toChatResult(json)
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof LLMError) throw err
       throw new LLMError('unknown', err.message || 'Unknown error')
     }
@@ -157,7 +156,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
     }
 
     return { content: contentBlocks, stopReason, usage }
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof LLMError) throw err
       if (err?.name === 'AbortError') throw new LLMError('timeout', 'Request was cancelled or timed out')
       throw new LLMError('unknown', err.message || 'Unknown error')
@@ -236,7 +235,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
     }
   }
 
-  private toLLMError(status: number, body: any): LLMError {
+  private toLLMError(status: number, body: Record<string, unknown>): LLMError {
     if (status === 401 || status === 403) return new LLMError('auth', body?.error?.message || 'Authentication failed', status)
     if (status === 429) return new LLMError('rate_limit', body?.error?.message || 'Rate limited', status)
     if (status === 400) return new LLMError('invalid_request', body?.error?.message || 'Invalid request', status)
@@ -312,8 +311,6 @@ function toOpenAITool(tool: LLMToolDef) {
       parameters: tool.input_schema,
     },
   }
-}
-
 }
 
 function tryParseJson(s: string): unknown {

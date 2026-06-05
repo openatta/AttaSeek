@@ -4,7 +4,7 @@
 
 import { getDb } from '../store/db'
 import { newId } from '../store/id'
-import type { MemoryEntry, MemoryQuery } from '../../renderer/core/types/Memory'
+import type { MemoryEntry, MemoryQuery } from '../../shared/types/Memory'
 
 export class MemoryService {
   private scratchpads = new Map<string, Map<string, unknown>>()
@@ -53,7 +53,7 @@ export class MemoryService {
 
   delete(id: string): boolean { return getDb().prepare('DELETE FROM memory_entries WHERE id=?').run(id).changes > 0 }
 
-  listAll(): MemoryEntry[] { return (getDb().prepare('SELECT * FROM memory_entries ORDER BY updated_at DESC').all() as any[]).map((r: any) => this.rowToEntry(r)).filter((e): e is MemoryEntry => !!e) }
+  listAll(): MemoryEntry[] { return (getDb().prepare('SELECT * FROM memory_entries ORDER BY updated_at DESC LIMIT 200').all() as any[]).map((r: any) => this.rowToEntry(r)).filter((e): e is MemoryEntry => !!e) }
 
   get count(): number { return (getDb().prepare('SELECT COUNT(*) as c FROM memory_entries').get() as any)?.c || 0 }
 

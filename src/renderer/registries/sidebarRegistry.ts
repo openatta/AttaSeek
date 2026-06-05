@@ -6,6 +6,7 @@
  */
 
 import type { ComponentType } from 'react'
+import { Registry } from './Registry'
 
 export interface SidebarViewRegistration {
   viewKey: string
@@ -15,14 +16,10 @@ export interface SidebarViewRegistration {
   pluginId?: string
 }
 
-const registry = new Map<string, SidebarViewRegistration>()
+const registry = new Registry<SidebarViewRegistration>()
 
 export function registerSidebarView(config: SidebarViewRegistration): void {
-  const key = `${config.activityId}:${config.viewKey}`
-  if (registry.has(key)) {
-    console.warn(`[sidebarRegistry] overwriting: ${key}`)
-  }
-  registry.set(key, config)
+  registry.register(`${config.activityId}:${config.viewKey}`, config)
 }
 
 export function getSidebarView(activityId: string, viewKey: string): SidebarViewRegistration | undefined {
@@ -31,22 +28,17 @@ export function getSidebarView(activityId: string, viewKey: string): SidebarView
 
 export function getPrimarySidebarView(activityId: string): SidebarViewRegistration | undefined {
   // Return the first registered sidebar for this activity
-  for (const [, reg] of registry) {
+  for (const [, reg] of registry.entries()) {
     if (reg.activityId === activityId) return reg
   }
   return undefined
 }
 
 export function listSidebarViews(activityId?: string): SidebarViewRegistration[] {
-  const all = Array.from(registry.values())
-  if (activityId) return all.filter((r) => r.activityId === activityId)
-  return all
+  if (activityId) return registry.list((r) => r.activityId === activityId)
+  return registry.list()
 }
 
 export function unregisterByPlugin(pluginId: string): void {
-  for (const [key, reg] of registry) {
-    if (reg.pluginId === pluginId) {
-      registry.delete(key)
-    }
-  }
+  registry.unregisterByPlugin(pluginId)
 }
