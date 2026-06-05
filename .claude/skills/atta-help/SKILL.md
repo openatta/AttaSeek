@@ -1,0 +1,126 @@
+---
+name: atta-help
+description: AttaSeek 开发工作流帮助 — 展示 skill 体系全景、选径指南、各 skill 速查。
+---
+
+# AttaSeek 开发工作流帮助
+
+> **本 skill：** 输出 AttaSeek 的 AI 辅助开发工作流全貌。不执行任何开发动作，只做信息展示。
+
+## 触发时机
+
+- 用户输入 `/atta-help`
+- 用户问"有哪些 skill" / "怎么开发" / "用什么流程"
+- 用户不确定该走哪条路径
+
+## 产出
+
+根据用户问题的具体程度，选择以下三种输出之一：
+
+### 1. 快速选径（用户知道要干什么但不确定用哪个 skill）
+
+```markdown
+## 选径指南
+
+| 我要... | 用这个 |
+|---------|--------|
+| 从零做新功能，需独立设计文档 | `/atta-analyze-requirements` → `/atta-design-architecture` → `/atta-plan-and-execute` → `/atta-review-and-fix` |
+| 从零做新功能，已有设计，不用独立检视 | `/atta-analyze-requirements` → `/atta-design-architecture` → `/atta-implement` |
+| 中等功能，端到端一步搞定 | `/atta-feature-dev`（实施前会让你确认） |
+| 修不确定根因的 bug | `/atta-describe-problem` → `/atta-design-fix` → `/atta-plan-and-execute` → `/atta-review-and-fix` |
+| 修不确定根因的 bug，快捷版 | `/atta-describe-problem` → `/atta-design-fix` → `/atta-implement` |
+| 修能快速定位的 bug | `/atta-bug-fix`（修复前会让你确认） |
+| 了解项目整体状态 | `/atta-status` |
+```
+
+### 2. 全景图（用户想了解 skill 体系架构）
+
+```markdown
+## AttaSeek Skill 工作流全景
+
+### 完整流程（6 skills，分步执行）
+
+```
+特性开发 track:
+  /atta-analyze-requirements → /atta-design-architecture ↘
+                                                            /atta-plan-and-execute → /atta-review-and-fix
+问题修复 track:                                                ↗
+  /atta-describe-problem     → /atta-design-fix
+```
+
+### 快捷路径（1 skill，合并最后两步）
+
+`/atta-implement` 合并 plan-and-execute + review-and-fix。当前面设计/方案已就绪时使用：
+
+```
+  ...-design-architecture ↘
+                            → /atta-implement（一步收尾）
+  ...-design-fix          ↗
+```
+
+### 简化全流程（2 skills，端到端）
+
+`/atta-feature-dev` 和 `/atta-bug-fix` 端到端完成全部工作。内部有**决策门**：分析/诊断完成后输出简报，用户确认后才动手改代码。
+
+```
+  /atta-feature-dev  =  需求分析 + 架构设计 + [决策门] + 实施 + 检视
+  /atta-bug-fix      =  问题诊断 + 修改方案 + [决策门] + 实施 + 检视
+```
+
+### 三种路径对比
+
+| 维度 | 完整流程 | 快捷路径 | 简化全流程 |
+|------|---------|---------|-----------|
+| 步数 | 4 步 | 3 步 | 1 步（内部 2 阶段） |
+| 独立设计文档 | ✅ 有 | ✅ 有 | ❌ 无（对话内） |
+| 独立审查 | ✅ 有 | ❌ 内嵌 | ❌ 内嵌 |
+| 用户决策门 | 每步后 | 每步后 | 实施前 1 次 |
+| 适用 | 大特性、需审阅 | 中等、设计已清 | 小到中等、快速迭代 |
+
+### 阶段隔离原则
+
+- **需求/问题阶段** → 不读代码（CLAUDE.md 除外）
+- **设计/方案阶段** → 只读代码，不改代码
+- **实施阶段** → 严格按 task 范围改，不顺手重构
+- **检视阶段** → 只检视本次变更，不扩展范围
+
+### 错误恢复
+
+- 需求不清 → 退回 `/atta-analyze-requirements`
+- 设计有缺陷 → 退回 `/atta-design-architecture` 或 `/atta-design-fix`
+- 实施发现方案不可行 → 退回 `/atta-design-fix`
+- 审查发现 >3 个 Critical → 退回 `/atta-design-fix`
+```
+
+### 3. 单 Skill 详情（用户问某个具体 skill 怎么用）
+
+对请求的 skill 输出：
+
+```markdown
+## /atta-[name] — [一句话定位]
+
+### 目标
+[本阶段要达成什么]
+
+### 前置
+[需要什么输入]
+
+### 产出
+[输出什么、输出到哪]
+
+### 铁律
+- [关键约束 1]
+- [关键约束 2]
+
+### 简报
+[用户看到的总结内容]
+
+### 下一步
+[完成后进入哪个阶段，或 END]
+```
+
+## 铁律
+
+- **只展示信息，不执行开发动作** — 帮助 skill 是地图，不是交通工具。
+- **根据用户问题粒度选输出** — 用户问"怎么修 bug"就用选径指南，用户说"介绍一下体系"就用全景图。
+- **帮助内容与 CLAUDE.md 保持一致** — 如发现差异，以本 skill 为准并同步更新 CLAUDE.md。

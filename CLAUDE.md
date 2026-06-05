@@ -36,13 +36,18 @@ Agent 工作台桌面应用。视觉与功能以 Codex Desktop 为源头参考�
 }
 ```
 
-## 项目结构（规划）
+## 项目结构
 
 ```
 AttaSeek/
-├── CLAUDE.md
+├── CLAUDE.md                    # 本文件 —— 项目指南 + 开发工作流
 ├── docs/
-│   └── ui.md                    # UI/UX 设计规格
+│   ├── ui.md                    # UI/UX 设计规格
+│   ├── design/                  # 架构设计文档（由 /atta-design-architecture 产出）
+│   ├── reqs/                    # 需求规格文档（由 /atta-analyze-requirements 产出）
+│   └── plans/                   # 正式实现计划文档（可选，日常用轻量内联任务列表）
+├── .claude/
+│   └── skills/                  # AI 开发工作流 skill 定义（10 个 atta-* skills）
 ├── package.json
 ├── electron-builder.yml
 ├── tsconfig.json
@@ -105,3 +110,74 @@ npm run package
 - React 函数组件 + Hooks，无 class 组件
 - IPC 通信：主进程暴露 API 经 contextBridge，渲染进程不直接访问 Node.js
 - CSS：Tailwind 原子类为主，必要时 `components/` 层提取复用样式
+
+## 开发工作流（Skill 体系）
+
+11 个 `atta-*` skill，三层设计：**完整流程**（分步，每步可审阅）、**快捷路径**（合并最后两步）、**简化全流程**（端到端，实施前有决策门）。Skill 定义在 `.claude/skills/atta-*/SKILL.md`。
+
+### 完整流程（6 skills，分步执行）
+
+```
+特性开发 track:
+  /atta-analyze-requirements → /atta-design-architecture ↘
+                                                            /atta-plan-and-execute → /atta-review-and-fix
+问题修复 track:                                                ↗
+  /atta-describe-problem     → /atta-design-fix
+```
+
+| Skill | 阶段 | 产出 | 铁律 |
+|-------|------|------|------|
+| `/atta-analyze-requirements` | 需求分析 | `docs/reqs/*.md` | 不读代码、不讨论技术方案 |
+| `/atta-design-architecture` | 架构设计 | `docs/design/*.md` | 不写实现代码、不分解任务 |
+| `/atta-describe-problem` | 问题说明 | 对话内问题报告 | 不查代码、不猜根因、不提方案 |
+| `/atta-design-fix` | 修改方案 | 对话内修复方案 | 只读代码不改代码 |
+| `/atta-plan-and-execute` | 计划与实施 | 代码变更 | 每个 task 可构建、不顺手改无关代码 |
+| `/atta-review-and-fix` | 检视与修复 | 审查结论 + 变更总结 | 不新增功能、不重构无关代码 |
+
+### 快捷路径（1 skill，合并最后两步）
+
+`/atta-implement` 合并 `/atta-plan-and-execute` + `/atta-review-and-fix`。在前面设计/方案已就绪时使用：
+
+```
+...-design-architecture ↘
+                          → /atta-implement（一步收尾）
+...-design-fix          ↗
+```
+
+### 简化全流程（2 skills，端到端）
+
+`/atta-feature-dev` 和 `/atta-bug-fix` 端到端完成全部工作。内部两个阶段：
+1. **分析/诊断**（只读，输出简报）
+2. **实施/收尾**（用户确认后才执行）
+
+| Skill | 覆盖 | 决策门 | 适用 |
+|-------|------|--------|------|
+| `/atta-feature-dev` | 需求分析 → 架构设计 → 实施 → 检视 | 实施前 | 中等特性 |
+| `/atta-bug-fix` | 问题诊断 → 修改方案 → 实施 → 检视 | 修复前 | 可快速定位的 bug |
+
+### 辅助 skill
+
+| Skill | 用途 |
+|-------|------|
+| `/atta-status` | 项目状态评估 —— 审计代码库与文档的一致性，只读不写 |
+| `/atta-help` | 工作流帮助 —— 展示 skill 全景、选径指南、单 skill 详情 |
+
+### 选哪条路径
+
+| 场景 | 路径 |
+|------|------|
+| 跨模块大特性，需独立文档和审阅 | `analyze-requirements` → `design-architecture` → `plan-and-execute` → `review-and-fix` |
+| 大特性，已有设计，快捷收尾 | `analyze-requirements` → `design-architecture` → `implement` |
+| 中等特性，端到端一步搞定 | `feature-dev`（实施前会确认） |
+| 复杂 bug，需独立分析 | `describe-problem` → `design-fix` → `plan-and-execute` → `review-and-fix` |
+| bug 定位后快捷修复 | `describe-problem` → `design-fix` → `implement` |
+| 可快速修复的 bug | `bug-fix`（修复前会确认） |
+| 了解项目状态 | `status` |
+
+### 阶段隔离原则
+
+- **需求/问题阶段** → 不读代码（CLAUDE.md 除外）
+- **设计/方案阶段** → 只读代码，不改代码
+- **实施阶段** → 严格按 task 范围改，不顺手重构
+- **检视阶段** → 只检视本次变更，不扩展范围
+- **简化全流程的决策门** → 简报后必须等用户确认才能动手
