@@ -27,14 +27,12 @@ export class PluginRegistry {
     return instance
   }
 
-  /** Activate a plugin */
+  /** Activate a plugin. MVP: synchronous local ts manifests. Future: async subprocess/MCP. */
   activate(pluginId: string): PluginInstance | null {
     const instance = this.plugins.get(pluginId)
     if (!instance) return null
 
-    instance.status = 'loading'
-    // In MVP, activation is synchronous (local ts manifests)
-    // In future, this would spawn subprocess / MCP server
+    // In MVP activation is immediate; 'loading' is reserved for async future use
     instance.status = 'active'
     instance.activatedAt = Date.now()
     return instance

@@ -1,7 +1,8 @@
-/**
- * Dashboard workspace — home page with stats and Quick Start.
- * Content is vertically and horizontally centered.
- */
+import { useRef, useState } from 'react'
+import { useSetAtom } from 'jotai'
+import { ArrowUp } from 'lucide-react'
+import { activeActivityAtom, type Activity } from '../atoms/activityAtom'
+import { composerValueAtom } from '../atoms/composerAtom'
 
 const MOCK_STATS = {
   conversations: { count: 5, recent: ['Refactor API module', 'Write test suite', 'Fix bridge connection', 'Update proto definitions', 'Review PR #42'] },
@@ -12,6 +13,31 @@ const MOCK_STATS = {
 }
 
 export default function DashboardWorkspace() {
+  const setActivity = useSetAtom(activeActivityAtom)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [qsValue, setQsValue] = useState('')
+  const hasInput = qsValue.trim().length > 0
+
+  const handleQuickStart = async () => {
+    const value = qsValue.trim()
+    if (!value) return
+    // Create task directly via IPC — bypasses composerAtom activity-key timing issues
+    if (window.api?.agent?.createTask) {
+      await window.api.agent.createTask(value, `session_chat_${Date.now()}`, undefined)
+    }
+    // Switch to chat activity to show the conversation
+    setActivity('chat' as Activity)
+    // Clear the input
+    setQsValue('')
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleQuickStart()
+    }
+  }
+
   return (
     <div className="flex flex-col h-full">
       {/* Drag region — part of the content, not a separate bar */}
@@ -90,11 +116,25 @@ export default function DashboardWorkspace() {
           {/* Quick Start */}
           <div className="rounded-lg border border-[var(--app-border)] bg-[var(--app-bg-inset)] p-4">
             <h3 className="text-xs font-medium text-[var(--app-text)] mb-2">Quick Start</h3>
-            <textarea
-              className="w-full bg-[var(--app-bg)] border border-[var(--app-border)] rounded-md px-3 py-2 text-sm text-[var(--app-text)] placeholder:text-[var(--app-text-dim)] resize-none outline-none focus:border-[var(--app-accent)] transition-colors"
-              placeholder="What do you want to build?"
-              rows={2}
-            />
+            <div className="relative">
+              <textarea
+                ref={textareaRef}
+                value={qsValue}
+                onChange={(e) => setQsValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="w-full bg-[var(--app-bg)] border border-[var(--app-border)] rounded-xl pl-3 pr-10 py-2 text-sm text-[var(--app-text)] placeholder:text-[var(--app-text-dim)] resize-none outline-none focus:border-[var(--app-accent)] transition-colors"
+                placeholder="What do you want to build?"
+                rows={2}
+              />
+              <button
+                onClick={handleQuickStart}
+                disabled={!hasInput}
+                className={`absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${hasInput ? 'bg-[var(--app-text)] text-[var(--app-bg)] hover:opacity-80' : 'bg-[var(--app-bg-active)] text-[var(--app-text-dim)] cursor-not-allowed'}`}
+                title="Send"
+              >
+                <ArrowUp size={14} />
+              </button>
+            </div>
           </div>
         </div>
       </div>

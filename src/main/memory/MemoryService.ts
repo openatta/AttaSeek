@@ -1,99 +1,66 @@
 /**
- * MemoryService — L1 scratchpad (per-session, in-memory) + L2 persistent memory.
- * MVP: all storage is in-memory. Phase 5+: L2 backed by SQLite + vector search.
+ * MemoryService — L1 scratchpad (per-session, in-memory) + L2 persistent (SQLite).
  */
 
-import type { MemoryEntry, MemoryLayer, MemoryQuery, MemoryScope, MemoryType } from '../../renderer/core/types/Memory'
+import { getDb } from '../store/db'
+import { newId } from '../store/id'
+import type { MemoryEntry, MemoryQuery } from '../../renderer/core/types/Memory'
 
 export class MemoryService {
-  private scratchpads: Map<string, Map<string, unknown>> = new Map() // L1: sessionId -> key/val
-  private entries: MemoryEntry[] = [] // L2: persistent memory
-  private nextId = 1
+  private scratchpads = new Map<string, Map<string, unknown>>()
 
   // --- L1: Session Scratchpad ---
-
-  getScratchpad(sessionId: string, key: string): unknown {
-    return this.scratchpads.get(sessionId)?.get(key)
+  getScratchpad(sid: string, key: string): unknown { return this.scratchpads.get(sid)?.get(key) }
+  setScratchpad(sid: string, key: string, value: unknown): void {
+    if (!this.scratchpads.has(sid)) this.scratchpads.set(sid, new Map())
+    this.scratchpads.get(sid)!.set(key, value)
   }
+  clearScratchpad(sid: string): void { this.scratchpads.delete(sid) }
 
-  setScratchpad(sessionId: string, key: string, value: unknown): void {
-    if (!this.scratchpads.has(sessionId)) {
-      this.scratchpads.set(sessionId, new Map())
-    }
-    this.scratchpads.get(sessionId)!.set(key, value)
-  }
-
-  clearScratchpad(sessionId: string): void {
-    this.scratchpads.delete(sessionId)
-  }
-
-  getAllScratchpad(sessionId: string): Record<string, unknown> {
-    const pad = this.scratchpads.get(sessionId)
-    if (!pad) return {}
-    return Object.fromEntries(pad)
-  }
-
-  // --- L2: Persistent Memory ---
-
-  store(entry: Omit<MemoryEntry, 'id' | 'createdAt' | 'updatedAt'>): MemoryEntry {
+  // --- L2: Persistent Memory (SQLite) ---
+  store(entry: Omit<MemoryEntry, 'id' | 'layer' | 'createdAt' | 'updatedAt'>): MemoryEntry {
+    const db = getDb()
+    const id = `mem_${newId().slice(0, 8)}`
     const now = Date.now()
-    const stored: MemoryEntry = {
-      ...entry,
-      id: `mem_${this.nextId++}`,
-      layer: 'L2',
-      createdAt: now,
-      updatedAt: now,
-    }
-    this.entries.push(stored)
-    return stored
+    db.prepare(`INSERT INTO memory_entries (id, layer, scope, scope_id, type, content, source, session_id, task_id, created_at, updated_at)
+      VALUES (?, 'L2', ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, entry.scope, entry.scopeId, entry.type, entry.content, entry.source, entry.sessionId || null, entry.taskId || null, now, now)
+    return { id, layer: 'L2', ...entry, createdAt: now, updatedAt: now }
   }
 
   recall(query: MemoryQuery): MemoryEntry[] {
-    let results = [...this.entries]
-
-    if (query.scope) results = results.filter((e) => e.scope === query.scope)
-    if (query.scopeId) results = results.filter((e) => e.scopeId === query.scopeId)
-    if (query.type) results = results.filter((e) => e.type === query.type)
-    if (query.layer) results = results.filter((e) => e.layer === query.layer)
-
-    if (query.query) {
-      const q = query.query.toLowerCase()
-      results = results.filter((e) => e.content.toLowerCase().includes(q))
-    }
-
-    results.sort((a, b) => b.updatedAt - a.updatedAt)
-    if (query.limit) results = results.slice(0, query.limit)
-
-    return results
+    const db = getDb()
+    let sql = 'SELECT * FROM memory_entries WHERE 1=1'
+    const params: any[] = []
+    if (query.scope) { sql += ' AND scope = ?'; params.push(query.scope) }
+    if (query.scopeId) { sql += ' AND scope_id = ?'; params.push(query.scopeId) }
+    if (query.type) { sql += ' AND type = ?'; params.push(query.type) }
+    if (query.layer) { sql += ' AND layer = ?'; params.push(query.layer) }
+    if (query.query) { sql += ' AND content LIKE ?'; params.push(`%${query.query}%`) }
+    sql += ' ORDER BY updated_at DESC'
+    if (query.limit) { sql += ' LIMIT ?'; params.push(query.limit) }
+    return (db.prepare(sql).all(...params) as any[]).map((r: any) => this.rowToEntry(r)).filter((e): e is MemoryEntry => !!e)
   }
 
-  get(id: string): MemoryEntry | undefined {
-    return this.entries.find((e) => e.id === id)
-  }
+  get(id: string): MemoryEntry | undefined { return this.rowToEntry(getDb().prepare('SELECT * FROM memory_entries WHERE id = ?').get(id) as any) }
 
   update(id: string, patch: Partial<Pick<MemoryEntry, 'content' | 'scope' | 'scopeId' | 'type'>>): MemoryEntry | null {
-    const entry = this.get(id)
-    if (!entry) return null
-    Object.assign(entry, patch, { updatedAt: Date.now() })
-    return entry
+    const db = getDb(); const ex = db.prepare('SELECT * FROM memory_entries WHERE id = ?').get(id) as any
+    if (!ex) return null
+    const c = patch.content ?? ex.content; const sc = patch.scope ?? ex.scope; const si = patch.scopeId ?? ex.scope_id; const t = patch.type ?? ex.type; const now = Date.now()
+    db.prepare('UPDATE memory_entries SET content=?, scope=?, scope_id=?, type=?, updated_at=? WHERE id=?').run(c, sc, si, t, now, id)
+    return this.rowToEntry({ ...ex, content: c, scope: sc, scope_id: si, type: t, updated_at: now }) || null
   }
 
-  delete(id: string): boolean {
-    const idx = this.entries.findIndex((e) => e.id === id)
-    if (idx === -1) return false
-    this.entries.splice(idx, 1)
-    return true
-  }
+  delete(id: string): boolean { return getDb().prepare('DELETE FROM memory_entries WHERE id=?').run(id).changes > 0 }
 
-  /** List all L2 entries (for settings UI) */
-  listAll(): MemoryEntry[] {
-    return [...this.entries].sort((a, b) => b.updatedAt - a.updatedAt)
-  }
+  listAll(): MemoryEntry[] { return (getDb().prepare('SELECT * FROM memory_entries ORDER BY updated_at DESC').all() as any[]).map((r: any) => this.rowToEntry(r)).filter((e): e is MemoryEntry => !!e) }
 
-  get count(): number {
-    return this.entries.length
+  get count(): number { return (getDb().prepare('SELECT COUNT(*) as c FROM memory_entries').get() as any)?.c || 0 }
+
+  private rowToEntry(r: any): MemoryEntry | undefined {
+    if (!r) return undefined
+    return { id: r.id, layer: r.layer, scope: r.scope, scopeId: r.scope_id, type: r.type, content: r.content, source: r.source, sessionId: r.session_id, taskId: r.task_id, createdAt: r.created_at, updatedAt: r.updated_at }
   }
 }
 
-/** Singleton */
 export const memoryService = new MemoryService()

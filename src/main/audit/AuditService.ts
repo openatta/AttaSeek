@@ -1,84 +1,50 @@
 /**
- * AuditService — immutable log of agent actions, tool calls, and permission decisions.
- * Always-on; all entries are recorded for compliance and debugging.
- * MVP: in-memory storage. Phase 5+: SQLite persistence.
+ * AuditService — SQLite-backed immutable audit log.
  */
 
+import { getDb } from '../store/db'
+import { newId } from '../store/id'
 import type { AuditLog, AuditEventType, AuditFilters } from '../../renderer/core/types/Audit'
 import type { ToolRiskLevel } from '../../renderer/core/types/Tool'
 
 export class AuditService {
-  private logs: AuditLog[] = []
-  private nextId = 1
-
-  /** Record an audit event */
   log(params: {
-    taskId?: string
-    sessionId?: string
-    projectId?: string
-    eventType: AuditEventType
-    toolId?: string
-    riskLevel?: ToolRiskLevel
-    inputSummary?: string
-    outputSummary?: string
-    permissionResult?: 'allow' | 'deny'
-    artifactRefs?: string[]
-    metadata?: Record<string, unknown>
+    taskId?: string; sessionId?: string; projectId?: string;
+    eventType: AuditEventType; toolId?: string; riskLevel?: ToolRiskLevel;
+    inputSummary?: string; outputSummary?: string; permissionResult?: 'allow' | 'deny';
+    artifactRefs?: string[]; metadata?: Record<string, unknown>
   }): AuditLog {
-    const entry: AuditLog = {
-      id: `audit_${this.nextId++}`,
-      taskId: params.taskId,
-      sessionId: params.sessionId,
-      projectId: params.projectId,
-      eventType: params.eventType,
-      toolId: params.toolId,
-      riskLevel: params.riskLevel,
-      inputSummary: params.inputSummary,
-      outputSummary: params.outputSummary,
-      permissionResult: params.permissionResult,
-      artifactRefs: params.artifactRefs,
-      metadata: params.metadata,
-      createdAt: Date.now(),
-    }
-    this.logs.push(entry)
-    return entry
+    const db = getDb(); const id = `audit_${newId().slice(0, 8)}`; const now = Date.now()
+    const ar = params.artifactRefs ? JSON.stringify(params.artifactRefs) : null
+    const md = params.metadata ? JSON.stringify(params.metadata) : null
+    db.prepare(`INSERT INTO audit_logs (id, task_id, session_id, project_id, event_type, tool_id, risk_level, input_summary, output_summary, permission_result, artifact_refs, metadata, created_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(id, params.taskId||null, params.sessionId||null, params.projectId||null, params.eventType, params.toolId||null, params.riskLevel||null, params.inputSummary||null, params.outputSummary||null, params.permissionResult||null, ar, md, now)
+    return { id, taskId: params.taskId, sessionId: params.sessionId, projectId: params.projectId, eventType: params.eventType, toolId: params.toolId, riskLevel: params.riskLevel, inputSummary: params.inputSummary, outputSummary: params.outputSummary, permissionResult: params.permissionResult, artifactRefs: params.artifactRefs, metadata: params.metadata, createdAt: now }
   }
 
-  /** Query audit logs with filters */
   query(filters: AuditFilters = {}): AuditLog[] {
-    let results = [...this.logs]
-
-    if (filters.sessionId) results = results.filter((l) => l.sessionId === filters.sessionId)
-    if (filters.taskId) results = results.filter((l) => l.taskId === filters.taskId)
-    if (filters.projectId) results = results.filter((l) => l.projectId === filters.projectId)
-    if (filters.eventType) results = results.filter((l) => l.eventType === filters.eventType)
-    if (filters.riskLevel) results = results.filter((l) => l.riskLevel === filters.riskLevel)
-    if (filters.from) results = results.filter((l) => l.createdAt >= filters.from!)
-    if (filters.to) results = results.filter((l) => l.createdAt <= filters.to!)
-
-    results.sort((a, b) => b.createdAt - a.createdAt)
-
-    if (filters.offset) results = results.slice(filters.offset)
-    if (filters.limit) results = results.slice(0, filters.limit)
-
-    return results
+    const db = getDb(); let sql = 'SELECT * FROM audit_logs WHERE 1=1'; const p: any[] = []
+    if (filters.sessionId) { sql += ' AND session_id=?'; p.push(filters.sessionId) }
+    if (filters.taskId) { sql += ' AND task_id=?'; p.push(filters.taskId) }
+    if (filters.projectId) { sql += ' AND project_id=?'; p.push(filters.projectId) }
+    if (filters.eventType) { sql += ' AND event_type=?'; p.push(filters.eventType) }
+    if (filters.riskLevel) { sql += ' AND risk_level=?'; p.push(filters.riskLevel) }
+    if (filters.from) { sql += ' AND created_at>=?'; p.push(filters.from) }
+    if (filters.to) { sql += ' AND created_at<=?'; p.push(filters.to) }
+    sql += ' ORDER BY created_at DESC'
+    if (filters.limit) { sql += ' LIMIT ?'; p.push(filters.limit) }
+    if (filters.offset) { sql += ' OFFSET ?'; p.push(filters.offset) }
+    return (db.prepare(sql).all(...p) as any[]).map((r: any) => this.rowToLog(r)).filter((l): l is AuditLog => !!l)
   }
 
-  /** Get a single audit log by ID */
-  get(id: string): AuditLog | undefined {
-    return this.logs.find((l) => l.id === id)
-  }
+  get(id: string): AuditLog | undefined { return this.rowToLog(getDb().prepare('SELECT * FROM audit_logs WHERE id=?').get(id) as any) }
 
-  /** Get total count */
-  get count(): number {
-    return this.logs.length
-  }
+  get count(): number { return (getDb().prepare('SELECT COUNT(*) as c FROM audit_logs').get() as any)?.c || 0 }
 
-  /** Clear all logs (admin only) */
-  clear(): void {
-    this.logs = []
+  private rowToLog(r: any): AuditLog | undefined {
+    if (!r) return undefined
+    return { id: r.id, taskId: r.task_id, sessionId: r.session_id, projectId: r.project_id, eventType: r.event_type as AuditEventType, toolId: r.tool_id, riskLevel: r.risk_level, inputSummary: r.input_summary, outputSummary: r.output_summary, permissionResult: r.permission_result, artifactRefs: r.artifact_refs ? JSON.parse(r.artifact_refs) : undefined, metadata: r.metadata ? JSON.parse(r.metadata) : undefined, createdAt: r.created_at }
   }
 }
 
-/** Singleton */
 export const auditService = new AuditService()

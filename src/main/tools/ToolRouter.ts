@@ -58,3 +58,6 @@ export class ToolRouter {
     return intersection.size / union.size
   }
 }
+
+/** Singleton */
+export const toolRouter = new ToolRouter()

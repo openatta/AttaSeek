@@ -3,7 +3,6 @@ import { useAtom } from 'jotai'
 import { artifactWidthAtom } from '../atoms/shellAtom'
 
 interface AppSpaceProps {
-  mode: string
   fullscreen: boolean
   agentPane: ReactNode
   artifactPane: ReactNode
@@ -19,13 +18,17 @@ export default function AppSpace({ agentPane, artifactPane, fullscreen }: AppSpa
       if (!draggingRef.current) return
       setArtifactWidth((w) => Math.min(800, Math.max(240, w - e.movementX)))
     }
-    const onUp = () => {
+    const cleanup = () => {
       draggingRef.current = false
       document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
+      document.removeEventListener('mouseup', cleanup)
+      document.removeEventListener('pointercancel', cleanup)
+      document.removeEventListener('pointerleave', cleanup)
     }
     document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
+    document.addEventListener('mouseup', cleanup)
+    document.addEventListener('pointercancel', cleanup)
+    document.addEventListener('pointerleave', cleanup)
   }, [setArtifactWidth])
 
   const hasArtifact = artifactPane !== null
@@ -55,4 +58,4 @@ export default function AppSpace({ agentPane, artifactPane, fullscreen }: AppSpa
   )
 }
 
-export type AppSpaceLayoutMode = 'standard'
+

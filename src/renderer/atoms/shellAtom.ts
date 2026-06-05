@@ -1,9 +1,6 @@
 import { atom } from 'jotai'
 import type { OutputTab } from './outputTabsAtom'
 
-/** Layout mode — always 'standard' for MVP */
-export const LAYOUT_MODE = 'standard' as const
-
 /** Sidebar width — resizable by drag handle (min 160, max 500) */
 export const sidebarWidthAtom = atom(260)
 

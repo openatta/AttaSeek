@@ -2,9 +2,10 @@ import { describe, it, expect } from 'vitest'
 import { currentSessionIdAtom, sessionEventsAtom, agentTasksAtom } from '../../../src/renderer/atoms/sessionAtom'
 
 describe('sessionAtom', () => {
-  it('currentSessionIdAtom defaults to session_default', () => {
-    // atoms are lazily evaluated — test initial values
-    expect(currentSessionIdAtom.init).toBe('session_default')
+  it('currentSessionIdAtom is a readable atom (derived from active activity)', () => {
+    // Derived atoms don't have .init — they compute from dependencies
+    expect(currentSessionIdAtom).toBeDefined()
+    expect(typeof currentSessionIdAtom.read).toBe('function')
   })
 
   it('sessionEventsAtom starts as empty array', () => {
@@ -15,10 +16,9 @@ describe('sessionAtom', () => {
     expect(agentTasksAtom.init).toEqual([])
   })
 
-  // S2: no subscribeToAgentEventsAtom — subscription is managed by App.tsx useEffect
-  it('does not export subscribeToAgentEventsAtom (moved to App.tsx)', () => {
-    // This atom was removed; import should fail at compile time
-    // If this test compiles, the atom doesn't exist in the module
-    expect(true).toBe(true)
+  it('exports atoms needed by the event bridge', () => {
+    expect(currentSessionIdAtom).toBeDefined()
+    expect(sessionEventsAtom).toBeDefined()
+    expect(agentTasksAtom).toBeDefined()
   })
 })

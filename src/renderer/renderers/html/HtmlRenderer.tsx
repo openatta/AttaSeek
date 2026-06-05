@@ -26,7 +26,7 @@ export default function HtmlRenderer({ content, title }: ArtifactRendererProps) 
       <iframe
         ref={iframeRef}
         className="flex-1 w-full border-0"
-        sandbox="allow-scripts"
+        sandbox=""
         title={title}
       />
     </div>

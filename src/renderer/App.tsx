@@ -1,8 +1,16 @@
 import { useEffect, useRef } from 'react'
 import { Provider, useSetAtom } from 'jotai'
 import ThemeProvider from './components/ThemeProvider'
+import ErrorBoundary from './components/ErrorBoundary'
 import Shell from './layouts/Shell'
-import { sessionEventsAtom, agentTasksAtom, handleAgentEvent } from './atoms/sessionAtom'
+import {
+  sessionEventsAtom,
+  agentTasksAtom,
+  streamingBuffersAtom,
+  _sessionTitleAtom,
+  handleAgentEvent,
+} from './atoms/sessionAtom'
+import { modelConfigsAtom } from './atoms/modelConfigAtom'
 import type { SessionEvent } from './core/types/SessionEvent'
 
 /**
@@ -12,22 +20,47 @@ import type { SessionEvent } from './core/types/SessionEvent'
 function useAgentEventBridge() {
   const setSessionEvents = useSetAtom(sessionEventsAtom)
   const setAgentTasks = useSetAtom(agentTasksAtom)
+  const setStreamingBuffers = useSetAtom(streamingBuffersAtom)
+  const setModelConfigs = useSetAtom(modelConfigsAtom)
+  const setTitleStore = useSetAtom(_sessionTitleAtom)
   const subscribedRef = useRef(false)
+  const messageBufRef = useRef<Map<string, string>>(new Map())
+
+  const handleSessionTitle = (sid: string, title: string) => {
+    setTitleStore((prev) => ({ ...prev, [sid]: title }))
+  }
 
   useEffect(() => {
     if (subscribedRef.current) return
-    if (!window.api?.agent?.onEvent) return
-
     subscribedRef.current = true
-    const unsubscribe = window.api.agent.onEvent((event: unknown) => {
-      handleAgentEvent(event as SessionEvent, setSessionEvents, setAgentTasks)
-    })
+
+    // Subscribe to agent events
+    let unsubEvent: (() => void) | undefined
+    if (window.api?.agent?.onEvent) {
+      unsubEvent = window.api.agent.onEvent((event: unknown) => {
+        handleAgentEvent(
+          event as SessionEvent,
+          setSessionEvents,
+          setAgentTasks,
+          setStreamingBuffers,
+          messageBufRef,
+          handleSessionTitle,
+        )
+      })
+    }
+
+    // Load model configs at startup
+    if (window.api?.model) {
+      window.api.model.list().then((res: any) => {
+        if (res.configs) setModelConfigs(res.configs)
+      }).catch(() => {})
+    }
 
     return () => {
-      unsubscribe?.()
+      unsubEvent?.()
       subscribedRef.current = false
     }
-  }, [setSessionEvents, setAgentTasks])
+  }, [setSessionEvents, setAgentTasks, setStreamingBuffers, setModelConfigs])
 }
 
 export default function App() {
@@ -45,5 +78,9 @@ export default function App() {
  */
 function AppContent() {
   useAgentEventBridge()
-  return <Shell />
+  return (
+    <ErrorBoundary>
+      <Shell />
+    </ErrorBoundary>
+  )
 }

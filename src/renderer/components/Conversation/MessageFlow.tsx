@@ -1,5 +1,7 @@
-import { useAtomValue } from 'jotai'
-import { sessionEventsAtom, currentSessionIdAtom, agentTasksAtom } from '../../atoms/sessionAtom'
+import { useRef, useState, useEffect, useCallback, memo } from 'react'
+import { useAtomValue, useSetAtom } from 'jotai'
+import { sessionEventsAtom, currentSessionIdAtom, agentTasksAtom, streamingBuffersAtom } from '../../atoms/sessionAtom'
+import { editTextAtom } from '../../atoms/composerAtom'
 import AgentStatusBar from './AgentStatusBar'
 import type { SessionEvent } from '../../core/types/SessionEvent'
 import UserMessageEvent from './events/UserMessageEvent'
@@ -10,73 +12,107 @@ import ToolCallFinishedEvent from './events/ToolCallFinishedEvent'
 import ArtifactCreatedEvent from './events/ArtifactCreatedEvent'
 import TaskCompletedEvent from './events/TaskCompletedEvent'
 import TaskFailedEvent from './events/TaskFailedEvent'
+import PermissionRequestedEvent from './events/PermissionRequestedEvent'
+import NoModelPrompt from './NoModelPrompt'
+import { ArrowDown } from 'lucide-react'
 
-/**
- * Scrollable message flow area driven by session events.
- * Renders user messages, agent messages, tool call cards,
- * plan cards, permission prompts, and artifact references.
- */
 export default function MessageFlow() {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [showScrollBtn, setShowScrollBtn] = useState(false)
   const events = useAtomValue(sessionEventsAtom)
-  const tasks = useAtomValue(agentTasksAtom)
   const sessionId = useAtomValue(currentSessionIdAtom)
+  const streamingBuffers = useAtomValue(streamingBuffersAtom)
+  const setEditText = useSetAtom(editTextAtom)
 
-  // Filter events for current session
   const sessionEvents = events.filter((e) => e.sessionId === sessionId)
+  const streamingKeys = Object.keys(streamingBuffers).filter((k) => streamingBuffers[k])
+  const streamingMessageId = streamingKeys.length > 0 ? streamingKeys[streamingKeys.length - 1] : undefined
+  const lastAgentIdx = [...sessionEvents].reverse().findIndex((e) => e.type === 'AgentMessage')
 
-  if (sessionEvents.length === 0) {
+  const handleScroll = useCallback(() => {
+    const el = containerRef.current
+    if (!el) return
+    const dist = el.scrollHeight - el.scrollTop - el.clientHeight
+    setShowScrollBtn(dist > 150)
+  }, [])
+
+  const scrollToBottom = () => {
+    containerRef.current?.scrollTo({ top: containerRef.current.scrollHeight, behavior: 'smooth' })
+  }
+
+  // Auto-scroll when new events arrive OR streaming buffer changes
+  const streamTotalLen = streamingKeys.reduce((sum, k) => sum + (streamingBuffers[k]?.length || 0), 0)
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const dist = el.scrollHeight - el.scrollTop - el.clientHeight
+    if (dist < 150) el.scrollTop = el.scrollHeight
+  }, [sessionEvents.length, streamTotalLen])
+
+  if (sessionEvents.length === 0 && streamingKeys.length === 0) {
     return (
       <div className="flex-1 overflow-y-auto min-h-0">
         <AgentStatusBar />
-
-        <div className="flex flex-col items-center justify-center h-full px-6 pb-20">
-          <div className="w-16 h-16 rounded-2xl bg-[var(--app-bg-hover)] flex items-center justify-center mb-4">
-            <span className="text-2xl text-[var(--app-text-dim)]">◈</span>
+        <div className="flex flex-col items-center justify-center h-full px-6 pb-20 text-center">
+          <p className="text-xl text-[var(--app-text)] mb-6 font-medium">What can I help with?</p>
+          <div className="flex flex-wrap justify-center gap-2 max-w-lg">
+            {['Explain quantum computing', 'Write a Python script', 'Summarize a document', 'Review my code'].map((s) => (
+              <button key={s} onClick={() => setEditText(s)} className="px-4 py-2 rounded-full border border-[var(--app-border)] text-sm text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:border-[var(--app-text-dim)] hover:bg-[var(--app-bg-hover)] transition-colors">
+                {s}
+              </button>
+            ))}
           </div>
-          <h3 className="text-sm font-medium text-[var(--app-text-secondary)] mb-1">
-            AttaSeek Agent Workbench
-          </h3>
-          <p className="text-xs text-[var(--app-text-dim)] text-center max-w-xs">
-            Type a message below to start. The agent will plan, execute tools, and generate artifacts.
-          </p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="flex-1 overflow-y-auto min-h-0">
+    <div className="flex-1 overflow-y-auto min-h-0 relative" ref={containerRef} onScroll={handleScroll}>
       <AgentStatusBar />
-      <div className="px-4 py-2 space-y-2 max-w-3xl mx-auto">
-        {sessionEvents.map((event) => (
-          <EventCard key={event.id} event={event} />
-        ))}
+      <div className="px-6 py-2 max-w-[48rem] mx-auto">
+        {sessionEvents.map((event, idx) => {
+          const isLastAgent = event.type === 'AgentMessage' && lastAgentIdx >= 0 && idx === sessionEvents.length - 1 - lastAgentIdx
+          return <EventCard key={event.id} event={event} streamingMessageId={isLastAgent ? streamingMessageId : undefined} />
+        })}
       </div>
-      {/* Scroll anchor */}
       <div className="h-4" />
+      {showScrollBtn && (
+        <button onClick={scrollToBottom} className="absolute bottom-4 right-6 w-8 h-8 rounded-full bg-[var(--app-bg-elevated)] border border-[var(--app-border)] shadow-md flex items-center justify-center hover:bg-[var(--app-bg-hover)] transition-colors z-10">
+          <ArrowDown className="w-4 h-4 text-[var(--app-text-secondary)]" />
+        </button>
+      )}
     </div>
   )
 }
 
-function EventCard({ event }: { event: SessionEvent }) {
+const EventCard = memo(function EventCard({ event, streamingMessageId }: { event: SessionEvent; streamingMessageId?: string }) {
+  const setEditText = useSetAtom(editTextAtom)
   switch (event.type) {
     case 'UserMessage':
-      return <UserMessageEvent payload={event.payload as Parameters<typeof UserMessageEvent>[0]['payload']} />
+      return <UserMessageEvent payload={event.payload as any} onEdit={(text) => setEditText(text)} />
     case 'AgentMessage':
-      return <AgentMessageEvent payload={event.payload as Parameters<typeof AgentMessageEvent>[0]['payload']} />
+      return <AgentMessageEvent payload={event.payload as any} streamingMessageId={streamingMessageId} onRegenerate={() => {}} />
     case 'PlanCreated':
-      return <PlanCreatedEvent payload={event.payload as Parameters<typeof PlanCreatedEvent>[0]['payload']} />
+      return <PlanCreatedEvent payload={event.payload as any} />
     case 'ToolCallStarted':
-      return <ToolCallStartedEvent payload={event.payload as Parameters<typeof ToolCallStartedEvent>[0]['payload']} />
+      return <ToolCallStartedEvent payload={event.payload as any} />
     case 'ToolCallFinished':
-      return <ToolCallFinishedEvent payload={event.payload as Parameters<typeof ToolCallFinishedEvent>[0]['payload']} />
+      return <ToolCallFinishedEvent payload={event.payload as any} />
     case 'ArtifactCreated':
-      return <ArtifactCreatedEvent payload={event.payload as Parameters<typeof ArtifactCreatedEvent>[0]['payload']} />
+      return <ArtifactCreatedEvent payload={event.payload as any} />
     case 'TaskCompleted':
-      return <TaskCompletedEvent payload={event.payload as Parameters<typeof TaskCompletedEvent>[0]['payload']} />
+      return <TaskCompletedEvent payload={event.payload as any} />
+    case 'SystemNotification': {
+      const snPayload = event.payload as { kind: string; message: string }
+      if (snPayload.kind === 'no_model') return <NoModelPrompt />
+      return null
+    }
     case 'TaskFailed':
-      return <TaskFailedEvent payload={event.payload as Parameters<typeof TaskFailedEvent>[0]['payload']} />
+      return <TaskFailedEvent payload={event.payload as any} taskId={event.taskId} sessionId={event.sessionId} />
+    case 'PermissionRequested':
+      return <PermissionRequestedEvent payload={event.payload as any} />
     default:
       return null
   }
-}
+})

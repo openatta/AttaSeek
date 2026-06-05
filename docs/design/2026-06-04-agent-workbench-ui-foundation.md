@@ -278,72 +278,7 @@ ArtifactPane 不直接理解业务含义，只根据 Artifact 类型、renderer 
 
 ---
 
-## 8. 布局模式
-
-虽然 AgentPane 永远存在，但它的尺寸和停靠位置可以变化。
-
-### 8.1 Standard Mode
-
-默认模式。
-
-```text
-Sidebar | AgentPane | ArtifactPane
-```
-
-适合：
-
-- 日常对话
-- 文档生成
-- 邮件草稿
-- 项目协作
-
-### 8.2 Artifact Focus Mode
-
-Artifact 最大化，AgentPane 收窄。
-
-```text
-Sidebar | Agent Rail | ArtifactPane
-```
-
-适合：
-
-- 长文档编辑
-- 图表查看
-- 代码 Diff 审查
-- 回测报告分析
-
-### 8.3 Review Mode
-
-Artifact 为主，AgentPane 可在底部或侧边。
-
-```text
-Sidebar | ArtifactPane
-          AgentPane
-```
-
-适合：
-
-- PR review
-- 文档审阅
-- 交易复盘
-
-### 8.4 Chat Only Mode
-
-隐藏 ArtifactPane。
-
-```text
-Sidebar | AgentPane
-```
-
-适合：
-
-- 普通问答
-- 轻量任务
-- 无 Artifact 输出的交互
-
----
-
-## 9. 插件扩展模型
+## 8. 插件扩展模型
 
 垂直产品不应重写 Shell。
 
@@ -408,7 +343,7 @@ Artifact:
 
 ---
 
-## 10. Conversation 与 Artifact 的分工
+## 9. Conversation 与 Artifact 的分工
 
 | 内容 | Conversation / AgentPane | ArtifactPane |
 |---|---|---|
@@ -430,7 +365,7 @@ Artifact:
 
 ---
 
-## 11. 长期设计原则
+## 10. 长期设计原则
 
 1. Conversation 是所有垂直场景的默认核心交互面板。
 2. ArtifactPane 是完整产物和人工编辑面板。
@@ -438,12 +373,12 @@ Artifact:
 4. ActivityBar 是平台级导航，不承载业务逻辑。
 5. 插件扩展内容，不替换 Shell 结构。
 6. 复杂业务 UI 应优先成为 Artifact Renderer，而不是独立重写 Workspace。
-7. AgentPane 永远存在，但可以收窄、停靠或临时隐藏。
+7. AgentPane 和 ArtifactPane 是固定布局，AgentPane 在左、ArtifactPane 在右，通过拖拽分隔线调整宽度。
 8. 用户可以从自然语言进入工作流，也可以在 Artifact 中直接人工编辑。
 
 ---
 
-## 12. 最终结论
+## 11. 最终结论
 
 推荐长期 UI 架构：
 

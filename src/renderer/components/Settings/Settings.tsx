@@ -10,18 +10,26 @@ import NotificationsSettings from './pages/NotificationsSettings'
 import AgentSettings from './pages/AgentSettings'
 import GitSettings from './pages/GitSettings'
 import IntegrationsSettings from './pages/IntegrationsSettings'
+import PermissionsSettings from './pages/PermissionsSettings'
+import MemorySettings from './pages/MemorySettings'
+import AuditSettings from './pages/AuditSettings'
+import ModelSettings from './pages/ModelSettings'
 
 const PAGE_MAP: Record<string, React.ComponentType> = {
   general: GeneralSettings,
   profile: ProfileSettings,
   appearance: AppearanceSettings,
   configuration: ConfigurationSettings,
+  model: ModelSettings,
   personalization: PersonalizationSettings,
   keyboard: KeyboardSettings,
   notifications: NotificationsSettings,
   agent: AgentSettings,
   git: GitSettings,
-  integrations: IntegrationsSettings
+  integrations: IntegrationsSettings,
+  permissions: PermissionsSettings,
+  memory: MemorySettings,
+  audit: AuditSettings,
 }
 
 export default function Settings() {

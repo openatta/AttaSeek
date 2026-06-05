@@ -1,7 +1,7 @@
 # Agent Workbench Electron 架构设计
 
 > **日期：** 2026-06-04
-> **状态：** 草稿
+> **状态：** 已实施 (v0.2.0) — 核心架构对齐，参见末尾实施备注
 > **基于需求：** `docs/requirements/2026-06-04-agent-workbench-foundation-spec.md`
 > **基于 UI：** `docs/design/2026-06-04-agent-workbench-ui-foundation.md`
 
@@ -602,7 +602,6 @@ Jotai 只保存 UI 状态和 main process 数据的前端投影。
 |---|---|---|
 | `activeActivityAtom` | 当前 Activity | yes |
 | `sidebarStateAtom` | Sidebar 展开、宽度、筛选 | partial |
-| `layoutModeAtom` | Standard / ArtifactFocus / Review / ChatOnly | yes |
 | `currentSessionAtom` | 当前 session | no |
 | `agentTasksAtom` | 当前 session 的任务投影 | no |
 | `sessionEventsAtom` | Conversation 事件流 | no |
@@ -899,3 +898,30 @@ Main:
 ```
 
 现有实现可以保留作为过渡，但应逐步从 workspace-owned layout 迁移到 Shell-owned slots。这样既能继续利用当前已有 UI 组件，又不会把长期架构锁死在现有 workspace 结构里。
+
+---
+
+## 附录：v0.2.0 实施状态
+
+| 模块 | 状态 | 备注 |
+|------|------|------|
+| Shell Slot 架构 | ✅ | ActivityBar + SidebarSlot + AppSpace { AgentPane + ArtifactPane } |
+| AgentRuntime 状态机 | ✅ | 转换表驱动，11 状态全部实现 |
+| AgentEventBus | ✅ | 12 种事件类型，IPC 推送至 renderer |
+| ToolRegistry + ToolRouter | ✅ | 关键词 Jaccard 匹配 (Stage A)，sqlite-vec 延后 |
+| ArtifactService + Renderer Registry | ✅ | 6 Renderer，版本管理，内存存储 |
+| MemoryService L1+L2 | ✅ | Scratchpad + Persistent，内存存储 |
+| PermissionService + AuditService | ✅ | 三态判断 + 策略持久化 + 审计日志 |
+| PluginRegistry + PluginLoader | ✅ | 生命周期管理 (boot/activate/deactivate/reload/onError) |
+| WorkspaceRouter → registry | ✅ | 优先从 activityRegistry 读取，fallback 硬编码 |
+| IPC 全通道 | ✅ | 9 个 handler 文件，全部 try/catch 包裹 |
+| 事件驱动 Conversation | ✅ | 8 个 event renderer + PermissionRequestedEvent |
+| Settings: Permissions/Memory/Audit | ✅ | 3 个新页面 |
+| 集成测试 | ✅ | PermissionService + MemoryService + ArtifactService (24 tests) |
+| ContextBuilder | 🔵 | 已删除；接入真实 LLM 时重建 |
+| ToolExecutor | 🔵 | 已删除；接入真实 tool 执行时重建 |
+| SkillLoader | 🔵 | 已删除；当前 skill 由 boot.ts 直接注册 |
+| SQLite 持久化 (Memory/Audit/Artifact) | 🔵 | MVP 内存存储，未来迁移 |
+| 会话恢复 (Gap G5) | 🔵 | 依赖 SQLite + Session 管理 |
+| 性能基准 (Gap G8) | 🔵 | 需真实 LLM 集成后设置 |
+| IPC 版本兼容 (Gap G9) | 🔵 | 接口仍在迭代中 |

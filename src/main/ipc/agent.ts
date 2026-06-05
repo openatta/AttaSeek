@@ -6,14 +6,23 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import { agentRuntime } from '../agent/AgentRuntime'
 import { agentEventBus } from '../agent/AgentEventBus'
+import { perf } from '../perf'
+import { validateRequiredString } from '../store/util'
 
 let mainWindow: BrowserWindow | null = null
+let unsubscribeAgentEvents: (() => void) | null = null
 
 export function setAgentWindow(win: BrowserWindow): void {
+  // Clean up previous subscription before creating a new one
+  if (unsubscribeAgentEvents) {
+    unsubscribeAgentEvents()
+    unsubscribeAgentEvents = null
+  }
+
   mainWindow = win
 
   // Forward all agent events to the renderer
-  agentEventBus.subscribe('*', (event) => {
+  unsubscribeAgentEvents = agentEventBus.subscribe('*', (event) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('agent:event', event)
     }
@@ -21,9 +30,13 @@ export function setAgentWindow(win: BrowserWindow): void {
 }
 
 export function registerAgentHandlers(): void {
-  ipcMain.handle('agent:create-task', async (_event, params: { sessionId: string; goal: string; projectId?: string }) => {
+  ipcMain.handle('agent:create-task', async (_event, params: { sessionId: string; goal: string; projectId?: string; modelConfigId?: string; modelName?: string }) => {
+    validateRequiredString(params, 'sessionId', 'sessionId')
+    validateRequiredString(params, 'goal', 'goal')
+    const t0 = performance.now()
     try {
-      const task = agentRuntime.createTask(params.sessionId, params.goal, params.projectId)
+      const task = agentRuntime.createTask(params.sessionId, params.goal, params.projectId, params.modelConfigId, params.modelName)
+      perf.mark('ipc', 'agent:create-task', performance.now() - t0)
       return { success: true, task }
     } catch (err) {
       return {
@@ -34,16 +47,19 @@ export function registerAgentHandlers(): void {
   })
 
   ipcMain.handle('agent:cancel-task', async (_event, params: { taskId: string }) => {
+    validateRequiredString(params, 'taskId', 'taskId')
     const cancelled = agentRuntime.cancelTask(params.taskId)
     return { success: cancelled }
   })
 
   ipcMain.handle('agent:get-task', async (_event, params: { taskId: string }) => {
+    validateRequiredString(params, 'taskId', 'taskId')
     const task = agentRuntime.getTask(params.taskId)
     return { task: task || null }
   })
 
   ipcMain.handle('agent:list-events', async (_event, params: { sessionId: string }) => {
+    validateRequiredString(params, 'sessionId', 'sessionId')
     const events = agentEventBus.getHistory(params.sessionId)
     return { events }
   })

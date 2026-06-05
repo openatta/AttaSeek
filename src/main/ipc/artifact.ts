@@ -1,21 +1,13 @@
 import { ipcMain } from 'electron'
 import { artifactService } from '../artifacts/ArtifactService'
+import { ipcWrap } from '../store/util'
 
 export function registerArtifactHandlers(): void {
-  ipcMain.handle('artifact:list', async (_event, params: { sessionId: string }) => {
-    const artifacts = artifactService.listBySession(params.sessionId)
-    return { artifacts }
-  })
-
-  ipcMain.handle('artifact:get', async (_event, params: { artifactId: string }) => {
-    const artifact = artifactService.get(params.artifactId)
-    return { artifact: artifact || null }
-  })
-
-  ipcMain.handle('artifact:update', async (_event, params: { artifactId: string; patch: { content?: string; title?: string } }) => {
-    const artifact = artifactService.update(params.artifactId, params.patch)
-    return { artifact: artifact || null }
-  })
-
+  ipcMain.handle('artifact:list', async (_e, p: { sessionId: string }) =>
+    ipcWrap(() => ({ artifacts: artifactService.listBySession(p.sessionId) })))
+  ipcMain.handle('artifact:get', async (_e, p: { artifactId: string }) =>
+    ipcWrap(() => ({ artifact: artifactService.get(p.artifactId) || null })))
+  ipcMain.handle('artifact:update', async (_e, p: { artifactId: string; patch: { content?: string; title?: string } }) =>
+    ipcWrap(() => ({ artifact: artifactService.update(p.artifactId, p.patch) || null })))
   console.log('[IPC:artifact] handlers registered')
 }

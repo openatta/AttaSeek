@@ -15,6 +15,7 @@ export type {
   SessionEventPayload,
   UserMessagePayload,
   AgentMessagePayload,
+  AgentMessageChunkPayload,
   PlanCreatedPayload,
   PlanUpdatedPayload,
   ToolCallStartedPayload,

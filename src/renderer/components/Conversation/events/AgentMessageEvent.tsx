@@ -1,18 +1,48 @@
+import { useState } from 'react'
+import { useAtomValue } from 'jotai'
+import { streamingBuffersAtom } from '../../../atoms/sessionAtom'
 import type { AgentMessagePayload } from '../../../core/types/SessionEvent'
+import { Copy, Check, RefreshCw } from 'lucide-react'
+import MarkdownRenderer from '../MarkdownRenderer'
 
-interface Props {
-  payload: AgentMessagePayload
-}
+interface Props { payload: AgentMessagePayload; streamingMessageId?: string; onRegenerate?: () => void }
 
-export default function AgentMessageEvent({ payload }: Props) {
+export default function AgentMessageEvent({ payload, streamingMessageId, onRegenerate }: Props) {
+  const streamingBuffers = useAtomValue(streamingBuffersAtom)
+  const streamingContent = streamingMessageId ? streamingBuffers[streamingMessageId] : undefined
+  const displayContent = streamingContent || payload.content
+  const isStreaming = !!streamingMessageId && !!streamingContent && !payload.content
+  const hasContent = !!displayContent
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = () => {
+    const text = displayContent || ''
+    navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) }).catch(() => {})
+  }
+
   return (
-    <div className="flex justify-start">
-      <div className="bg-[var(--app-bg-inset)] border border-[var(--app-border)] rounded-xl rounded-bl-md px-4 py-2 max-w-[80%]">
-        {payload.reasoning && (
-          <p className="text-[11px] text-[var(--app-text-dim)] mb-1 italic">{payload.reasoning}</p>
-        )}
-        <p className="text-sm text-[var(--app-text)]">{payload.content}</p>
-      </div>
+    <div className="py-2">
+      {hasContent ? (
+        <MarkdownRenderer content={displayContent} />
+      ) : isStreaming ? (
+        <span className="text-[var(--app-text-dim)]">Thinking…</span>
+      ) : null}
+
+      {/* Action buttons — always visible when content exists and streaming is done */}
+      {hasContent && !isStreaming && (
+        <div className="flex gap-1 mt-2">
+          <button onClick={handleCopy} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs border border-[var(--app-border)] text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors">
+            {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+          {onRegenerate && (
+            <button onClick={onRegenerate} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs border border-[var(--app-border)] text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors">
+              <RefreshCw className="w-3 h-3" />
+              Retry
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

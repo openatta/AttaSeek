@@ -7,11 +7,18 @@ import { registerActivity } from './activityRegistry'
 import { registerSidebarView } from './sidebarRegistry'
 import { registerArtifactRenderer } from './artifactRendererRegistry'
 
-// Sidebar views (no state bridging needed)
+// Workspace components
+import ChatWorkspace from '../workspaces/ChatWorkspace'
+import ProjectsWorkspace from '../workspaces/ProjectsWorkspace'
+import SettingsWorkspace from '../workspaces/SettingsWorkspace'
+import DashboardWorkspace from '../workspaces/DashboardWorkspace'
+import SearchWorkspace from '../workspaces/SearchWorkspace'
+import AutomationWorkspace from '../workspaces/AutomationWorkspace'
+import PluginWorkspace from '../workspaces/PluginWorkspace'
+
+// Sidebar views
 import ChatsSidebar from '../workspaces/ChatsSidebar'
 import SettingsSidebar from '../components/Settings/SettingsSidebar'
-
-// Sidebar views with atom-connected wrappers
 import {
   AutomationSidebarConnected,
   PluginSidebarConnected,
@@ -34,13 +41,20 @@ export function initializeRegistries(): void {
 
   // ── Activities ──────────────────────────────────────────
 
-  registerActivity({ activity: 'chat', defaultLayoutMode: 'standard', defaultArtifactTabs: [] })
-  registerActivity({ activity: 'projects', defaultLayoutMode: 'standard', defaultArtifactTabs: ['files', 'review'] })
-  registerActivity({ activity: 'automation', defaultLayoutMode: 'standard', defaultArtifactTabs: [] })
-  registerActivity({ activity: 'plugin', defaultLayoutMode: 'standard', defaultArtifactTabs: [] })
-  registerActivity({ activity: 'settings', defaultLayoutMode: 'standard', defaultArtifactTabs: [] })
-  registerActivity({ activity: 'home', defaultLayoutMode: 'standard', defaultArtifactTabs: [] })
-  registerActivity({ activity: 'search', defaultLayoutMode: 'standard', defaultArtifactTabs: [] })
+  registerActivity({ activity: 'home', workspaceComponent: DashboardWorkspace
+, defaultArtifactTabs: [] })
+  registerActivity({ activity: 'chat', workspaceComponent: ChatWorkspace
+, defaultArtifactTabs: [] })
+  registerActivity({ activity: 'projects', workspaceComponent: ProjectsWorkspace
+, defaultArtifactTabs: ['files', 'review'] })
+  registerActivity({ activity: 'search', workspaceComponent: SearchWorkspace
+, defaultArtifactTabs: [] })
+  registerActivity({ activity: 'automation', workspaceComponent: AutomationWorkspace
+, defaultArtifactTabs: [] })
+  registerActivity({ activity: 'plugin', workspaceComponent: PluginWorkspace
+, defaultArtifactTabs: [] })
+  registerActivity({ activity: 'settings', workspaceComponent: SettingsWorkspace
+, defaultArtifactTabs: [] })
 
   // ── Sidebar Views ───────────────────────────────────────
 
@@ -61,3 +75,6 @@ export function initializeRegistries(): void {
 
   console.log('[registries] initialized — 7 activities, 5 sidebars, 6 renderers')
 }
+
+// Auto-init at module load — ensures registries are populated before first render
+initializeRegistries()

@@ -10,12 +10,17 @@ type EventListener = (event: SessionEvent) => void
 export class AgentEventBus {
   private listeners: Map<string, Set<EventListener>> = new Map()
   private eventHistory: Map<string, SessionEvent[]> = new Map()
+  private static readonly MAX_EVENTS_PER_SESSION = 1000
 
   /** Emit an event to all session subscribers */
   emit(event: SessionEvent): void {
-    // Store in history
+    // Store in history with cap
     const history = this.eventHistory.get(event.sessionId) || []
     history.push(event)
+    // Trim oldest events if over cap
+    if (history.length > AgentEventBus.MAX_EVENTS_PER_SESSION) {
+      history.splice(0, history.length - AgentEventBus.MAX_EVENTS_PER_SESSION)
+    }
     this.eventHistory.set(event.sessionId, history)
 
     // Notify session listeners

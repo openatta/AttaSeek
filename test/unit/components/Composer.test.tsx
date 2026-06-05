@@ -27,9 +27,10 @@ describe('Composer', () => {
     expect(screen.getByPlaceholderText(/Ask anything/)).toBeInTheDocument()
   })
 
-  it('should render model selector', () => {
+  it('should render model selector (shows "No model" when no configs)', () => {
     renderComposer()
-    expect(screen.getByText(/Opus/)).toBeInTheDocument()
+    // In test env with no model configs, ModelSelector shows "No model"
+    expect(screen.getByText('No model')).toBeInTheDocument()
   })
 
   it('should render permission mode label', () => {
@@ -61,9 +62,9 @@ describe('Composer', () => {
     renderComposer()
     const textarea = screen.getByRole('textbox')
     const card = textarea.closest('[class*="rounded-xl"]')
-    const modelBtn = screen.getByText(/Opus/).closest('[class*="rounded"]')
-    // Model selector is in its own small rounded element, not inside the card
+    // Model selector is outside the card in the metadata row
+    const modelBtn = screen.getByText('No model').closest('[class*="rounded"]')
     expect(card).not.toBeNull()
-    expect(card!.contains(screen.getByText(/Opus/))).toBe(false)
+    expect(card!.contains(screen.getByText('No model'))).toBe(false)
   })
 })

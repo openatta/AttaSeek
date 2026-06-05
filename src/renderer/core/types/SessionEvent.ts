@@ -6,6 +6,7 @@
 export type SessionEventType =
   | 'UserMessage'
   | 'AgentMessage'
+  | 'AgentMessageChunk'
   | 'PlanCreated'
   | 'PlanUpdated'
   | 'ToolCallStarted'
@@ -16,6 +17,8 @@ export type SessionEventType =
   | 'TaskPaused'
   | 'TaskCompleted'
   | 'TaskFailed'
+  | 'SystemNotification'
+  | 'SessionTitleGenerated'
 
 export interface SessionEvent {
   id: string
@@ -29,6 +32,7 @@ export interface SessionEvent {
 export type SessionEventPayload =
   | UserMessagePayload
   | AgentMessagePayload
+  | AgentMessageChunkPayload
   | PlanCreatedPayload
   | PlanUpdatedPayload
   | ToolCallStartedPayload
@@ -39,6 +43,8 @@ export type SessionEventPayload =
   | TaskPausedPayload
   | TaskCompletedPayload
   | TaskFailedPayload
+  | SystemNotificationPayload
+  | SessionTitleGeneratedPayload
 
 export interface UserMessagePayload {
   content: string
@@ -48,6 +54,12 @@ export interface UserMessagePayload {
 export interface AgentMessagePayload {
   content: string
   reasoning?: string
+}
+
+export interface AgentMessageChunkPayload {
+  content: string
+  isFinal: boolean
+  messageId: string
 }
 
 export interface PlanCreatedPayload {
@@ -116,4 +128,13 @@ export interface TaskCompletedPayload {
 export interface TaskFailedPayload {
   error: string
   recoverable: boolean
+}
+
+export interface SystemNotificationPayload {
+  kind: 'no_model' | 'info' | 'warning'
+  message: string
+}
+
+export interface SessionTitleGeneratedPayload {
+  title: string
 }
