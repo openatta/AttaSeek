@@ -7,7 +7,7 @@
  *  - Proves the base architecture supports vertical scenario plugins
  */
 
-import type { PluginManifest } from '../../../renderer/core/types/Plugin'
+import type { PluginManifest } from '../../../shared/types/Plugin'
 
 export const EnterpriseDocPlugin: PluginManifest = {
   id: 'enterprise-doc',

@@ -3,7 +3,7 @@
  * Tracks which plugins are available, their status, and their contributions.
  */
 
-import type { PluginManifest, PluginInstance, PluginStatus } from '../../renderer/core/types/Plugin'
+import type { PluginManifest, PluginInstance, PluginStatus } from '../../shared/types/Plugin'
 
 export class PluginRegistry {
   private plugins: Map<string, PluginInstance> = new Map()

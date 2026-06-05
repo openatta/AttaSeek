@@ -3,7 +3,7 @@
  * Registered at startup via SkillRegistry.
  */
 
-import type { SkillManifest } from '../../../renderer/core/types/Skill'
+import type { SkillManifest } from '../../../shared/types/Skill'
 
 export const DEMO_SKILLS: SkillManifest[] = [
   {

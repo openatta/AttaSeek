@@ -6,7 +6,7 @@
  * PluginRegistry, then activates them in sequence.
  */
 
-import type { PluginManifest } from '../../renderer/core/types/Plugin'
+import type { PluginManifest } from '../../shared/types/Plugin'
 import { pluginRegistry } from './PluginRegistry'
 import { skillRegistry } from '../skills/SkillRegistry'
 import { toolRegistry } from '../tools/ToolRegistry'

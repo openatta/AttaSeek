@@ -3,8 +3,8 @@
  * Skills are registered by plugins or built-in packs.
  */
 
-import type { SkillManifest, SkillLayer } from '../../renderer/core/types/Skill'
-import type { AgentTask } from '../../renderer/core/types/AgentTask'
+import type { SkillManifest, SkillLayer } from '../../shared/types/Skill'
+import type { AgentTask } from '../../shared/types/AgentTask'
 
 export class SkillRegistry {
   private skills: Map<string, SkillManifest> = new Map()
