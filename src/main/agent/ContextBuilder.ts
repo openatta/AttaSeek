@@ -125,7 +125,7 @@ export class ContextBuilder {
 
     // 1. System prompt
     const skillPrompts = this.getRelevantSkillPrompts(goal)
-    const memoryContext = this.getMemoryContext(sessionId, projectId, goal)
+    const memoryContext = await this.getMemoryContext(sessionId, projectId, goal)
     const constraints = this.getProjectConstraints(projectId)
 
     let systemPrompt = [
@@ -205,7 +205,7 @@ export class ContextBuilder {
     })
   }
 
-  private getMemoryContext(sessionId: string, projectId?: string, goal?: string): string {
+  private async getMemoryContext(sessionId: string, projectId?: string, goal?: string): Promise<string> {
     const parts: string[] = []
 
     // L2: SQLite memory
@@ -221,7 +221,7 @@ export class ContextBuilder {
     // L0: File system memory (CLAUDE.md + .attaseek/memory/*.md)
     if (projectId) {
       try {
-        const fileEntries = loadFileMemories(projectId)
+        const fileEntries = await loadFileMemories(projectId)
         if (fileEntries.length > 0) {
           const memEntries = toMemoryEntries(fileEntries, 'project', projectId)
           parts.push(memEntries.map((e) => `- [${e.type}] ${e.content.slice(0, 500)}`).join('\n'))
