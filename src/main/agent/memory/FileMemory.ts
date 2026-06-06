@@ -1,7 +1,7 @@
 /**
  * FileMemory — File-system based persistent memory (L0 layer).
  *
- * Loads CLAUDE.md and .attaseek/memory/*.md from the project root.
+ * Loads CLAUDE.md and .atta/seek/memories/*.md from the project root.
  * Markdown files with optional YAML frontmatter for metadata.
  *
  * Inspired by Claude Code's memdir/ system.
@@ -35,7 +35,7 @@ export async function loadFileMemories(projectRoot: string): Promise<FileMemoryE
     })
   } catch { /* file not found — skip */ }
 
-  // Load .attaseek/memory/*.md
+  // Load .atta/seek/memories/*.md
   const memDir = path.join(projectRoot, '.atta', 'seek', 'memories')
   try {
     const files = await fsp.readdir(memDir)

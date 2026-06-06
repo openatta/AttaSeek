@@ -218,7 +218,7 @@ export class ContextBuilder {
       parts.push(entries.map((e) => `- [${e.type}] ${e.content}`).join('\n'))
     }
 
-    // L0: File system memory (CLAUDE.md + .attaseek/memory/*.md)
+    // L0: File system memory (CLAUDE.md + .atta/seek/memories/*.md)
     if (projectId) {
       try {
         const fileEntries = await loadFileMemories(projectId)

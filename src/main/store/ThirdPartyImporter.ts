@@ -10,6 +10,7 @@ import { join, basename } from 'path'
 import { app } from 'electron'
 import type { BrowserWindow } from 'electron'
 import { getSetting } from './settings'
+import { CLAUDE_TO_ATTASEEK, CODEX_TO_ATTASEEK, mapSettings } from '../config/mapping'
 
 let _seekDir: string, _claudeDir: string, _codexDir: string
 function seekDir() { if (!_seekDir) _seekDir = join(app.getPath('home'), '.atta', 'seek'); return _seekDir }
@@ -50,14 +51,9 @@ export async function importFromClaudeCode(mainWindow?: BrowserWindow): Promise<
     try {
       const claudeSettings = JSON.parse(readFileSync(srcSettings, 'utf-8'))
       const attaseekSettings: Record<string, unknown> = existsSync(dstSettings) ? JSON.parse(readFileSync(dstSettings, 'utf-8')) : {}
-      // Map known keys
-      const keyMap: Record<string, string> = {
-        theme: 'theme', model: 'modelConfigId', permissionMode: 'permissionMode',
-      }
-      for (const [ck, ak] of Object.entries(keyMap)) {
-        if (claudeSettings[ck] !== undefined && attaseekSettings[ak] === undefined) {
-          attaseekSettings[ak] = claudeSettings[ck]
-        }
+      const mapped = mapSettings(claudeSettings, CLAUDE_TO_ATTASEEK)
+      for (const [k, v] of Object.entries(mapped)) {
+        if (attaseekSettings[k] === undefined) attaseekSettings[k] = v
       }
       const { writeFileSync } = await import('fs')
       writeFileSync(dstSettings, JSON.stringify(attaseekSettings, null, 2))
