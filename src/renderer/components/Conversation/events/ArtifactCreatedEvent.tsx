@@ -1,6 +1,6 @@
 import InlineArtifactPreview from '../InlineArtifactPreview'
-import type { ArtifactCreatedPayload } from '../../../core/types/SessionEvent'
-import type { ArtifactType } from '../../../core/types/Artifact'
+import type { ArtifactCreatedPayload } from '../../../../shared/types/SessionEvent'
+import type { ArtifactType } from '../../../../shared/types/Artifact'
 
 interface Props {
   payload: ArtifactCreatedPayload

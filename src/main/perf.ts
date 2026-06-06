@@ -95,27 +95,6 @@ class PerfCollector {
 
 export const perf = new PerfCollector()
 
-// ── IPC timing wrapper ──
-
-/** Wrap an IPC handler to measure and log invocation latency */
-export function withIpcTiming<T>(
-  channel: string,
-  handler: (...args: any[]) => Promise<T>,
-): (...args: any[]) => Promise<T> {
-  return async (...args: any[]) => {
-    const start = performance.now()
-    try {
-      return await handler(...args)
-    } finally {
-      const elapsed = performance.now() - start
-      perf.mark('ipc', channel, elapsed)
-      if (elapsed > 50) {
-        console.warn(`[perf] slow IPC: ${channel} took ${Math.round(elapsed)}ms`)
-      }
-    }
-  }
-}
-
 // ── Performance targets (from G8) ──
 
 export const PERF_TARGETS = {

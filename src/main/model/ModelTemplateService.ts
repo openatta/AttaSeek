@@ -7,22 +7,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 
 import { join } from 'path'
 import { app } from 'electron'
 import { BUILTIN_TEMPLATES } from './templates/builtin'
-
-export interface ProviderInterface {
-  type: 'anthropic' | 'openai_compatible'
-  endpointUrl: string
-  defaultModels: string[]
-  defaultModel: string
-}
-
-export interface ModelTemplate {
-  id: string; name: string; provider: string
-  /** All officially supported interfaces. Providers like DeepSeek/Kimi/GLM/MiniMax support both. */
-  interfaces: ProviderInterface[]
-  envKey: string; apiKeyUrl: string; apiKeyHeader: string
-  apiKeyPrefix?: string; recommendedParams: Record<string, unknown>
-  iconType: string; region: 'international' | 'china'; version: number
-}
+import type { ModelTemplate } from '../../shared/types/model'
+export type { ProviderInterface, ModelTemplate } from '../../shared/types/model'
 
 let _userDir: string | null = null
 function userDir(): string { if (!_userDir) _userDir = join(app.getPath('home'), '.atta', 'seek', 'model-templates'); return _userDir }

@@ -15,12 +15,23 @@ import type { AgentProfile } from './profile/AgentProfile'
 
 const MAX_TASKS = 500
 
+export interface CreateTaskParams {
+  sessionId: string
+  goal: string
+  projectId?: string
+  modelConfigId?: string
+  modelName?: string
+  profile?: AgentProfile
+}
+
 export class AgentRuntime {
   private tasks = new Map<string, AgentTask>()
   private activeExecutions = new Map<string, AgentOrchestrator>()
 
   /** Create and start a new agent task */
-  createTask(sessionId: string, goal: string, projectId?: string, modelConfigId?: string, modelName?: string, profile?: AgentProfile): AgentTask {
+  createTask(params: CreateTaskParams): AgentTask {
+    const { sessionId, goal, projectId, modelConfigId, modelName, profile } = params
+
     // Evict oldest completed/failed tasks if at capacity
     if (this.tasks.size >= MAX_TASKS) {
       for (const [tid, t] of this.tasks) {

@@ -1,4 +1,4 @@
-import type { UserMessagePayload } from '../../../core/types/SessionEvent'
+import type { UserMessagePayload } from '../../../../shared/types/SessionEvent'
 import { Copy, Check, Edit } from 'lucide-react'
 import { useCopyToClipboard } from '../../../hooks/useCopyToClipboard'
 

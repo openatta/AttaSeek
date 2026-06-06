@@ -7,7 +7,7 @@
  */
 
 import type { ComponentType } from 'react'
-import type { ArtifactType, ArtifactRendererHint } from '../core/types/Artifact'
+import type { ArtifactType, ArtifactRendererHint } from '../../shared/types/Artifact'
 import { Registry } from './Registry'
 
 export interface ArtifactRendererRegistration {

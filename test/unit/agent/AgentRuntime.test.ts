@@ -17,7 +17,7 @@ describe('AgentRuntime', () => {
   })
 
   it('creates a task with the correct shape', () => {
-    const task = runtime.createTask('session_1', 'Test goal')
+    const task = runtime.createTask({ sessionId: 'session_1', goal: 'Test goal' })
     expect(task).toBeDefined()
     expect(task.id).toBeTruthy()
     expect(task.sessionId).toBe('session_1')
@@ -28,13 +28,13 @@ describe('AgentRuntime', () => {
   })
 
   it('assigns unique IDs to tasks', () => {
-    const t1 = runtime.createTask('s1', 'Goal 1')
-    const t2 = runtime.createTask('s1', 'Goal 2')
+    const t1 = runtime.createTask({ sessionId: 's1', goal: 'Goal 1' })
+    const t2 = runtime.createTask({ sessionId: 's1', goal: 'Goal 2' })
     expect(t1.id).not.toBe(t2.id)
   })
 
   it('can cancel a task', () => {
-    const task = runtime.createTask('s1', 'Test')
+    const task = runtime.createTask({ sessionId: 's1', goal: 'Test' })
     const result = runtime.cancelTask(task.id)
     expect(result).toBe(true)
     const retrieved = runtime.getTask(task.id)
@@ -50,9 +50,9 @@ describe('AgentRuntime', () => {
   })
 
   it('lists tasks by session', () => {
-    runtime.createTask('session_a', 'Task A1')
-    runtime.createTask('session_a', 'Task A2')
-    runtime.createTask('session_b', 'Task B1')
+    runtime.createTask({ sessionId: 'session_a', goal: 'Task A1' })
+    runtime.createTask({ sessionId: 'session_a', goal: 'Task A2' })
+    runtime.createTask({ sessionId: 'session_b', goal: 'Task B1' })
 
     const a = runtime.listBySession('session_a')
     const b = runtime.listBySession('session_b')
@@ -61,7 +61,7 @@ describe('AgentRuntime', () => {
   })
 
   it('emits UserMessage event during task creation', () => {
-    const task = runtime.createTask('s1', 'Send a message')
+    const task = runtime.createTask({ sessionId: 's1', goal: 'Send a message' })
     expect(task.goal).toBe('Send a message')
     // The emit() method is called during createTask — we verify task was created
     expect(runtime.getTask(task.id)).toBeDefined()

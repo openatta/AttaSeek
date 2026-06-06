@@ -13,7 +13,7 @@
  */
 
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AgentTask } from '../shared/types/AgentTask'
+import type { AgentTask, SessionInfo } from '../shared/types/AgentTask'
 import type { SessionEvent } from '../shared/types/SessionEvent'
 import type { Artifact, ArtifactSummary } from '../shared/types/Artifact'
 import type { MemoryEntry } from '../shared/types/Memory'
@@ -23,11 +23,6 @@ import type { PluginManifest } from '../shared/types/Plugin'
 import type { SkillManifest } from '../shared/types/Skill'
 import type { ToolManifest } from '../shared/types/Tool'
 import type { ModelConfig } from '../shared/types/model'
-
-/** Session shape returned by IPC — kept inline to avoid unnecessary indirection */
-interface SessionInfo {
-  id: string; title: string; activity: string; createdAt: number; updatedAt: number
-}
 
 const api = {
   platform: process.platform,

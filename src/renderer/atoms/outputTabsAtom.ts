@@ -1,6 +1,8 @@
 import { atom } from 'jotai'
+import type { ArtifactType } from '../../shared/types/Artifact'
 
-export type OutputTabType = 'browser' | 'files' | 'terminal' | 'review'
+/** Output tabs can be artifact views or built-in panels. */
+export type OutputTabType = ArtifactType | 'review'
 
 export interface OutputTab {
   id: string

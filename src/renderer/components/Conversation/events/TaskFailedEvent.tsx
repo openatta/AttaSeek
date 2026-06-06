@@ -1,5 +1,5 @@
 import { useSetAtom } from 'jotai'
-import type { TaskFailedPayload } from '../../../core/types/SessionEvent'
+import type { TaskFailedPayload } from '../../../../shared/types/SessionEvent'
 import { agentTasksAtom } from '../../../atoms/sessionAtom'
 
 interface Props { payload: TaskFailedPayload; taskId?: string; sessionId?: string }

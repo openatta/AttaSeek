@@ -12,8 +12,7 @@ import { mkdir, readFile, writeFile, unlink, readdir, rename } from 'fs/promises
 import { existsSync } from 'fs' // kept sync for cheap existence checks — non-blocking
 import { join } from 'path'
 import { app } from 'electron'
-
-export interface SessionInfo { id: string; title: string; activity: string; createdAt: number; updatedAt: number }
+import type { SessionInfo } from '../../shared/types/AgentTask'
 
 let _baseDir: string | null = null
 function baseDir(): string { if (!_baseDir) _baseDir = join(app.getPath('home'), '.atta', 'seek', 'sessions'); return _baseDir }
@@ -36,13 +35,8 @@ async function ensureDir(): Promise<void> {
 
 // ── Index mutex (prevents lost updates in concurrent read-modify-write) ──
 
-let _indexLock: Promise<void> = Promise.resolve()
-function withIndexLock<T>(fn: () => Promise<T>): Promise<T> {
-  const prev = _indexLock
-  let release!: () => void
-  _indexLock = new Promise<void>(resolve => { release = resolve })
-  return prev.then(() => fn().finally(release))
-}
+import { withMutex } from './mutex'
+const withIndexLock = withMutex
 
 // ── Index ──
 
@@ -110,10 +104,16 @@ let _lastIndexFlush = 0
 const INDEX_FLUSH_INTERVAL_MS = 10000 // throttle index rewrites to every 10s during streaming
 
 export async function appendEvent(sessionId: string, event: unknown): Promise<void> {
+  return appendEvents(sessionId, [event])
+}
+
+/** Batch-append multiple events in a single write — avoids N+1 I/O in save-events. */
+export async function appendEvents(sessionId: string, events: unknown[]): Promise<void> {
+  if (events.length === 0) return
   await ensureDir()
-  const line = JSON.stringify(event) + '\n'
-  try { await writeFile(eventsPath(sessionId), line, { flag: 'a' }) }
-  catch (e) { console.warn('[SessionStore] failed to append event:', e instanceof Error ? e.message : String(e)) }
+  const lines = events.map(e => JSON.stringify(e) + '\n').join('')
+  try { await writeFile(eventsPath(sessionId), lines, { flag: 'a' }) }
+  catch (e) { console.warn('[SessionStore] failed to append events:', e instanceof Error ? e.message : String(e)) }
   // Update session timestamp; throttle index rewrites to avoid I/O on every event
   const now = Date.now()
   if (now - _lastIndexFlush < INDEX_FLUSH_INTERVAL_MS) return

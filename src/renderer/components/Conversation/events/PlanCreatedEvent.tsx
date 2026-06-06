@@ -1,4 +1,4 @@
-import type { PlanCreatedPayload } from '../../../core/types/SessionEvent'
+import type { PlanCreatedPayload } from '../../../../shared/types/SessionEvent'
 
 interface Props { payload: PlanCreatedPayload }
 

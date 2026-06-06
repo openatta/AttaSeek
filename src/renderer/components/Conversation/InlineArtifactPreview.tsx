@@ -9,7 +9,7 @@ import { useSetAtom } from 'jotai'
 import { activeArtifactAtom, artifactsAtom } from '../../atoms/sessionAtom'
 import { outputAreaVisibleAtom, outputTabsAtom, activeOutputTabAtom } from '../../atoms/outputTabsAtom'
 import { FileText, Code, Table, Image, ExternalLink } from 'lucide-react'
-import type { ArtifactType } from '../../core/types/Artifact'
+import type { ArtifactType } from '../../../shared/types/Artifact'
 
 interface Props {
   artifactId: string

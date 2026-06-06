@@ -124,36 +124,15 @@ export class ContextBuilder {
     const { goal, sessionId, projectId } = params
 
     // 1. System prompt
-    const skillPrompts = this.getRelevantSkillPrompts(goal)
-    const memoryContext = await this.getMemoryContext(sessionId, projectId, goal)
-    const constraints = this.getProjectConstraints(projectId)
-
-    let systemPrompt = [
-      BASE_SYSTEM_PROMPT,
-      skillPrompts.length > 0 ? `\n## Available Skills\n\n${skillPrompts.join('\n')}` : '',
-      memoryContext ? `\n## Relevant Context\n\n${memoryContext}` : '',
-      constraints.length > 0 ? `\n## Constraints\n\n${constraints.join('\n')}` : '',
-      `\n## Current Session\nSession ID: ${sessionId}${projectId ? `\nProject ID: ${projectId}` : ''}`,
-      `\nToday's date: ${new Date().toISOString().split('T')[0]}`,
-    ]
-      .filter(Boolean)
-      .join('\n')
+    let systemPrompt = await this.buildSystemPrompt(goal, sessionId, projectId)
 
     // 2. Message history (recent N rounds, from AgentEventBus)
     const recentEvents = this.getRecentMessages(sessionId)
     let messages = this.eventsToMessages(recentEvents)
-    // Truncate to fit within message budget
     messages = truncateMessages(messages, BUDGET.messages)
 
     // 3. Tools (ToolRouter Top-K) — only for file/project tasks, not pure Q&A
-    const allTools = toolRegistry.list()
-    const needsTools = /\b(file|code|project|document|folder|directory|search|find|read|write|commit|create)\b/i.test(goal)
-    const selectedTools = needsTools ? toolRouter.selectTools(goal, allTools) : []
-    const toolDefs: LLMToolDef[] = selectedTools.map((t) => ({
-      name: t.id,
-      description: t.description,
-      input_schema: normalizeJsonSchema(t.inputSchema), // ensure proper JSON Schema format
-    }))
+    const toolDefs = this.buildToolDefs(goal)
 
     // 4. Artifact summaries for this session
     const artifactSummaries = this.getSessionArtifactSummaries(sessionId)
@@ -165,6 +144,7 @@ export class ContextBuilder {
     }
 
     // ── Token accounting ──
+    const memoryContext = '' // already embedded in system prompt
     const tokenUsage: TokenUsage = {
       systemPrompt: estimateTokens(systemPrompt),
       tools: estimateToolsTokens(toolDefs),
@@ -183,6 +163,38 @@ export class ContextBuilder {
   }
 
   // ── Private helpers ──
+
+  /** Assemble the full system prompt from base + skills + memory + constraints. */
+  private async buildSystemPrompt(goal: string, sessionId: string, projectId?: string): Promise<string> {
+    const skillPrompts = this.getRelevantSkillPrompts(goal)
+    const memoryContext = await this.getMemoryContext(sessionId, projectId, goal)
+    const constraints = this.getProjectConstraints(projectId)
+
+    return [
+      BASE_SYSTEM_PROMPT,
+      skillPrompts.length > 0 ? `\n## Available Skills\n\n${skillPrompts.join('\n')}` : '',
+      memoryContext ? `\n## Relevant Context\n\n${memoryContext}` : '',
+      constraints.length > 0 ? `\n## Constraints\n\n${constraints.join('\n')}` : '',
+      `\n## Current Session\nSession ID: ${sessionId}${projectId ? `\nProject ID: ${projectId}` : ''}`,
+      `\nToday's date: ${new Date().toISOString().split('T')[0]}`,
+    ]
+      .filter(Boolean)
+      .join('\n')
+  }
+
+  /** Select and normalize tool definitions for the goal. */
+  private buildToolDefs(goal: string): LLMToolDef[] {
+    const needsTools = /\b(file|code|project|document|folder|directory|search|find|read|write|commit|create)\b/i.test(goal)
+    if (!needsTools) return []
+
+    const allTools = toolRegistry.list()
+    const selectedTools = toolRouter.selectTools(goal, allTools)
+    return selectedTools.map((t) => ({
+      name: t.id,
+      description: t.description,
+      input_schema: normalizeJsonSchema(t.inputSchema),
+    }))
+  }
 
   private getRelevantSkillPrompts(goal: string): string[] {
     const allSkills = skillRegistry.list()

@@ -12,7 +12,7 @@ import { outputTabsAtom, activeOutputTabAtom, outputAreaVisibleAtom, outputFulls
 import { artifactsAtom, activeArtifactAtom } from '../../atoms/sessionAtom'
 import { getRenderer, listRenderers } from '../../registries/artifactRendererRegistry'
 import { PanelRightClose, Expand, Shrink, Plus, X } from 'lucide-react'
-import type { OutputTab } from '../../atoms/outputTabsAtom'
+import type { OutputTab, OutputTabType } from '../../atoms/outputTabsAtom'
 
 const TYPE_LABELS: Record<string, string> = {
   markdown: 'Markdown', html: 'HTML', svg: 'SVG', table: 'Table',
@@ -59,7 +59,7 @@ export default function ArtifactPane() {
   }
 
   // Add a tab by artifact type (from registry)
-  const addTab = (type: string) => {
+  const addTab = (type: OutputTabType) => {
     // Find matching artifact or create an empty tab
     const matchingArtifact = artifacts.find((a) => a.type === type)
     if (matchingArtifact) {
@@ -195,7 +195,7 @@ export default function ArtifactPane() {
   )
 }
 
-function ArtifactTabContent({ tab, artifacts }: { tab: OutputTab; artifacts: import('../../core/types/Artifact').Artifact[] }) {
+function ArtifactTabContent({ tab, artifacts }: { tab: OutputTab; artifacts: import('../../../shared/types/Artifact').Artifact[] }) {
   // Try to find matching artifact by ID first, then by type
   const artifact =
     artifacts.find((a) => a.id === tab.id) ||

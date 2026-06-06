@@ -35,7 +35,7 @@ export function registerAgentHandlers(): void {
     validateRequiredString(params, 'goal', 'goal')
     const t0 = performance.now()
     try {
-      const task = agentRuntime.createTask(params.sessionId, params.goal, params.projectId, params.modelConfigId, params.modelName)
+      const task = agentRuntime.createTask(params)
       perf.mark('ipc', 'agent:create-task', performance.now() - t0)
       return { success: true, task }
     } catch (err) {

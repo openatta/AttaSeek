@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { PermissionRequestedPayload } from '../../../core/types/SessionEvent'
+import type { PermissionRequestedPayload } from '../../../../shared/types/SessionEvent'
 
 interface Props {
   payload: PermissionRequestedPayload

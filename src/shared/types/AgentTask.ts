@@ -1,4 +1,15 @@
 /**
+ * SessionInfo — session metadata shared across main (SessionStore), preload, and renderer.
+ */
+export interface SessionInfo {
+  id: string
+  title: string
+  activity: string
+  createdAt: number
+  updatedAt: number
+}
+
+/**
  * AgentTask — a single agent execution unit.
  * Lives in main process; renderer holds a projection via Jotai.
  */

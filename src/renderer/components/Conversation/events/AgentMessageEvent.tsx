@@ -1,6 +1,6 @@
 import { useAtomValue } from 'jotai'
 import { streamingBuffersAtom } from '../../../atoms/sessionAtom'
-import type { AgentMessagePayload } from '../../../core/types/SessionEvent'
+import type { AgentMessagePayload } from '../../../../shared/types/SessionEvent'
 import { Copy, Check, RefreshCw } from 'lucide-react'
 import MarkdownRenderer from '../MarkdownRenderer'
 import { useCopyToClipboard } from '../../../hooks/useCopyToClipboard'

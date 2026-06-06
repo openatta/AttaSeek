@@ -7,7 +7,7 @@ import { ipcMain, type BrowserWindow } from 'electron'
 import { newId } from '../store/id'
 import { agentEventBus } from '../agent/AgentEventBus'
 import { ipcWrap, ipcWrapAsync, validateRequiredString } from '../store/util'
-import { createSession, getSession, listSessions, updateSession, deleteSession, appendEvent, readEvents, setProjectSessions } from '../store/SessionStore'
+import { createSession, getSession, listSessions, updateSession, deleteSession, appendEvents, readEvents, setProjectSessions } from '../store/SessionStore'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -21,8 +21,11 @@ export function registerSessionHandlers(): void {
     })
   })
 
-  ipcMain.handle('session:list', async (_e, p?: { activity?: string }) => {
-    return ipcWrapAsync(async () => ({ sessions: await listSessions(p?.activity) }))
+  ipcMain.handle('session:list', async (_e, p?: { activity?: string; limit?: number }) => {
+    return ipcWrapAsync(async () => {
+      const sessions = await listSessions(p?.activity)
+      return { sessions: sessions.slice(0, p?.limit ?? 200) }
+    })
   })
 
   ipcMain.handle('session:get', async (_e, p: { id: string }) => {
@@ -51,7 +54,7 @@ export function registerSessionHandlers(): void {
     validateRequiredString(p, 'sessionId', 'sessionId')
     return ipcWrapAsync(async () => {
       const events = agentEventBus.getHistory(p.sessionId)
-      for (const e of events) await appendEvent(p.sessionId, e)
+      await appendEvents(p.sessionId, events)
       return { success: true, count: events.length }
     })
   })

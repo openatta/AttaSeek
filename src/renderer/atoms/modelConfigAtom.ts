@@ -5,7 +5,7 @@
  */
 
 import { atom } from 'jotai'
-import type { UsageStats } from '../../shared/types/model'
+import type { ModelConfig, UsageStats } from '../../shared/types/model'
 
 export type { ModelConfig, CreateModelConfig, UsageStats } from '../../shared/types/model'
 

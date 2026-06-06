@@ -5,9 +5,9 @@
 
 import { atom } from 'jotai'
 import { activeActivityAtom } from './activityAtom'
-import type { SessionEvent } from '../core/types/SessionEvent'
-import type { AgentTask } from '../core/types/AgentTask'
-import type { Artifact } from '../core/types/Artifact'
+import type { SessionEvent } from '../../shared/types/SessionEvent'
+import type { AgentTask } from '../../shared/types/AgentTask'
+import type { Artifact } from '../../shared/types/Artifact'
 
 // Per-activity session IDs — each activity has its own conversation state
 const activitySessionMap: Record<string, string> = {}

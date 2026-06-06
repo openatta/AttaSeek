@@ -74,88 +74,9 @@ export class OpenAICompatibleProvider implements LLMProvider {
         throw this.toLLMError(res.status, JSON.parse(errText || '{}'))
       }
 
-    const reader = res.body!.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    const contentBlocks: LLMContentBlock[] = []
-    let currentToolCalls: Map<number, { id: string; name: string; args: string }> = new Map()
-    let usage = { inputTokens: 0, outputTokens: 0 }
-    let stopReason: LLMChatResult['stopReason'] = 'end_turn'
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-
-      // Extract complete lines without splitting entire buffer (O(n) per line, not O(n²))
-      let idx: number
-      while ((idx = buffer.indexOf('\n')) !== -1) {
-        const line = buffer.slice(0, idx)
-        buffer = buffer.slice(idx + 1)
-        if (!line.startsWith('data: ')) continue
-        const data = line.slice(6).trim()
-        if (data === '[DONE]') continue
-
-        try {
-          const chunk = JSON.parse(data)
-          const choice = chunk.choices?.[0]
-          if (!choice) continue
-
-          const delta = choice.delta
-
-          // Text delta
-          if (delta?.content) {
-            onChunk({ type: 'text_delta', text: delta.content })
-          }
-
-          // Tool call delta
-          if (delta?.tool_calls) {
-            for (const tc of delta.tool_calls) {
-              const idx = tc.index
-              if (!currentToolCalls.has(idx)) {
-                currentToolCalls.set(idx, { id: tc.id || '', name: '', args: '' })
-                if (tc.function?.name) {
-                  currentToolCalls.get(idx)!.name = tc.function.name
-                  onChunk({ type: 'tool_use_start', id: tc.id || `tc_${idx}`, name: tc.function.name })
-                }
-              }
-              const cur = currentToolCalls.get(idx)!
-              if (tc.id) cur.id = tc.id
-              if (tc.function?.arguments) {
-                cur.args += tc.function.arguments
-                onChunk({ type: 'tool_use_delta', id: cur.id, input_json: tc.function.arguments })
-              }
-            }
-          }
-
-          // Finish
-          if (choice.finish_reason) {
-            stopReason = toStopReason(choice.finish_reason)
-            onChunk({ type: 'content_block_stop', index: choice.index ?? 0 })
-          }
-
-          if (chunk.usage) {
-            usage = { inputTokens: chunk.usage.prompt_tokens, outputTokens: chunk.usage.completion_tokens }
-          }
-        } catch (e) { console.warn('[OpenAI] malformed streaming chunk:', e instanceof Error ? e.message : String(e)) }
-      }
-    }
-
-    onChunk({ type: 'message_stop' })
-
-    // Build content blocks from accumulated tool calls
-    for (const [, tc] of currentToolCalls) {
-      if (tc.name) {
-        contentBlocks.push({
-          type: 'tool_use',
-          id: tc.id,
-          name: tc.name,
-          input: tryParseJson(tc.args) || tc.args,
-        })
-      }
-    }
-
-    return { content: contentBlocks, stopReason, usage }
+      const result = await parseSSEStream(res.body!.getReader(), onChunk)
+      onChunk({ type: 'message_stop' })
+      return result
     } catch (err: unknown) {
       if (err instanceof LLMError) throw err
       const e = err as Error | undefined
@@ -272,6 +193,109 @@ export class OpenAICompatibleProvider implements LLMProvider {
         outputTokens: json.usage.completion_tokens,
       },
     }
+  }
+}
+
+// ── SSE stream parser ──
+
+interface StreamState {
+  contentBlocks: LLMContentBlock[]
+  currentToolCalls: Map<number, { id: string; name: string; args: string }>
+  usage: { inputTokens: number; outputTokens: number }
+  stopReason: LLMChatResult['stopReason']
+}
+
+async function parseSSEStream(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  onChunk: LLMChunkCallback,
+): Promise<LLMChatResult> {
+  const decoder = new TextDecoder()
+  let buffer = ''
+  const state: StreamState = {
+    contentBlocks: [],
+    currentToolCalls: new Map(),
+    usage: { inputTokens: 0, outputTokens: 0 },
+    stopReason: 'end_turn',
+  }
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+
+    let idx: number
+    while ((idx = buffer.indexOf('\n')) !== -1) {
+      const line = buffer.slice(0, idx)
+      buffer = buffer.slice(idx + 1)
+      if (!line.startsWith('data: ')) continue
+      const data = line.slice(6).trim()
+      if (data === '[DONE]') continue
+
+      try {
+        processSSELine(data, state, onChunk)
+      } catch (e) { console.warn('[OpenAI] malformed streaming chunk:', e instanceof Error ? e.message : String(e)) }
+    }
+  }
+
+  // Build content blocks from accumulated tool calls
+  for (const [, tc] of state.currentToolCalls) {
+    if (tc.name) {
+      state.contentBlocks.push({
+        type: 'tool_use',
+        id: tc.id,
+        name: tc.name,
+        input: tryParseJson(tc.args) || tc.args,
+      })
+    }
+  }
+
+  return { content: state.contentBlocks, stopReason: state.stopReason, usage: state.usage }
+}
+
+function processSSELine(
+  data: string,
+  state: StreamState,
+  onChunk: LLMChunkCallback,
+): void {
+  const chunk = JSON.parse(data)
+  const choice = chunk.choices?.[0]
+  if (!choice) return
+
+  const delta = choice.delta
+
+  // Text delta
+  if (delta?.content) {
+    onChunk({ type: 'text_delta', text: delta.content })
+  }
+
+  // Tool call delta
+  if (delta?.tool_calls) {
+    for (const tc of delta.tool_calls) {
+      const tcIdx = tc.index
+      if (!state.currentToolCalls.has(tcIdx)) {
+        state.currentToolCalls.set(tcIdx, { id: tc.id || '', name: '', args: '' })
+        if (tc.function?.name) {
+          state.currentToolCalls.get(tcIdx)!.name = tc.function.name
+          onChunk({ type: 'tool_use_start', id: tc.id || `tc_${tcIdx}`, name: tc.function.name })
+        }
+      }
+      const cur = state.currentToolCalls.get(tcIdx)!
+      if (tc.id) cur.id = tc.id
+      if (tc.function?.arguments) {
+        cur.args += tc.function.arguments
+        onChunk({ type: 'tool_use_delta', id: cur.id, input_json: tc.function.arguments })
+      }
+    }
+  }
+
+  // Finish
+  if (choice.finish_reason) {
+    state.stopReason = toStopReason(choice.finish_reason)
+    onChunk({ type: 'content_block_stop', index: choice.index ?? 0 })
+  }
+
+  if (chunk.usage) {
+    state.usage = { inputTokens: chunk.usage.prompt_tokens, outputTokens: chunk.usage.completion_tokens }
   }
 }
 

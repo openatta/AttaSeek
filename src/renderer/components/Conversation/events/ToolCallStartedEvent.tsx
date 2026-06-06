@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { ToolCallStartedPayload } from '../../../core/types/SessionEvent'
+import type { ToolCallStartedPayload } from '../../../../shared/types/SessionEvent'
 
 interface Props { payload: ToolCallStartedPayload }
 

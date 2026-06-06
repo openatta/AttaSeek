@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import type { ModelConfig, CreateModelConfig } from '../../../atoms/modelConfigAtom'
-import { type UITemplate, BUILTIN_TEMPLATES, toUITemplates } from '../../../../main/model/templates/builtin'
+import { type UITemplate, BUILTIN_TEMPLATES, toUITemplates } from '../../../../shared/types/model'
 import { Wifi, Loader2, Eye, EyeOff, X, Check, AlertTriangle, ChevronDown } from 'lucide-react'
 
 interface Props { config?: ModelConfig; onSaved: (config: ModelConfig | null) => void; onCancel: () => void }

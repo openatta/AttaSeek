@@ -3,7 +3,7 @@ import { useAtomValue, useSetAtom } from 'jotai'
 import { sessionEventsAtom, currentSessionIdAtom, agentTasksAtom, streamingBuffersAtom } from '../../atoms/sessionAtom'
 import { editTextAtom } from '../../atoms/composerAtom'
 
-import type { SessionEvent } from '../../core/types/SessionEvent'
+import type { SessionEvent } from '../../../shared/types/SessionEvent'
 import UserMessageEvent from './events/UserMessageEvent'
 import AgentMessageEvent from './events/AgentMessageEvent'
 import PlanCreatedEvent from './events/PlanCreatedEvent'

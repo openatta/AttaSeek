@@ -1,4 +1,4 @@
-import type { TaskCompletedPayload } from '../../../core/types/SessionEvent'
+import type { TaskCompletedPayload } from '../../../../shared/types/SessionEvent'
 
 interface Props { payload: TaskCompletedPayload }
 
