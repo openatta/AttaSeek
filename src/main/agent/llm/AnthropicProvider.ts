@@ -84,43 +84,43 @@ export class AnthropicProvider implements LLMProvider {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const stream = (this.client as any).messages.stream(body, { signal: params.signal })
 
-    // Wire up Anthropic stream events to our LLMChunk format
-    stream.on('text', (text: string) => {
-      onChunk({ type: 'text_delta', text })
-    })
+      // Wire up Anthropic stream events to our LLMChunk format
+      stream.on('text', (text: string) => {
+        onChunk({ type: 'text_delta', text })
+      })
 
-    stream.on('contentBlockStart', (block: { type: string; content_block: { type: string; id: string; name: string } }) => {
-      if (block.type === 'tool_use' && 'name' in block.content_block) {
-        onChunk({
-          type: 'tool_use_start',
-          id: block.content_block.id,
-          name: block.content_block.name,
-        })
+      stream.on('contentBlockStart', (block: { type: string; content_block: { type: string; id: string; name: string } }) => {
+        if (block.type === 'tool_use' && 'name' in block.content_block) {
+          onChunk({
+            type: 'tool_use_start',
+            id: block.content_block.id,
+            name: block.content_block.name,
+          })
+        }
+      })
+
+      stream.on('contentBlockDelta', (delta: { type: string; delta: string }) => {
+        if (delta.type === 'input_json_delta') {
+          onChunk({
+            type: 'tool_use_delta',
+            id: '',
+            input_json: delta.delta,
+          })
+        }
+      })
+
+      stream.on('contentBlockStop', (block: { index: number }) => {
+        onChunk({ type: 'content_block_stop', index: block.index })
+      })
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (stream as any).finalMessage()
+      onChunk({ type: 'message_stop' })
+      return {
+        content: result.content.map(toLLMBlock).filter((b: LLMContentBlock | null): b is LLMContentBlock => b !== null),
+        stopReason: result.stop_reason as LLMChatResult['stopReason'],
+        usage: { inputTokens: result.usage.input_tokens, outputTokens: result.usage.output_tokens },
       }
-    })
-
-    stream.on('contentBlockDelta', (delta: { type: string; delta: string }) => {
-      if (delta.type === 'input_json_delta') {
-        onChunk({
-          type: 'tool_use_delta',
-          id: '',
-          input_json: delta.delta,
-        })
-      }
-    })
-
-    stream.on('contentBlockStop', (block: { index: number }) => {
-      onChunk({ type: 'content_block_stop', index: block.index })
-    })
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await (stream as any).finalMessage()
-    onChunk({ type: 'message_stop' })
-    return {
-      content: result.content.map(toLLMBlock).filter((b: LLMContentBlock | null): b is LLMContentBlock => b !== null),
-      stopReason: result.stop_reason as LLMChatResult['stopReason'],
-      usage: { inputTokens: result.usage.input_tokens, outputTokens: result.usage.output_tokens },
-    }
     } catch (err: unknown) {
       throw this.toLLMError(err)
     }
@@ -129,7 +129,8 @@ export class AnthropicProvider implements LLMProvider {
   private toLLMError(err: unknown): LLMError {
     const e = (err instanceof Error ? err : null) ?? (err as Record<string, unknown> | undefined)
     const status = (e as Record<string, unknown> | undefined)?.status as number | undefined || 0
-    const errorType = String((e as Record<string, unknown> | undefined)?.error && typeof (e as Record<string, unknown>).error === 'object' ? ((e as Record<string, unknown>).error as Record<string, unknown>).type || '' : '')
+    const errorBody = (e as Record<string, unknown> | undefined)?.error
+    const errorType = (errorBody && typeof errorBody === 'object' ? String((errorBody as Record<string, unknown>).type || '') : '')
     const message = e instanceof Error ? e.message : String(err ?? 'Unknown error')
     const name = e instanceof Error ? e.name : undefined
     if (status === 401 || status === 403 || errorType === 'authentication_error') return new LLMError('auth', message, status)
