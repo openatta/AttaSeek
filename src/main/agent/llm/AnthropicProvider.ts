@@ -45,7 +45,7 @@ export class AnthropicProvider implements LLMProvider {
       max_tokens: cfg.maxTokens || DEFAULT_MAX_TOKENS,
       system: params.systemPrompt,
       messages: params.messages.map(toAnthropicMessage),
-      tools: params.tools.length > 0 ? params.tools.map(toAnthropicTool) : undefined,
+      tools: params.tools.length > 0 ? params.tools.map((t, i) => toAnthropicTool(t, i === params.tools.length - 1)) : undefined,
     }
     if (cfg.temperature !== undefined) body.temperature = cfg.temperature
     if (cfg.topP !== undefined) body.top_p = cfg.topP
@@ -174,12 +174,15 @@ function toAnthropicMessage(msg: LLMMessage): Anthropic.MessageParam {
   } as Anthropic.MessageParam
 }
 
-function toAnthropicTool(tool: { name: string; description: string; input_schema: Record<string, unknown> }): AnthropicTool {
-  return {
+function toAnthropicTool(tool: { name: string; description: string; input_schema: Record<string, unknown> }, isLast: boolean = false): AnthropicTool {
+  const result: AnthropicTool = {
     name: tool.name,
     description: tool.description,
     input_schema: tool.input_schema as AnthropicTool['input_schema'],
   }
+  // Mark last tool with cache_control for prompt caching
+  if (isLast) (result as any).cache_control = { type: 'ephemeral' }
+  return result
 }
 
 function toLLMBlock(block: Anthropic.ContentBlock): LLMContentBlock | null {

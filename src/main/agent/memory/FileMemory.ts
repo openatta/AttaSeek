@@ -8,6 +8,7 @@
  */
 
 import * as fs from 'fs'
+import * as fsp from 'fs/promises'
 import * as path from 'path'
 import type { MemoryEntry, MemoryType, MemoryScope } from '../../../shared/types/Memory'
 
@@ -18,37 +19,37 @@ export interface FileMemoryEntry {
   updatedAt: number
 }
 
-/** Load all memory files from a project directory */
-export function loadFileMemories(projectRoot: string): FileMemoryEntry[] {
+/** Load all memory files from a project directory (async) */
+export async function loadFileMemories(projectRoot: string): Promise<FileMemoryEntry[]> {
   const entries: FileMemoryEntry[] = []
 
   // Load CLAUDE.md
   const claudeMd = path.join(projectRoot, 'CLAUDE.md')
-  if (fs.existsSync(claudeMd)) {
-    const content = fs.readFileSync(claudeMd, 'utf-8')
+  try {
+    const content = await fsp.readFile(claudeMd, 'utf-8')
+    const stat = await fsp.stat(claudeMd)
     entries.push({
-      filePath: claudeMd,
-      content,
+      filePath: claudeMd, content,
       metadata: parseFrontmatter(content),
-      updatedAt: fs.statSync(claudeMd).mtimeMs,
+      updatedAt: stat.mtimeMs,
     })
-  }
+  } catch { /* file not found — skip */ }
 
   // Load .attaseek/memory/*.md
-  const memDir = path.join(projectRoot, '.attaseek', 'memory')
-  if (fs.existsSync(memDir)) {
-    for (const file of fs.readdirSync(memDir)) {
-      if (!file.endsWith('.md')) continue
+  const memDir = path.join(projectRoot, '.atta', 'seek', 'memories')
+  try {
+    const files = await fsp.readdir(memDir)
+    const mdFiles = files.filter(f => f.endsWith('.md'))
+    const fileResults = await Promise.all(mdFiles.map(async (file) => {
       const fp = path.join(memDir, file)
-      const content = fs.readFileSync(fp, 'utf-8')
-      entries.push({
-        filePath: fp,
-        content,
-        metadata: parseFrontmatter(content),
-        updatedAt: fs.statSync(fp).mtimeMs,
-      })
-    }
-  }
+      try {
+        const content = await fsp.readFile(fp, 'utf-8')
+        const stat = await fsp.stat(fp)
+        return { filePath: fp, content, metadata: parseFrontmatter(content), updatedAt: stat.mtimeMs }
+      } catch { return null }
+    }))
+    for (const r of fileResults) { if (r) entries.push(r) }
+  } catch { /* dir not found — skip */ }
 
   return entries.sort((a, b) => b.updatedAt - a.updatedAt)
 }

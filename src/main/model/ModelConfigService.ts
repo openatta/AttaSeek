@@ -16,7 +16,7 @@ function keyId(configId: string): string {
   return `model:${configId}`
 }
 
-const DEFAULT_ANTHROPIC_MODELS = DEFAULT_ANTHROPIC_MODELS
+const DEFAULT_ANTHROPIC_MODELS = ['claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-opus-4-8']
 
 export interface TestStep {
   step: number

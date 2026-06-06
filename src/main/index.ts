@@ -19,13 +19,13 @@ import { getDb, closeDb } from './store/db'
 import { agentEventBus } from './agent/AgentEventBus'
 import { permissionBridge } from './permission/PermissionBridge'
 import { subAgentManager } from './agent/subagent/SubAgentManager'
+import { cleanupTaskStore } from './agent/tools/implementations/task-mgmt'
 import { startTimer } from './perf'
 
 const isMac = platform() === 'darwin'
 
 const bootTimer = startTimer('boot')
-boot()
-bootTimer()
+boot().catch((err) => { console.error('[boot] failed:', err) }).finally(() => bootTimer())
 
 // Initialize database
 const dbTimer = startTimer('db_init')
@@ -114,6 +114,9 @@ app.on('window-all-closed', () => {
 // ── Session persistence: save on quit ──
 
 app.on('before-quit', () => {
+  // Cleanup task store
+  cleanupTaskStore()
+
   // Cancel all pending permission requests
   permissionBridge.cancelAll()
 

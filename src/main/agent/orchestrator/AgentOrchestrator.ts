@@ -22,8 +22,9 @@ import { auditService } from '../../audit/AuditService'
 import { llmProviderRegistry } from '../llm/LLMProviderRegistry'
 import { newId } from '../../store/id'
 import { renderPrompt } from '../prompt/PromptTemplate'
-import { shouldCompact, compactConversation } from '../compact/ContextCompactor'
+import { shouldCompact, compactConversation, reactiveCompact, isContextLengthError, microcompact } from '../compact/ContextCompactor'
 import { extractMemories } from '../memory/MemoryExtractor'
+import { hookManager } from '../hooks/HookManager'
 import { createInitialState, type AgentState, type TerminalReason, type RecoveryLevel } from './AgentState'
 import type { AgentTask } from '../../../shared/types/AgentTask'
 import type { AgentProfile } from '../profile/AgentProfile'
@@ -71,17 +72,18 @@ export class AgentOrchestrator {
         state.messages = assembledContext.messages
         tools = assembledContext.tools || []
       } else {
-        const promptCtx = {
-          profile: state.profile, skills: [], tools: [], memories: [],
-          sessionId: task.sessionId, projectId: task.projectId,
-          date: new Date().toISOString().slice(0, 10), goal: task.goal,
-        }
-        state.systemPrompt = renderPrompt(profile.systemPrompt, promptCtx)
         const ctx = await contextBuilder.build({
           goal: task.goal, sessionId: task.sessionId, projectId: task.projectId,
         })
         state.messages = ctx.messages
         tools = ctx.tools || []
+        // Render prompt AFTER context assembly so sections get actual tools/skills/memories
+        const promptCtx = {
+          profile: state.profile, skills: [], tools: tools, memories: [],
+          sessionId: task.sessionId, projectId: task.projectId,
+          date: new Date().toISOString().slice(0, 10), goal: task.goal,
+        }
+        state.systemPrompt = renderPrompt(profile.systemPrompt, promptCtx)
       }
 
       // ── Main loop ──
@@ -136,6 +138,7 @@ export class AgentOrchestrator {
             yield this.failEvent(task, err instanceof Error ? err.message : 'LLM call failed')
             return 'model_error'
           }
+          // retry / wait_retry / compact / collapse → continue loop; fail already returned above
           continue
         }
 
@@ -149,6 +152,23 @@ export class AgentOrchestrator {
         state.totalInputTokens += result.usage.inputTokens
         state.totalOutputTokens += result.usage.outputTokens
 
+        // ── Post-sampling hooks ──
+        const lastText = result.content.filter(b => b.type === 'text').map(b => (b as any).text).join(' ')
+        const hookResult = await hookManager.execute({
+          task: task, turnCount: state.turnCount + 1,
+          messages: state.messages,
+          lastAssistantContent: lastText,
+          profileId: profile.id,
+        })
+        if (hookResult.preventContinuation) {
+          yield this.failEvent(task, hookResult.blocking || 'Hook prevented continuation')
+          return 'aborted'
+        }
+        // Inject hook messages into system prompt for next turn
+        if (hookResult.messages && hookResult.messages.length > 0) {
+          state.systemPrompt = `${state.systemPrompt}\n\n[Hook feedback]\n${hookResult.messages.join('\n')}`
+        }
+
         // ── 4. Tool Execution ──
         const toolUses = result.content.filter(
           (b): b is LLMToolUseBlock => b.type === 'tool_use',
@@ -160,9 +180,44 @@ export class AgentOrchestrator {
           return 'completed'
         }
 
+        // Separate agent tool_use (CoordinatorMode) from regular tools
+        const agentCalls = toolUses.filter(t => t.name === 'agent')
+        const regularCalls = toolUses.filter(t => t.name !== 'agent')
         const toolResults: LLMContentBlock[] = []
-        const orchestrated = await orchestrateTools(
-          toolUses, task.id, task.sessionId, task.projectId,
+
+        // Handle agent calls via CoordinatorMode
+        for (const agentCall of agentCalls) {
+          yield this.makeEvent(task, 'ToolCallStarted', {
+            toolCallId: agentCall.id, toolId: 'agent', toolName: 'agent',
+            input: agentCall.input, riskLevel: 'read',
+          })
+          try {
+            const { coordinatorMode } = await import('../coordinator/CoordinatorMode')
+            const input = (agentCall.input || {}) as Record<string, unknown>
+            const subtasks = await coordinatorMode.decompose(task, profile)
+            const result = await coordinatorMode.execute(task, subtasks, new Map([[profile.id, profile]]))
+            toolResults.push({
+              type: 'tool_result' as const, tool_use_id: agentCall.id,
+              content: result.summary,
+            })
+            yield this.makeEvent(task, 'ToolCallFinished', {
+              toolCallId: agentCall.id, toolId: 'agent', toolName: 'agent',
+              output: result.summary, status: 'success', error: undefined, duration: 0,
+            })
+          } catch (err) {
+            yield this.makeEvent(task, 'ToolCallFinished', {
+              toolCallId: agentCall.id, toolId: 'agent', toolName: 'agent',
+              output: null, status: 'error', error: (err as Error).message, duration: 0,
+            })
+          }
+          state.toolUseCount++
+        }
+
+        // Handle regular tools via ToolOrchestrator
+        let orchestrated: Awaited<ReturnType<typeof orchestrateTools>> | null = null
+        if (regularCalls.length > 0) {
+        orchestrated = await orchestrateTools(
+          regularCalls, task.id, task.sessionId, task.projectId,
           profile.execution.maxParallelTools,
         )
 
@@ -186,24 +241,26 @@ export class AgentOrchestrator {
           toolResults.push({
             type: 'tool_result' as const,
             tool_use_id: tr.toolUse.id,
-            content: typeof tr.output === 'string'
-              ? tr.output
-              : JSON.stringify(tr.output).slice(0, CONTENT_TRUNCATE_LIMIT),
+            content: (typeof tr.output === 'string'
+              ? (tr.output.length > CONTENT_TRUNCATE_LIMIT ? tr.output.slice(0, CONTENT_TRUNCATE_LIMIT) + `\n...[truncated ${tr.output.length - CONTENT_TRUNCATE_LIMIT} chars]` : tr.output)
+              : JSON.stringify(tr.output).slice(0, CONTENT_TRUNCATE_LIMIT)),
           })
           state.toolUseCount++
         }
 
-        if (orchestrated.denied) {
+        if (orchestrated && orchestrated.denied) {
           return 'denied'
         }
+        } // end if (regularCalls.length > 0)
 
-        // Append assistant + tool results to message history
+        // Append assistant + tool results to message history (with microcompact)
         const assistantBlocks = result.content.filter(
           (b) => b.type === 'text' || b.type === 'tool_use',
         )
         state.messages.push({ role: 'assistant', content: assistantBlocks as LLMContentBlock[] })
         if (toolResults.length > 0) {
-          state.messages.push({ role: 'user', content: toolResults })
+          const compacted = microcompact(toolResults as { content: string }[])
+          state.messages.push({ role: 'user', content: compacted as LLMContentBlock[] })
         }
 
         state.turnCount++
@@ -274,8 +331,49 @@ export class AgentOrchestrator {
 
   // ── Error recovery ──
 
-  private async recoverFromError(_state: AgentState, _err: unknown): Promise<RecoveryLevel> {
-    // L1-L5 escalation ladder. L1-L2 for now, L3-L5 wired in Phase 3 (compaction).
+  private recoveryAttempts = 0
+
+  private async recoverFromError(state: AgentState, err: unknown): Promise<RecoveryLevel> {
+    this.recoveryAttempts++
+    const code = (err as any)?.code as string | undefined
+
+    // L1: Transparent retry (once) — for transient network/server errors
+    if (this.recoveryAttempts === 1 && (code === 'server' || code === 'timeout' || code === 'unknown')) {
+      return 'retry'
+    }
+
+    // L2: Wait-then-retry — for rate limits
+    if (code === 'rate_limit') {
+      if (this.recoveryAttempts <= 2) {
+        const delay = this.recoveryAttempts === 1 ? 1000 : 3000
+        await new Promise(r => setTimeout(r, delay))
+        return 'wait_retry'
+      }
+    }
+
+    // L3: Reactive compaction — triggered by context-length API errors
+    if (this.recoveryAttempts <= 2 && isContextLengthError(err)) {
+      try {
+        const compacted = await reactiveCompact(state.messages, state.profile, state.compactSummary)
+        state.messages = compacted.compactedMessages
+        state.compactSummary = compacted.summary
+        agentEventBus.emit(this.makeEvent(state.task, 'CompactBoundary', {
+          summary: compacted.summary,
+          tokenSaved: compacted.tokenSaved,
+          compactedMessageCount: compacted.compactedCount,
+        }))
+        return 'compact'
+      } catch { /* fall through to L5 */ }
+    }
+
+    // L4: Context collapse — aggressive message truncation (last resort)
+    if (this.recoveryAttempts <= 3 && isContextLengthError(err)) {
+      state.messages = state.messages.slice(-4) // Keep only last 2 turns
+      return 'collapse'
+    }
+
+    // L5: Give up
+    this.recoveryAttempts = 0
     return 'fail'
   }
 

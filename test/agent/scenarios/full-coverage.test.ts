@@ -226,18 +226,33 @@ describe('Path: llm-error → model_error', () => {
 // ── Path 9: LLM error recovery → retry then fail ──
 
 describe('Path: error-recovery', () => {
-  it('should emit TaskFailed when recoverFromError returns fail', async () => {
+  it('should retry server errors once then fail (L1)', async () => {
     const mock = new MockLLMProvider()
     mock.pushError('server', 'Internal server error')
+    mock.pushError('server', 'Internal server error') // retry also fails
 
     const orchestrator = new AgentOrchestrator()
     const events: any[] = []
     const gen = orchestrator.submitMessage(makeTask('Try something'), testProfile, mock, emptyContext)
     for await (const e of gen) events.push(e)
 
-    expect(events.some(e => e.type === 'TaskFailed'), 'fails on unrecoverable error').toBe(true)
-    expect(mock.requestCount, 'one attempt before fail').toBe(1)
+    expect(events.some(e => e.type === 'TaskFailed'), 'fails after retry exhausted').toBe(true)
+    expect(mock.requestCount, 'two attempts (initial + retry)').toBe(2)
   })
+
+  it('should retry rate_limit errors with wait (L2)', async () => {
+    const mock = new MockLLMProvider()
+    mock.pushError('rate_limit', 'Too many requests')
+    mock.pushError('rate_limit', 'Still rate limited')
+
+    const orchestrator = new AgentOrchestrator()
+    const events: any[] = []
+    const gen = orchestrator.submitMessage(makeTask('Try'), testProfile, mock, emptyContext)
+    for await (const e of gen) events.push(e)
+
+    expect(events.some(e => e.type === 'TaskFailed'), 'fails after rate_limit retries').toBe(true)
+    expect(mock.requestCount, 'retried at least once').toBeGreaterThanOrEqual(2)
+  }, 10_000) // rate_limit has 2s wait — needs longer timeout
 })
 
 // ── Path 10: LLM returns end_turn immediately (empty tools) ──

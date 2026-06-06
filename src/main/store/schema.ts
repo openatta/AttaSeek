@@ -1,5 +1,7 @@
 /**
- * SQLite schema — tables for artifact, session, memory, audit, and permission persistence.
+ * SQLite schema — audit_logs, token_usage, permission_policies (active).
+ * Legacy tables (sessions, session_events, memory_entries, app_state)
+ * retained for historical data read-back; new writes go to ~/.atta/seek/ plain-text files.
  */
 
 export const SCHEMA = `

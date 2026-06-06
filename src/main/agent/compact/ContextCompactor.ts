@@ -102,3 +102,51 @@ export async function compactConversation(
     compactedCount: toCompact.length,
   }
 }
+
+// ── Microcompact: per-turn tool result size capping ──
+
+const MAX_TOOL_RESULT_CHARS = 10_000
+
+/** Compress individual tool results to avoid context bloat. Called per-turn before message append. */
+export function microcompact(toolResults: { content: string }[]): { content: string }[] {
+  return toolResults.map(tr => ({
+    ...tr,
+    content: tr.content.length > MAX_TOOL_RESULT_CHARS
+      ? tr.content.slice(0, MAX_TOOL_RESULT_CHARS) + `\n...[truncated ${tr.content.length - MAX_TOOL_RESULT_CHARS} chars]`
+      : tr.content,
+  }))
+}
+
+// ── Reactive compaction: triggered on API 413 / prompt-too-long ──
+
+/** Check if an API error is a context-length error (should trigger reactive compaction) */
+export function isContextLengthError(err: unknown): boolean {
+  const msg = (err as any)?.message || ''
+  return msg.includes('prompt_too_long') || msg.includes('413') || msg.includes('context_length_exceeded')
+}
+
+/** Reactive compact — more aggressive than proactive. Keeps only keepRecentTurns/2 turns. */
+export async function reactiveCompact(
+  messages: LLMMessage[],
+  profile: AgentProfile,
+  existingSummary?: string,
+): Promise<CompactResult> {
+  // Halve the keep count for aggressive reactive compaction
+  const keepCount = Math.max(2, Math.floor(profile.context.keepRecentTurns * 1.5)) // 1.5 turns (3 messages) minimum
+  if (messages.length <= keepCount) {
+    // Already minimal — just truncate tool results
+    const compacted = messages.map(m => {
+      if (typeof m.content === 'string') return m
+      return { ...m, content: (m.content as any[]).map((b: any) => {
+        if (b.type === 'tool_result' && b.content?.length > 5000) {
+          return { ...b, content: b.content.slice(0, 5000) + '\n...[truncated]' }
+        }
+        return b
+      })}
+    })
+    return { summary: existingSummary || '', compactedMessages: compacted, tokenSaved: 0, compactedCount: 0 }
+  }
+
+  // Aggressive: compact all but last keepCount messages
+  return compactConversation(messages, { ...profile, context: { ...profile.context, keepRecentTurns: Math.ceil(keepCount / 2) } }, existingSummary)
+}

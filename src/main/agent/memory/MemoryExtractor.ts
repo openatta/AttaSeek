@@ -13,6 +13,7 @@
 import { memoryService } from '../../memory/MemoryService'
 import type { MemoryEntry } from '../../../shared/types/Memory'
 import type { LLMMessage } from '../llm/LLMProvider'
+import { llmProviderRegistry } from '../llm/LLMProviderRegistry'
 
 export const EXTRACT_MEMORIES_PROMPT = `You are a memory extraction assistant. Analyze the conversation below and extract key information worth remembering for future interactions.
 
@@ -36,58 +37,86 @@ export const EXTRACT_MEMORIES_PROMPT = `You are a memory extraction assistant. A
 
 Return ONLY the JSON array. No other text.`
 
-/** Extract memories from a completed conversation */
 export async function extractMemories(
   messages: LLMMessage[],
   goal: string,
   sessionId: string,
   projectId?: string,
-  projectRoot?: string,
+  _projectRoot?: string,
 ): Promise<MemoryEntry[]> {
-  // In MVP, do simple dedup-aware extraction without LLM
-  // Store the completed goal as a task_state entry
-  const existingEntries = memoryService.listAll()
-  const existingContent = new Set(existingEntries.map(e => e.content))
-
   const newEntries: MemoryEntry[] = []
 
   // Always record task completion
   const taskContent = `Completed: ${goal}`
+  let existingContent = new Set<string>()
+  try { existingContent = new Set(memoryService.listAll().map(e => e.content)) } catch { /* DB may not be available */ }
   if (!existingContent.has(taskContent)) {
-    const entry = memoryService.store({
-      scope: 'project', scopeId: projectId || sessionId,
-      type: 'task_state', content: taskContent,
-      source: 'auto_extract', layer: 'L2',
-      sessionId, taskId: '',
-    })
-    newEntries.push(entry)
+    try {
+      const entry = memoryService.store({
+        scope: 'project', scopeId: projectId || sessionId,
+        type: 'task_state', content: taskContent,
+        source: 'auto_extract', layer: 'L2',
+        sessionId, taskId: '',
+      })
+      newEntries.push(entry)
+    } catch { /* best effort */ }
   }
 
-  // Extract key information from messages using heuristics
+  // Try LLM-powered extraction first
   const allText = messages
     .map(m => typeof m.content === 'string' ? m.content : JSON.stringify(m.content))
     .join('\n')
 
-  // Simple heuristic extraction (LLM-powered extraction to be added in Phase 4 enhancement)
-  const patterns = [
-    { regex: /prefer[s]?\s+(?:to\s+)?(use|using)\s+([^.,]+)/gi, type: 'user_preference' as const },
-    { regex: /(?:convention|pattern)\s+(?:is|:)\s+([^.,]+)/gi, type: 'project_memory' as const },
-    { regex: /(?:decided|chose|selected)\s+(?:to\s+)?([^.,]+)/gi, type: 'task_state' as const },
-  ]
+  let extractedFacts: string[] = []
+  try {
+    const provider = llmProviderRegistry.getDefault()
+    if (provider) {
+      const result = await provider.chat({
+        systemPrompt: EXTRACT_MEMORIES_PROMPT,
+        messages: [
+          { role: 'user', content: `Goal: ${goal}\n\nConversation:\n${allText.slice(0, 20_000)}` },
+        ],
+        tools: [],
+      })
+      const text = result.content.filter(b => b.type === 'text').map(b => (b as any).text).join('\n')
+      const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/)
+      if (jsonMatch) {
+        extractedFacts = JSON.parse(jsonMatch[1]).map((f: any) => f.content).filter(Boolean)
+      }
+    }
+  } catch { /* LLM extraction failed — fall back to heuristics below */ }
 
-  for (const { regex, type } of patterns) {
-    let match
-    while ((match = regex.exec(allText)) !== null) {
-      const content = match[2] || match[1]
-      if (content.length > 10 && content.length < 500 && !existingContent.has(content)) {
+  // Heuristic fallback (when LLM unavailable or fails)
+  if (extractedFacts.length === 0) {
+    const patterns = [
+      { regex: /prefer[s]?\s+(?:to\s+)?(use|using)\s+([^.,]+)/gi },
+      { regex: /(?:convention|pattern)\s+(?:is|:)\s+([^.,]+)/gi },
+      { regex: /(?:decided|chose|selected)\s+(?:to\s+)?([^.,]+)/gi },
+    ]
+    for (const { regex } of patterns) {
+      let match
+      while ((match = regex.exec(allText)) !== null) {
+        const content = match[2] || match[1]
+        if (content && content.length > 10 && content.length < 500) {
+          extractedFacts.push(content.trim())
+        }
+      }
+    }
+  }
+
+  // Deduplicate and store
+  for (const fact of extractedFacts) {
+    if (!existingContent.has(fact)) {
+      try {
         const entry = memoryService.store({
           scope: 'project', scopeId: projectId || sessionId,
-          type, content: content.trim(),
+          type: 'user_preference', content: fact,
           source: 'auto_extract', layer: 'L2',
           sessionId, taskId: '',
         })
         newEntries.push(entry)
-      }
+        existingContent.add(fact)
+      } catch { /* best effort */ }
     }
   }
 

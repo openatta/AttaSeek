@@ -8,6 +8,7 @@
  */
 
 import { AgentOrchestrator } from '../orchestrator/AgentOrchestrator'
+import { cacheManager } from '../cache/CacheManager'
 import type { AgentTask } from '../../../shared/types/AgentTask'
 import type { AgentProfile } from '../profile/AgentProfile'
 import type { SubAgentContext } from './SubAgentContext'
@@ -44,10 +45,22 @@ export class SubAgentManager {
     const agentId = `subagent_${this.nextId++}`
     const orchestrator = new AgentOrchestrator()
 
+    // Worktree isolation
+    let worktreePath: string | undefined
+    if (context.isolation === 'worktree') {
+      try {
+        const { worktreeManager } = await import('./worktree/WorktreeManager')
+        worktreePath = worktreeManager.create(agentId)
+      } catch (err) {
+        console.warn(`[SubAgentManager] worktree creation failed for ${agentId}:`, err)
+        // Fall through to inline execution
+      }
+    }
+
     const task: AgentTask = {
       id: agentId,
       sessionId: parentTask.sessionId,
-      projectId: parentTask.projectId,
+      projectId: worktreePath || parentTask.projectId,
       goal,
       status: 'idle',
       createdAt: Date.now(),
@@ -75,6 +88,10 @@ export class SubAgentManager {
       info.errorMessage = err instanceof Error ? err.message : 'Unknown error'
       console.warn(`[SubAgentManager] agent ${agentId} failed:`, info.errorMessage)
     } finally {
+      // Cleanup worktree if used
+      if (worktreePath) {
+        try { const { worktreeManager } = await import('./worktree/WorktreeManager'); worktreeManager.discard(agentId) } catch { /* best effort */ }
+      }
       // Clean up completed/failed/cancelled agents after 5 minutes
       setTimeout(() => this.agents.delete(agentId), 300_000)
     }
