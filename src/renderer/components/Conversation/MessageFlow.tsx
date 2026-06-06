@@ -16,6 +16,9 @@ import PermissionRequestedEvent from './events/PermissionRequestedEvent'
 import NoModelPrompt from './NoModelPrompt'
 import { ArrowDown } from 'lucide-react'
 
+// Shared design tokens: max-w-[48rem] content width (also in Composer.tsx:137)
+const SCROLL_THRESHOLD_PX = 150
+
 export default function MessageFlow() {
   const containerRef = useRef<HTMLDivElement>(null)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
@@ -40,7 +43,7 @@ export default function MessageFlow() {
     const el = containerRef.current
     if (!el) return
     const dist = el.scrollHeight - el.scrollTop - el.clientHeight
-    setShowScrollBtn(dist > 150)
+    setShowScrollBtn(dist > SCROLL_THRESHOLD_PX)
   }, [])
 
   const scrollToBottom = () => {
@@ -52,7 +55,7 @@ export default function MessageFlow() {
     const el = containerRef.current
     if (!el) return
     const dist = el.scrollHeight - el.scrollTop - el.clientHeight
-    if (dist < 150) el.scrollTop = el.scrollHeight
+    if (dist < SCROLL_THRESHOLD_PX) el.scrollTop = el.scrollHeight
   }, [sessionEvents.length, streamTotalLen])
 
   if (sessionEvents.length === 0 && streamTotalLen === 0) {
@@ -90,32 +93,35 @@ export default function MessageFlow() {
   )
 }
 
+/**
+ * EventCard — renders a single session event.
+ * SessionEvent is now a discriminated union: switch(event.type) auto-narrows event.payload.
+ * No payload casts needed.
+ */
 const EventCard = memo(function EventCard({ event, streamingMessageId }: { event: SessionEvent; streamingMessageId?: string }) {
   const setEditText = useSetAtom(editTextAtom)
   switch (event.type) {
     case 'UserMessage':
-      return <UserMessageEvent payload={event.payload as any} onEdit={(text) => setEditText(text)} />
+      return <UserMessageEvent payload={event.payload} onEdit={(text) => setEditText(text)} />
     case 'AgentMessage':
-      return <AgentMessageEvent payload={event.payload as any} streamingMessageId={streamingMessageId} onRegenerate={() => {}} />
+      return <AgentMessageEvent payload={event.payload} streamingMessageId={streamingMessageId} onRegenerate={() => {}} />
     case 'PlanCreated':
-      return <PlanCreatedEvent payload={event.payload as any} />
+      return <PlanCreatedEvent payload={event.payload} />
     case 'ToolCallStarted':
-      return <ToolCallStartedEvent payload={event.payload as any} />
+      return <ToolCallStartedEvent payload={event.payload} />
     case 'ToolCallFinished':
-      return <ToolCallFinishedEvent payload={event.payload as any} />
+      return <ToolCallFinishedEvent payload={event.payload} />
     case 'ArtifactCreated':
-      return <ArtifactCreatedEvent payload={event.payload as any} />
+      return <ArtifactCreatedEvent payload={event.payload} />
     case 'TaskCompleted':
-      return <TaskCompletedEvent payload={event.payload as any} />
-    case 'SystemNotification': {
-      const snPayload = event.payload as { kind: string; message: string }
-      if (snPayload.kind === 'no_model') return <NoModelPrompt />
+      return <TaskCompletedEvent payload={event.payload} />
+    case 'SystemNotification':
+      if (event.payload.kind === 'no_model') return <NoModelPrompt />
       return null
-    }
     case 'TaskFailed':
-      return <TaskFailedEvent payload={event.payload as any} taskId={event.taskId} sessionId={event.sessionId} />
+      return <TaskFailedEvent payload={event.payload} taskId={event.taskId} sessionId={event.sessionId} />
     case 'PermissionRequested':
-      return <PermissionRequestedEvent payload={event.payload as any} />
+      return <PermissionRequestedEvent payload={event.payload} />
     default:
       return null
   }

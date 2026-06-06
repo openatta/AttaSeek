@@ -12,7 +12,7 @@
 import { AnthropicProvider } from './AnthropicProvider'
 import { OpenAICompatibleProvider } from './OpenAICompatibleProvider'
 import type { LLMProvider } from './LLMProvider'
-import type { ModelConfig } from '../../shared/types/model'
+import type { ModelConfig } from '../../../shared/types/model'
 
 export function createProvider(config: ModelConfig, apiKey: string): LLMProvider | null {
   try {

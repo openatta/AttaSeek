@@ -17,8 +17,8 @@ export default function AuditSettings() {
     const load = async () => {
       try {
         const result = await window.api.audit.list()
-        if (result && (result as any).logs) {
-          setLogs((result as any).logs.slice(0, 50))
+        if (result && result.logs) {
+          setLogs(result.logs.slice(0, 50))
         }
       } catch (err) {
         console.error('[AuditSettings] load error:', err)

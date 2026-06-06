@@ -14,12 +14,7 @@ const activitySessionMap: Record<string, string> = {}
 
 function ensureSession(activity: string): string {
   if (!activitySessionMap[activity]) {
-    const sid = `session_${activity}_${Date.now()}`
-    activitySessionMap[activity] = sid
-    // Persist to DB asynchronously with the same ID
-    if (typeof window !== 'undefined' && window.api?.session?.create) {
-      window.api.session.create('New Session', activity, sid).catch((err: unknown) => { console.warn('[session] failed to create session:', err) })
-    }
+    activitySessionMap[activity] = `session_${activity}_${Date.now()}`
   }
   return activitySessionMap[activity]
 }
@@ -93,12 +88,14 @@ export function handleAgentEvent(
     setStreamingBuffers?: (update: (prev: Record<string, string>) => Record<string, string>) => void
     messageBufRef?: { current: Map<string, string> }
     setSessionTitle?: (sid: string, title: string) => void
+    /** Persist session title to DB — provided by App.tsx hook layer, not the atom */
+    persistTitle?: (sessionId: string, title: string) => void
   },
 ): void {
-  const { setSessionEvents, setAgentTasks, setStreamingBuffers, messageBufRef, setSessionTitle } = setters
+  const { setSessionEvents, setAgentTasks, setStreamingBuffers, messageBufRef, setSessionTitle, persistTitle } = setters
   // Handle streaming chunks — accumulate in buffer and ref, don't add to event list yet
   if (event.type === 'AgentMessageChunk') {
-    const payload = event.payload as { content: string; isFinal: boolean; messageId: string }
+    const payload = event.payload
 
     // Accumulate in ref (synchronous, immediate access to full text)
     if (messageBufRef) {
@@ -127,11 +124,11 @@ export function handleAgentEvent(
         const idx = findLastIndex(prev, (e) => e.type === 'AgentMessage' && e.sessionId === event.sessionId)
         if (idx >= 0) {
           const updated = [...prev]
-          updated[idx] = { ...updated[idx], payload: { content: fullText } }
+          updated[idx] = { ...updated[idx], payload: { content: fullText } } as SessionEvent
           return updated
         }
         // Fallback: no placeholder found → append new
-        return [...prev, { id: event.id, sessionId: event.sessionId, taskId: event.taskId, type: 'AgentMessage' as const, payload: { content: fullText }, createdAt: event.createdAt }]
+        return [...prev, { id: event.id, sessionId: event.sessionId, taskId: event.taskId, type: 'AgentMessage', payload: { content: fullText }, createdAt: event.createdAt } as SessionEvent]
       })
     }
     return
@@ -141,14 +138,11 @@ export function handleAgentEvent(
   setSessionEvents((prev) => {
     // LLM-generated title: persist to DB + update header atom
     if (event.type === 'SessionTitleGenerated') {
-      const payload = event.payload as { title: string }
-      if (payload.title) {
+      if (event.payload.title) {
         // Update atom (triggers SessionHeader re-render)
-        if (setSessionTitle) setSessionTitle(event.sessionId, payload.title)
-        // Persist to DB
-        if (typeof window !== 'undefined' && window.api?.session?.update) {
-          window.api.session.update(event.sessionId, { title: payload.title }).catch((err: unknown) => { console.warn('[session] failed to update title:', err) })
-        }
+        if (setSessionTitle) setSessionTitle(event.sessionId, event.payload.title)
+        // Persist to DB via hook-provided callback (side effect isolated from atom)
+        persistTitle?.(event.sessionId, event.payload.title)
       }
     }
     const MAX_EVENTS = 2000

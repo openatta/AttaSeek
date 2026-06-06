@@ -2,14 +2,7 @@
  * Shared utilities for IPC handlers and SQLite services.
  */
 
-/** Validate that a field on an object is a string (if present) */
-export function validateStringField(obj: Record<string, unknown>, field: string, label: string): void {
-  if (obj[field] !== undefined && typeof obj[field] !== 'string') {
-    throw new Error(`${label} must be a string`)
-  }
-}
-
-/** Validate that a field on an object is a required string */
+/** Validate that a field on an object is a required non-empty string */
 export function validateRequiredString(obj: Record<string, unknown>, field: string, label: string): void {
   if (typeof obj[field] !== 'string' || !obj[field]) {
     throw new Error(`${label} is required and must be a non-empty string`)

@@ -15,7 +15,9 @@ import { app } from 'electron'
 import { artifactService } from '../artifacts/ArtifactService'
 import type { ArtifactType } from '../../shared/types/Artifact'
 
-export type ToolImpl = (input: Record<string, unknown>) => Promise<unknown>
+export type ToolImplFn = (input: Record<string, unknown>) => Promise<unknown>
+export type ToolImplObj = { toolId: string; execute: ToolImplFn }
+export type ToolImpl = ToolImplFn | ToolImplObj
 
 // ── Allowed file paths (sandbox) ──
 

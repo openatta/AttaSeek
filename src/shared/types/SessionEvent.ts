@@ -3,48 +3,41 @@
  * All agent activity flows as typed events; renderer subscribes and renders accordingly.
  */
 
-export type SessionEventType =
-  | 'UserMessage'
-  | 'AgentMessage'
-  | 'AgentMessageChunk'
-  | 'PlanCreated'
-  | 'PlanUpdated'
-  | 'ToolCallStarted'
-  | 'ToolCallFinished'
-  | 'PermissionRequested'
-  | 'ArtifactCreated'
-  | 'ArtifactUpdated'
-  | 'TaskPaused'
-  | 'TaskCompleted'
-  | 'TaskFailed'
-  | 'SystemNotification'
-  | 'SessionTitleGenerated'
-
-export interface SessionEvent {
-  id: string
-  sessionId: string
-  taskId: string
-  type: SessionEventType
-  payload: SessionEventPayload
-  createdAt: number
+/** Map each event type to its payload — single source of truth for the discriminated union. */
+export type SessionEventPayloadMap = {
+  UserMessage: UserMessagePayload
+  AgentMessage: AgentMessagePayload
+  AgentMessageChunk: AgentMessageChunkPayload
+  PlanCreated: PlanCreatedPayload
+  PlanUpdated: PlanUpdatedPayload
+  ToolCallStarted: ToolCallStartedPayload
+  ToolCallFinished: ToolCallFinishedPayload
+  PermissionRequested: PermissionRequestedPayload
+  ArtifactCreated: ArtifactCreatedPayload
+  ArtifactUpdated: ArtifactUpdatedPayload
+  TaskPaused: TaskPausedPayload
+  TaskCompleted: TaskCompletedPayload
+  TaskFailed: TaskFailedPayload
+  SystemNotification: SystemNotificationPayload
+  SessionTitleGenerated: SessionTitleGeneratedPayload
+  CompactBoundary: CompactBoundaryPayload
 }
 
-export type SessionEventPayload =
-  | UserMessagePayload
-  | AgentMessagePayload
-  | AgentMessageChunkPayload
-  | PlanCreatedPayload
-  | PlanUpdatedPayload
-  | ToolCallStartedPayload
-  | ToolCallFinishedPayload
-  | PermissionRequestedPayload
-  | ArtifactCreatedPayload
-  | ArtifactUpdatedPayload
-  | TaskPausedPayload
-  | TaskCompletedPayload
-  | TaskFailedPayload
-  | SystemNotificationPayload
-  | SessionTitleGeneratedPayload
+/** Discriminated union — `event.type` narrows `event.payload` without casts. */
+export type SessionEvent = {
+  [K in keyof SessionEventPayloadMap]: {
+    id: string
+    sessionId: string
+    taskId: string
+    type: K
+    payload: SessionEventPayloadMap[K]
+    createdAt: number
+  }
+}[keyof SessionEventPayloadMap]
+
+/** Derived convenience aliases (backward-compatible with existing union-typed code). */
+export type SessionEventType = keyof SessionEventPayloadMap
+export type SessionEventPayload = SessionEventPayloadMap[SessionEventType]
 
 export interface UserMessagePayload {
   content: string
@@ -120,9 +113,15 @@ export interface TaskPausedPayload {
 
 export interface TaskCompletedPayload {
   summary: string
-  artifactCount: number
-  toolCallCount: number
-  duration: number
+  artifactCount?: number
+  toolCallCount?: number
+  duration?: number
+}
+
+export interface CompactBoundaryPayload {
+  summary: string
+  tokenSaved: number
+  compactedMessageCount: number
 }
 
 export interface TaskFailedPayload {

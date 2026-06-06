@@ -1,12 +1,10 @@
-import { useState } from 'react'
 import type { ArtifactRendererProps } from '../../registries/artifactRendererRegistry'
 import { Copy, Check } from 'lucide-react'
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard'
 
 export default function CodeRenderer({ content, title }: ArtifactRendererProps) {
-  const [copied, setCopied] = useState(false)
-  const handleCopy = () => {
-    navigator.clipboard.writeText(content).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) }).catch(() => {})
-  }
+  const [copied, copy] = useCopyToClipboard()
+  const handleCopy = () => copy(content)
 
   return (
     <div className="flex flex-col h-full">

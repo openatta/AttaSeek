@@ -232,8 +232,8 @@ export class ContextBuilder {
     return parts.join('\n')
   }
 
+  /** Placeholder for project-level constraints (future: load from settings/memory). */
   private getProjectConstraints(_projectId?: string): string[] {
-    // TODO: load project-level constraints from settings or memory
     return []
   }
 

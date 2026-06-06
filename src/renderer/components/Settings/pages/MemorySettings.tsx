@@ -15,8 +15,8 @@ export default function MemorySettings() {
   const load = async () => {
     try {
       const result = await window.api.memory.list()
-      if (result && (result as any).entries) {
-        setEntries((result as any).entries)
+      if (result && result.entries) {
+        setEntries(result.entries)
       }
     } catch (err) {
       console.error('[MemorySettings] load error:', err)

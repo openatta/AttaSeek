@@ -15,8 +15,8 @@ export default function PermissionsSettings() {
     const load = async () => {
       try {
         const result = await window.api.permission.listPolicies()
-        if (result && (result as any).policies) {
-          setPolicies((result as any).policies)
+        if (result && result.policies) {
+          setPolicies(result.policies)
         }
       } catch (err) {
         console.error('[PermissionsSettings] load error:', err)

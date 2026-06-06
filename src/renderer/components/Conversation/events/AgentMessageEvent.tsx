@@ -1,9 +1,9 @@
-import { useState } from 'react'
 import { useAtomValue } from 'jotai'
 import { streamingBuffersAtom } from '../../../atoms/sessionAtom'
 import type { AgentMessagePayload } from '../../../core/types/SessionEvent'
 import { Copy, Check, RefreshCw } from 'lucide-react'
 import MarkdownRenderer from '../MarkdownRenderer'
+import { useCopyToClipboard } from '../../../hooks/useCopyToClipboard'
 
 interface Props { payload: AgentMessagePayload; streamingMessageId?: string; onRegenerate?: () => void }
 
@@ -13,12 +13,9 @@ export default function AgentMessageEvent({ payload, streamingMessageId, onRegen
   const displayContent = streamingContent || payload.content
   const isStreaming = !!streamingMessageId && !!streamingContent && !payload.content
   const hasContent = !!displayContent
-  const [copied, setCopied] = useState(false)
+  const [copied, copy] = useCopyToClipboard()
 
-  const handleCopy = () => {
-    const text = displayContent || ''
-    navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) }).catch(() => {})
-  }
+  const handleCopy = () => copy(displayContent || '')
 
   return (
     <div className="py-2">

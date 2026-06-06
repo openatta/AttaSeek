@@ -3,9 +3,13 @@
  * Aligned with Claude Code / Codex Desktop patterns.
  *
  * Path: ~/.atta/seek/sessions/ (global) or <project>/.atta/seek/sessions/ (per-project)
+ *
+ * All I/O is async (fs/promises). Index read-modify-write operations are
+ * serialised through a mutex to prevent lost updates from concurrent writes.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, readdirSync, renameSync } from 'fs'
+import { mkdir, readFile, writeFile, unlink, readdir, rename } from 'fs/promises'
+import { existsSync } from 'fs' // kept sync for cheap existence checks — non-blocking
 import { join } from 'path'
 import { app } from 'electron'
 
@@ -25,94 +29,128 @@ function metaPath(id: string): string { return join(sessionDir(), `${id}.json`) 
 function eventsPath(id: string): string { return join(sessionDir(), `${id}.jsonl`) }
 function archiveDir(): string { return join(sessionDir(), 'archive') }
 
-function ensureDir(): void { const d = sessionDir(); if (!existsSync(d)) mkdirSync(d, { recursive: true }) }
+async function ensureDir(): Promise<void> {
+  const d = sessionDir()
+  if (!existsSync(d)) await mkdir(d, { recursive: true })
+}
+
+// ── Index mutex (prevents lost updates in concurrent read-modify-write) ──
+
+let _indexLock: Promise<void> = Promise.resolve()
+function withIndexLock<T>(fn: () => Promise<T>): Promise<T> {
+  const prev = _indexLock
+  let release!: () => void
+  _indexLock = new Promise<void>(resolve => { release = resolve })
+  return prev.then(() => fn().finally(release))
+}
 
 // ── Index ──
 
-function loadIndex(): SessionInfo[] {
-  try { return JSON.parse(readFileSync(indexPath(), 'utf-8')) as SessionInfo[] }
-  catch { return [] }
+async function loadIndex(): Promise<SessionInfo[]> {
+  try { const raw = await readFile(indexPath(), 'utf-8'); return JSON.parse(raw) as SessionInfo[] }
+  catch (e) { console.warn('[SessionStore] failed to load index:', e instanceof Error ? e.message : String(e)); return [] }
 }
-function saveIndex(sessions: SessionInfo[]): void {
-  ensureDir(); writeFileSync(indexPath(), JSON.stringify(sessions))
+async function saveIndex(sessions: SessionInfo[]): Promise<void> {
+  await ensureDir(); await writeFile(indexPath(), JSON.stringify(sessions))
 }
 
 // ── CRUD ──
 
-export function createSession(id: string, title: string, activity: string): SessionInfo {
-  ensureDir()
+export async function createSession(id: string, title: string, activity: string): Promise<SessionInfo> {
+  await ensureDir()
   const now = Date.now()
   const s: SessionInfo = { id, title, activity, createdAt: now, updatedAt: now }
-  writeFileSync(metaPath(id), JSON.stringify(s))
-  const idx = loadIndex()
-  idx.unshift(s)
-  saveIndex(idx)
+  await writeFile(metaPath(id), JSON.stringify(s))
+  await withIndexLock(async () => {
+    const idx = await loadIndex()
+    idx.unshift(s)
+    await saveIndex(idx)
+  })
   return s
 }
 
-export function getSession(id: string): SessionInfo | null {
-  try { return JSON.parse(readFileSync(metaPath(id), 'utf-8')) as SessionInfo }
-  catch { return null }
+export async function getSession(id: string): Promise<SessionInfo | null> {
+  try { const raw = await readFile(metaPath(id), 'utf-8'); return JSON.parse(raw) as SessionInfo }
+  catch (e) { console.warn('[SessionStore] failed to read session meta:', e instanceof Error ? e.message : String(e)); return null }
 }
 
-export function listSessions(activity?: string): SessionInfo[] {
-  const idx = loadIndex()
+export async function listSessions(activity?: string): Promise<SessionInfo[]> {
+  const idx = await loadIndex()
   return activity ? idx.filter(s => s.activity === activity) : idx
 }
 
-export function updateSession(id: string, patch: { title?: string }): SessionInfo | null {
-  const s = getSession(id); if (!s) return null
+export async function updateSession(id: string, patch: { title?: string }): Promise<SessionInfo | null> {
+  const s = await getSession(id); if (!s) return null
   if (patch.title) s.title = patch.title
   s.updatedAt = Date.now()
-  writeFileSync(metaPath(id), JSON.stringify(s))
-  const idx = loadIndex()
-  const i = idx.findIndex(x => x.id === id)
-  if (i >= 0) { idx[i] = s; saveIndex(idx) }
+  await writeFile(metaPath(id), JSON.stringify(s))
+  await withIndexLock(async () => {
+    const idx = await loadIndex()
+    const i = idx.findIndex(x => x.id === id)
+    if (i >= 0) { idx[i] = s; await saveIndex(idx) }
+  })
   return s
 }
 
-export function deleteSession(id: string): boolean {
+export async function deleteSession(id: string): Promise<boolean> {
   try {
-    unlinkSync(metaPath(id))
-    try { unlinkSync(eventsPath(id)) } catch { /* jsonl may not exist */ }
-    const idx = loadIndex().filter(s => s.id !== id)
-    saveIndex(idx)
+    await unlink(metaPath(id))
+    try { await unlink(eventsPath(id)) } catch { /* events file may not exist */ }
+    await withIndexLock(async () => {
+      const idx = (await loadIndex()).filter(s => s.id !== id)
+      await saveIndex(idx)
+    })
     return true
-  } catch { return false }
+  } catch (e) { console.warn('[SessionStore] failed to delete session:', e instanceof Error ? e.message : String(e)); return false }
 }
 
 // ── Events (JSONL) ──
 
-export function appendEvent(sessionId: string, event: unknown): void {
-  ensureDir()
+let _lastIndexFlush = 0
+const INDEX_FLUSH_INTERVAL_MS = 10000 // throttle index rewrites to every 10s during streaming
+
+export async function appendEvent(sessionId: string, event: unknown): Promise<void> {
+  await ensureDir()
   const line = JSON.stringify(event) + '\n'
-  try { writeFileSync(eventsPath(sessionId), line, { flag: 'a' }) }
-  catch { /* best effort */ }
-  // Update session timestamp
-  const idx = loadIndex(); const i = idx.findIndex(s => s.id === sessionId)
-  if (i >= 0) { idx[i].updatedAt = Date.now(); saveIndex(idx) }
+  try { await writeFile(eventsPath(sessionId), line, { flag: 'a' }) }
+  catch (e) { console.warn('[SessionStore] failed to append event:', e instanceof Error ? e.message : String(e)) }
+  // Update session timestamp; throttle index rewrites to avoid I/O on every event
+  const now = Date.now()
+  if (now - _lastIndexFlush < INDEX_FLUSH_INTERVAL_MS) return
+  await withIndexLock(async () => {
+    const idx = await loadIndex(); const i = idx.findIndex(s => s.id === sessionId)
+    if (i >= 0) {
+      idx[i].updatedAt = now
+      await saveIndex(idx)
+      _lastIndexFlush = now
+    }
+  })
 }
 
-export function readEvents(sessionId: string): unknown[] {
+export async function readEvents(sessionId: string): Promise<unknown[]> {
   try {
-    const raw = readFileSync(eventsPath(sessionId), 'utf-8')
+    const raw = await readFile(eventsPath(sessionId), 'utf-8')
     return raw.split('\n').filter(Boolean).map(line => { try { return JSON.parse(line) } catch { return null } }).filter(Boolean)
-  } catch { return [] }
+  } catch (e) { console.warn('[SessionStore] failed to read events:', e instanceof Error ? e.message : String(e)); return [] }
 }
 
 // ── Archive ──
 
-export function archiveOldSessions(maxAgeDays: number = 30): number {
+export async function archiveOldSessions(maxAgeDays: number = 30): Promise<number> {
   const cutoff = Date.now() - maxAgeDays * 86400000
-  const idx = loadIndex(); let count = 0
-  const remaining: SessionInfo[] = []
-  for (const s of idx) {
-    if (s.updatedAt < cutoff) {
-      const ad = archiveDir(); if (!existsSync(ad)) mkdirSync(ad, { recursive: true })
-      try { renameSync(metaPath(s.id), join(ad, `${s.id}.json`)); count++ } catch { remaining.push(s) }
-      try { unlinkSync(eventsPath(s.id)) } catch { /* no events */ }
-    } else { remaining.push(s) }
-  }
-  if (count > 0) saveIndex(remaining)
+  let count = 0
+  await withIndexLock(async () => {
+    const idx = await loadIndex()
+    const remaining: SessionInfo[] = []
+    for (const s of idx) {
+      if (s.updatedAt < cutoff) {
+        const ad = archiveDir()
+        if (!existsSync(ad)) await mkdir(ad, { recursive: true })
+        try { await rename(metaPath(s.id), join(ad, `${s.id}.json`)); count++ } catch (e) { console.warn('[SessionStore] archive rename failed:', e instanceof Error ? e.message : String(e)); remaining.push(s) }
+        try { await unlink(eventsPath(s.id)) } catch { /* events file may not exist */ }
+      } else { remaining.push(s) }
+    }
+    if (count > 0) await saveIndex(remaining)
+  })
   return count
 }

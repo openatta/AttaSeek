@@ -55,11 +55,11 @@ export class OpenAICompatibleProvider implements LLMProvider {
         method: 'POST', headers: this.headers(), body: JSON.stringify(body),
       })
       const json = await res.json() as OpenAIResponse
-      if (!res.ok) throw this.toLLMError(res.status, json as OpenAIResponse)
+      if (!res.ok) throw this.toLLMError(res.status, json as unknown as Record<string, unknown>)
       return this.toChatResult(json)
     } catch (err: unknown) {
       if (err instanceof LLMError) throw err
-      throw new LLMError('unknown', err.message || 'Unknown error')
+      throw new LLMError('unknown', err instanceof Error ? err.message : 'Unknown error')
     }
   }
 
@@ -137,7 +137,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
           if (chunk.usage) {
             usage = { inputTokens: chunk.usage.prompt_tokens, outputTokens: chunk.usage.completion_tokens }
           }
-        } catch { /* skip malformed chunks */ }
+        } catch (e) { console.warn('[OpenAI] malformed streaming chunk:', e instanceof Error ? e.message : String(e)) }
       }
     }
 
@@ -158,8 +158,9 @@ export class OpenAICompatibleProvider implements LLMProvider {
     return { content: contentBlocks, stopReason, usage }
     } catch (err: unknown) {
       if (err instanceof LLMError) throw err
-      if (err?.name === 'AbortError') throw new LLMError('timeout', 'Request was cancelled or timed out')
-      throw new LLMError('unknown', err.message || 'Unknown error')
+      const e = err as Error | undefined
+      if (e?.name === 'AbortError') throw new LLMError('timeout', 'Request was cancelled or timed out')
+      throw new LLMError('unknown', e?.message || 'Unknown error')
     }
   }
 
@@ -179,7 +180,8 @@ export class OpenAICompatibleProvider implements LLMProvider {
         signal: AbortSignal.timeout(10000),
       })
       return res.ok
-    } catch {
+    } catch (e) {
+      console.warn('[OpenAI] validateKey failed:', e instanceof Error ? e.message : String(e))
       return false
     }
   }
@@ -236,12 +238,14 @@ export class OpenAICompatibleProvider implements LLMProvider {
   }
 
   private toLLMError(status: number, body: Record<string, unknown>): LLMError {
-    if (status === 401 || status === 403) return new LLMError('auth', body?.error?.message || 'Authentication failed', status)
-    if (status === 429) return new LLMError('rate_limit', body?.error?.message || 'Rate limited', status)
-    if (status === 400) return new LLMError('invalid_request', body?.error?.message || 'Invalid request', status)
-    if (status === 404) return new LLMError('not_found', body?.error?.message || 'Not found', status)
-    if (status >= 500) return new LLMError('server', body?.error?.message || 'Server error', status)
-    return new LLMError('unknown', body?.error?.message || `HTTP ${status}`, status)
+    const errObj = (body.error as Record<string, unknown> | undefined)
+    const msg = typeof errObj?.message === 'string' ? errObj.message : undefined
+    if (status === 401 || status === 403) return new LLMError('auth', msg || 'Authentication failed', status)
+    if (status === 429) return new LLMError('rate_limit', msg || 'Rate limited', status)
+    if (status === 400) return new LLMError('invalid_request', msg || 'Invalid request', status)
+    if (status === 404) return new LLMError('not_found', msg || 'Not found', status)
+    if (status >= 500) return new LLMError('server', msg || 'Server error', status)
+    return new LLMError('unknown', msg || `HTTP ${status}`, status)
   }
 
   private toChatResult(json: OpenAIResponse): LLMChatResult {

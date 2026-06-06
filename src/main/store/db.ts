@@ -36,12 +36,22 @@ function runMigrations(db: Database.Database): void {
     { table: 'model_configs', col: 'models', def: "TEXT NOT NULL DEFAULT '[]'" },
   ]
   for (const m of migrations) {
-    const cols = db.prepare(`PRAGMA table_info(${m.table})`).all() as any[]
-    if (!cols.some((c: any) => c.name === m.col)) {
+    const cols = dbQuery<{ name: string }>(`PRAGMA table_info(${m.table})`)
+    if (!cols.some((c) => c.name === m.col)) {
       db.exec(`ALTER TABLE ${m.table} ADD COLUMN ${m.col} ${m.def}`)
       console.log(`[db] migration: added ${m.table}.${m.col}`)
     }
   }
+}
+
+/** Typed query helper — eliminates `as any[]` boilerplate at call sites. */
+export function dbQuery<T>(sql: string, ...params: unknown[]): T[] {
+  return getDb().prepare(sql).all(...params) as T[]
+}
+
+/** Typed single-row query helper. */
+export function dbQueryOne<T>(sql: string, ...params: unknown[]): T | undefined {
+  return getDb().prepare(sql).get(...params) as T | undefined
 }
 
 export function closeDb(): void {

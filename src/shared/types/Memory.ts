@@ -3,7 +3,7 @@
  * Managed by MemoryService in main process.
  */
 
-export type MemoryLayer = 'L1' | 'L2'
+export type MemoryLayer = 'L0' | 'L1' | 'L2'
 
 export type MemoryType = 'user_preference' | 'project_memory' | 'enterprise_knowledge' | 'task_state'
 

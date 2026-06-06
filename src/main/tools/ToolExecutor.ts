@@ -144,7 +144,8 @@ export class ToolExecutor {
     }
 
     try {
-      const output = await impl(input)
+      const fn = typeof impl === 'function' ? impl : impl.execute
+      const output = await fn(input)
       const duration = Date.now() - startTime
 
       // 5. Log success

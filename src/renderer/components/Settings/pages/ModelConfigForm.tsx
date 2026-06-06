@@ -38,9 +38,9 @@ export default function ModelConfigForm({ config, onSaved, onCancel }: Props) {
   // Load key preview on edit
   useEffect(() => {
     if (isEdit && config?.id) {
-      (window as any).api?.model?.getKeyInfo?.(config.id).then((r: any) => {
+      window.api?.model?.getKeyInfo(config.id).then((r) => {
         if (r?.info?.exists) setKeyPreview(r.info.preview)
-      }).catch(() => {})
+      }).catch((e) => { console.warn('[ModelConfigForm] key preview load failed:', e instanceof Error ? e.message : String(e)) })
     }
   }, [isEdit, config?.id])
 

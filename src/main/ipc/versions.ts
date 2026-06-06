@@ -54,6 +54,18 @@ export const CHANNEL_REGISTRY: ChannelInfo[] = [
   { channel: 'memory:delete', since: '0.2.0', direction: 'renderer->main' },
   { channel: 'audit:list', since: '0.2.0', direction: 'renderer->main' },
 
+  // Model config (added 0.4.0)
+  { channel: 'model:list', since: '0.4.0', direction: 'renderer->main' },
+  { channel: 'model:get', since: '0.4.0', direction: 'renderer->main' },
+  { channel: 'model:create', since: '0.4.0', direction: 'renderer->main' },
+  { channel: 'model:update', since: '0.4.0', direction: 'renderer->main' },
+  { channel: 'model:delete', since: '0.4.0', direction: 'renderer->main' },
+  { channel: 'model:set-default', since: '0.4.0', direction: 'renderer->main' },
+  { channel: 'model:test', since: '0.4.0', direction: 'renderer->main' },
+  { channel: 'model:usage', since: '0.4.0', direction: 'renderer->main' },
+  { channel: 'model:get-key-info', since: '0.4.0', direction: 'renderer->main' },
+  { channel: 'model:has-config', since: '0.4.0', direction: 'renderer->main' },
+
   // Session (added 0.3.0)
   { channel: 'session:create', since: '0.3.0', direction: 'renderer->main' },
   { channel: 'session:list', since: '0.3.0', direction: 'renderer->main' },
@@ -62,6 +74,7 @@ export const CHANNEL_REGISTRY: ChannelInfo[] = [
   { channel: 'session:delete', since: '0.3.0', direction: 'renderer->main' },
   { channel: 'session:save-events', since: '0.3.0', direction: 'renderer->main' },
   { channel: 'session:load-events', since: '0.3.0', direction: 'renderer->main' },
+  { channel: 'session:updated', since: '0.3.0', direction: 'main->renderer' },
 
   // App state
   { channel: 'app:get-state', since: '0.2.0', direction: 'renderer->main' },

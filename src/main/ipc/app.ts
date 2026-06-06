@@ -3,12 +3,12 @@
  * Uses inline try/catch (not ipcWrap) because response shape differs from CRUD handlers.
  */
 import { ipcMain } from 'electron'
-import { getDb } from '../store/db'
+import { getDb, dbQueryOne } from '../store/db'
 
 export function registerAppHandlers(): void {
   ipcMain.handle('app:get-state', async (_e, key: string) => {
     try {
-      const row = getDb().prepare('SELECT value FROM app_state WHERE key = ?').get(key) as any
+      const row = dbQueryOne<{ value: string }>('SELECT value FROM app_state WHERE key = ?', key)
       return { success: true, value: row?.value || null }
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : 'Internal error' }

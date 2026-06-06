@@ -7,7 +7,7 @@ import { ipcMain, type BrowserWindow } from 'electron'
 import { agentRuntime } from '../agent/AgentRuntime'
 import { agentEventBus } from '../agent/AgentEventBus'
 import { perf } from '../perf'
-import { validateRequiredString, ipcWrap } from '../store/util'
+import { validateRequiredString } from '../store/util'
 
 let mainWindow: BrowserWindow | null = null
 let unsubscribeAgentEvents: (() => void) | null = null

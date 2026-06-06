@@ -2,7 +2,7 @@
  * MemoryService — L1 scratchpad (per-session, in-memory) + L2 persistent (SQLite).
  */
 
-import { getDb } from '../store/db'
+import { getDb, dbQuery, dbQueryOne } from '../store/db'
 import { newId } from '../store/id'
 import type { MemoryEntry, MemoryQuery } from '../../shared/types/Memory'
 
@@ -38,24 +38,25 @@ export class MemoryService {
     if (query.query) { sql += ' AND content LIKE ?'; params.push(`%${query.query}%`) }
     sql += ' ORDER BY updated_at DESC'
     if (query.limit) { sql += ' LIMIT ?'; params.push(query.limit) }
-    return (db.prepare(sql).all(...params) as any[]).map((r: any) => this.rowToEntry(r)).filter((e): e is MemoryEntry => !!e)
+    return dbQuery<Record<string, unknown>>(sql, ...params).map((r) => this.rowToEntry(r)).filter((e): e is MemoryEntry => !!e)
   }
 
-  get(id: string): MemoryEntry | undefined { return this.rowToEntry(getDb().prepare('SELECT * FROM memory_entries WHERE id = ?').get(id) as any) }
+  get(id: string): MemoryEntry | undefined { return this.rowToEntry(dbQueryOne<Record<string, unknown>>('SELECT * FROM memory_entries WHERE id = ?', id)) }
 
   update(id: string, patch: Partial<Pick<MemoryEntry, 'content' | 'scope' | 'scopeId' | 'type'>>): MemoryEntry | null {
-    const db = getDb(); const ex = db.prepare('SELECT * FROM memory_entries WHERE id = ?').get(id) as any
+    const ex = dbQueryOne<Record<string, unknown>>('SELECT * FROM memory_entries WHERE id = ?', id)
     if (!ex) return null
     const c = patch.content ?? ex.content; const sc = patch.scope ?? ex.scope; const si = patch.scopeId ?? ex.scope_id; const t = patch.type ?? ex.type; const now = Date.now()
+    const db = getDb()
     db.prepare('UPDATE memory_entries SET content=?, scope=?, scope_id=?, type=?, updated_at=? WHERE id=?').run(c, sc, si, t, now, id)
     return this.rowToEntry({ ...ex, content: c, scope: sc, scope_id: si, type: t, updated_at: now }) || null
   }
 
   delete(id: string): boolean { return getDb().prepare('DELETE FROM memory_entries WHERE id=?').run(id).changes > 0 }
 
-  listAll(): MemoryEntry[] { return (getDb().prepare('SELECT * FROM memory_entries ORDER BY updated_at DESC LIMIT 200').all() as any[]).map((r: any) => this.rowToEntry(r)).filter((e): e is MemoryEntry => !!e) }
+  listAll(): MemoryEntry[] { return dbQuery<Record<string, unknown>>('SELECT * FROM memory_entries ORDER BY updated_at DESC LIMIT 200').map((r) => this.rowToEntry(r)).filter((e): e is MemoryEntry => !!e) }
 
-  get count(): number { return (getDb().prepare('SELECT COUNT(*) as c FROM memory_entries').get() as any)?.c || 0 }
+  get count(): number { return dbQueryOne<{ c: number }>('SELECT COUNT(*) as c FROM memory_entries')?.c || 0 }
 
   private rowToEntry(r: any): MemoryEntry | undefined {
     if (!r) return undefined

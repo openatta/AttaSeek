@@ -148,6 +148,11 @@ const api = {
       ipcRenderer.invoke('session:update', { id, ...patch }),
     delete: (id: string): Promise<{ success: boolean }> =>
       ipcRenderer.invoke('session:delete', { id }),
+    onUpdate: (cb: (data: { id: string; title: string }) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { id: string; title: string }) => cb(data)
+      ipcRenderer.on('session:updated', listener)
+      return () => ipcRenderer.removeListener('session:updated', listener)
+    },
   },
 
   // Plugin API

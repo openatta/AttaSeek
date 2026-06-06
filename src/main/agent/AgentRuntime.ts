@@ -10,7 +10,7 @@ import { AgentOrchestrator } from './orchestrator/AgentOrchestrator'
 import { newId } from '../store/id'
 import { validateProfile } from './profile/AgentProfile'
 import type { AgentTask } from '../../shared/types/AgentTask'
-import type { SessionEvent } from '../../shared/types/SessionEvent'
+import type { SessionEvent, SessionEventPayloadMap } from '../../shared/types/SessionEvent'
 import type { AgentProfile } from './profile/AgentProfile'
 
 const MAX_TASKS = 500
@@ -113,15 +113,11 @@ export class AgentRuntime {
 
   // ── Event helper ──
 
-  emit(task: AgentTask, type: SessionEvent['type'], payload: SessionEvent['payload']): void {
+  emit<K extends keyof SessionEventPayloadMap>(task: AgentTask, type: K, payload: SessionEventPayloadMap[K]): void {
     agentEventBus.emit({
-      id: newId(),
-      sessionId: task.sessionId,
-      taskId: task.id,
-      type,
-      payload,
-      createdAt: Date.now(),
-    })
+      id: newId(), sessionId: task.sessionId, taskId: task.id,
+      type, payload, createdAt: Date.now(),
+    } as SessionEvent)
   }
 }
 
@@ -137,7 +133,7 @@ function getDefaultProfile(): AgentProfile {
       description: 'General-purpose AI agent.',
       systemPrompt: { id: 'default', sections: [{ name: 'identity', priority: 10, content: `You are an AI agent running in AttaSeek. Use tools when needed. Be concise and helpful.` }] },
       tools: [], skills: [],
-      execution: { maxParallelTools: 1 }, // conservative default for unknown profiles
+      execution: { maxTurns: 10, maxParallelTools: 1, planning: 'none' as const }, // conservative default for unknown profiles
     })
   }
   return _defaultProfile

@@ -3,7 +3,7 @@
  * Loads all configs from SQLite at boot, instantiates providers, registers them.
  */
 
-import { getDb } from '../store/db'
+import { getDb, dbQuery, dbQueryOne } from '../store/db'
 import { newId } from '../store/id'
 import { storeApiKey, getApiKey, deleteApiKey } from '../store/secrets'
 import { llmProviderRegistry } from '../agent/llm/LLMProviderRegistry'
@@ -40,8 +40,7 @@ export interface TestResult {
 export class ModelConfigService {
   /** Load all configs from DB and register providers */
   loadAll(): ModelConfig[] {
-    const db = getDb()
-    const rows = db.prepare('SELECT * FROM model_configs ORDER BY is_default DESC, created_at ASC').all() as any[]
+    const rows = dbQuery<Record<string, unknown>>('SELECT * FROM model_configs ORDER BY is_default DESC, created_at ASC')
     const configs: ModelConfig[] = []
 
     for (const row of rows) {
@@ -49,7 +48,7 @@ export class ModelConfigService {
       configs.push(config)
 
       // Instantiate provider
-      const apiKey = getApiKey(keyId(row.id))
+      const apiKey = getApiKey(keyId(row.id as string))
       if (apiKey) {
         const provider = createProvider(config, apiKey)
         if (provider) {
@@ -71,14 +70,13 @@ export class ModelConfigService {
 
   /** List all configs (without keys) */
   listAll(): ModelConfig[] {
-    const db = getDb()
-    const rows = db.prepare('SELECT * FROM model_configs ORDER BY is_default DESC, created_at ASC').all() as any[]
+    const rows = dbQuery<Record<string, unknown>>('SELECT * FROM model_configs ORDER BY is_default DESC, created_at ASC')
     return rows.map((r) => this.rowToConfig(r))
   }
 
   /** Get a single config by ID */
   get(id: string): ModelConfig | null {
-    const row = getDb().prepare('SELECT * FROM model_configs WHERE id = ?').get(id) as any
+    const row = dbQueryOne<Record<string, unknown>>('SELECT * FROM model_configs WHERE id = ?', id)
     return row ? this.rowToConfig(row) : null
   }
 
@@ -138,7 +136,7 @@ export class ModelConfigService {
   /** Update an existing config */
   update(id: string, patch: Partial<Pick<ModelConfig, 'name' | 'endpointUrl' | 'defaultModel' | 'models' | 'extraParams'>> & { apiKey?: string; interfaceType?: 'openai_compatible' | 'anthropic' }): ModelConfig | null {
     const db = getDb()
-    const row = db.prepare('SELECT * FROM model_configs WHERE id = ?').get(id) as any
+    const row = dbQueryOne<Record<string, unknown>>('SELECT * FROM model_configs WHERE id = ?', id)
     if (!row) return null
 
     const now = Date.now()
@@ -180,7 +178,7 @@ export class ModelConfigService {
   /** Delete a config */
   delete(id: string): { success: boolean; needNewDefault: boolean } {
     const db = getDb()
-    const row = db.prepare('SELECT is_default FROM model_configs WHERE id = ?').get(id) as any
+    const row = dbQueryOne<Record<string, unknown>>('SELECT is_default FROM model_configs WHERE id = ?', id)
     if (!row) return { success: false, needNewDefault: false }
 
     const wasDefault = row.is_default === 1
@@ -206,7 +204,7 @@ export class ModelConfigService {
   /** Set a config as default */
   setDefault(id: string): boolean {
     const db = getDb()
-    const row = db.prepare('SELECT id FROM model_configs WHERE id = ?').get(id) as any
+    const row = dbQueryOne<Record<string, unknown>>('SELECT id FROM model_configs WHERE id = ?', id)
     if (!row) return false
 
     const now = Date.now()

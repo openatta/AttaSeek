@@ -21,7 +21,7 @@ export default function ModelSettings() {
     ;(async () => {
       try {
         const res = await window.api.model.list()
-        if ((res as any).configs) setConfigs((res as any).configs)
+        if (res.configs) setConfigs(res.configs)
       } catch (err) { console.error('[ModelSettings] load configs failed:', err) }
     })()
   }, [])
@@ -30,7 +30,7 @@ export default function ModelSettings() {
     if (!confirm('Delete this model configuration?')) return
     try {
       const res = await window.api.model.delete(id)
-      if ((res as any).success) {
+      if (res.success) {
         setConfigs((prev) => prev.filter((c) => c.id !== id))
       }
     } catch (err) { console.error('[ModelSettings] delete failed:', err) }
@@ -50,10 +50,9 @@ export default function ModelSettings() {
     setTestingIds((prev) => new Set(prev).add(id))
     try {
       const res = await window.api.model.test(id)
-      const data = res as any
       setTestResults((prev) => ({
         ...prev,
-        [id]: { ok: data.success, ms: data.latencyMs, error: data.error, errorCode: data.errorCode },
+        [id]: { ok: res.success, ms: res.latencyMs, error: res.error, errorCode: (res as { errorCode?: string }).errorCode },
       }))
     } catch (err) { console.error('[ModelSettings] test failed:', err) }
       finally { setTestingIds((prev) => { const s = new Set(prev); s.delete(id); return s }) }

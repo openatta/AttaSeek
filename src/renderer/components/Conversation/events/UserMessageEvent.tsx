@@ -1,15 +1,13 @@
-import { useState } from 'react'
 import type { UserMessagePayload } from '../../../core/types/SessionEvent'
 import { Copy, Check, Edit } from 'lucide-react'
+import { useCopyToClipboard } from '../../../hooks/useCopyToClipboard'
 
 interface Props { payload: UserMessagePayload; onEdit?: (text: string) => void }
 
 export default function UserMessageEvent({ payload, onEdit }: Props) {
-  const [copied, setCopied] = useState(false)
+  const [copied, copy] = useCopyToClipboard()
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(payload.content).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) }).catch(() => {})
-  }
+  const handleCopy = () => copy(payload.content)
 
   return (
     <div className="py-2 flex justify-end">

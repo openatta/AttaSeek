@@ -28,7 +28,7 @@ import { hookManager } from '../hooks/HookManager'
 import { createInitialState, type AgentState, type TerminalReason, type RecoveryLevel } from './AgentState'
 import type { AgentTask } from '../../../shared/types/AgentTask'
 import type { AgentProfile } from '../profile/AgentProfile'
-import type { SessionEvent } from '../../../shared/types/SessionEvent'
+import type { SessionEvent, SessionEventPayloadMap } from '../../../shared/types/SessionEvent'
 import type { LLMContentBlock, LLMToolUseBlock, LLMChatResult } from '../llm/LLMProvider'
 
 const CONTENT_TRUNCATE_LIMIT = 4000
@@ -180,88 +180,11 @@ export class AgentOrchestrator {
           return 'completed'
         }
 
-        // Separate agent tool_use (CoordinatorMode) from regular tools
-        const agentCalls = toolUses.filter(t => t.name === 'agent')
-        const regularCalls = toolUses.filter(t => t.name !== 'agent')
-        const toolResults: LLMContentBlock[] = []
+        const toolResult = yield* this.runToolExecution(state, task, profile, toolUses, signal)
+        if (toolResult === 'denied' || toolResult === 'aborted') return toolResult
 
-        // Handle agent calls via CoordinatorMode
-        for (const agentCall of agentCalls) {
-          yield this.makeEvent(task, 'ToolCallStarted', {
-            toolCallId: agentCall.id, toolId: 'agent', toolName: 'agent',
-            input: agentCall.input, riskLevel: 'read',
-          })
-          try {
-            const { coordinatorMode } = await import('../coordinator/CoordinatorMode')
-            const input = (agentCall.input || {}) as Record<string, unknown>
-            const subtasks = await coordinatorMode.decompose(task, profile)
-            const result = await coordinatorMode.execute(task, subtasks, new Map([[profile.id, profile]]))
-            toolResults.push({
-              type: 'tool_result' as const, tool_use_id: agentCall.id,
-              content: result.summary,
-            })
-            yield this.makeEvent(task, 'ToolCallFinished', {
-              toolCallId: agentCall.id, toolId: 'agent', toolName: 'agent',
-              output: result.summary, status: 'success', error: undefined, duration: 0,
-            })
-          } catch (err) {
-            yield this.makeEvent(task, 'ToolCallFinished', {
-              toolCallId: agentCall.id, toolId: 'agent', toolName: 'agent',
-              output: null, status: 'error', error: (err as Error).message, duration: 0,
-            })
-          }
-          state.toolUseCount++
-        }
-
-        // Handle regular tools via ToolOrchestrator
-        let orchestrated: Awaited<ReturnType<typeof orchestrateTools>> | null = null
-        if (regularCalls.length > 0) {
-        orchestrated = await orchestrateTools(
-          regularCalls, task.id, task.sessionId, task.projectId,
-          profile.execution.maxParallelTools,
-        )
-
-        for (const tr of orchestrated.results) {
-          if (signal.aborted) {
-            yield this.failEvent(task, 'Task cancelled by user')
-            return 'aborted'
-          }
-
-          yield this.makeEvent(task, 'ToolCallStarted', {
-            toolCallId: tr.toolCallId, toolId: tr.toolUse.name, toolName: tr.toolUse.name,
-            input: tr.toolUse.input, riskLevel: 'read',
-          })
-
-          yield this.makeEvent(task, 'ToolCallFinished', {
-            toolCallId: tr.toolCallId, toolId: tr.toolUse.name, toolName: tr.toolUse.name,
-            output: tr.output, status: tr.success ? 'success' : 'error',
-            error: tr.error?.message, duration: 0,
-          })
-
-          toolResults.push({
-            type: 'tool_result' as const,
-            tool_use_id: tr.toolUse.id,
-            content: (typeof tr.output === 'string'
-              ? (tr.output.length > CONTENT_TRUNCATE_LIMIT ? tr.output.slice(0, CONTENT_TRUNCATE_LIMIT) + `\n...[truncated ${tr.output.length - CONTENT_TRUNCATE_LIMIT} chars]` : tr.output)
-              : JSON.stringify(tr.output).slice(0, CONTENT_TRUNCATE_LIMIT)),
-          })
-          state.toolUseCount++
-        }
-
-        if (orchestrated && orchestrated.denied) {
-          return 'denied'
-        }
-        } // end if (regularCalls.length > 0)
-
-        // Append assistant + tool results to message history (with microcompact)
-        const assistantBlocks = result.content.filter(
-          (b) => b.type === 'text' || b.type === 'tool_use',
-        )
-        state.messages.push({ role: 'assistant', content: assistantBlocks as LLMContentBlock[] })
-        if (toolResults.length > 0) {
-          const compacted = microcompact(toolResults as { content: string }[])
-          state.messages.push({ role: 'user', content: compacted as LLMContentBlock[] })
-        }
+        // Append assistant + tool results to message history
+        this.appendTurnToHistory(state, result.content, toolResult)
 
         state.turnCount++
       }
@@ -279,6 +202,101 @@ export class AgentOrchestrator {
     this.abortController?.abort()
   }
 
+  // ── Private: tool execution ──
+
+  /** Execute tool_use blocks (agent + regular), yielding events. Returns 'aborted'|'denied'|tool result blocks. */
+  private async *runToolExecution(
+    state: AgentState,
+    task: AgentTask,
+    profile: AgentProfile,
+    toolUses: LLMToolUseBlock[],
+    signal: AbortSignal,
+  ): AsyncGenerator<SessionEvent, 'aborted' | 'denied' | LLMContentBlock[], void> {
+    const agentCalls = toolUses.filter(t => t.name === 'agent')
+    const regularCalls = toolUses.filter(t => t.name !== 'agent')
+    const toolResults: LLMContentBlock[] = []
+
+    // Handle agent calls via CoordinatorMode
+    for (const agentCall of agentCalls) {
+      yield this.makeEvent(task, 'ToolCallStarted', {
+        toolCallId: agentCall.id, toolId: 'agent', toolName: 'agent',
+        input: agentCall.input, riskLevel: 'read',
+      })
+      try {
+        const { coordinatorMode } = await import('../coordinator/CoordinatorMode')
+        const subtasks = await coordinatorMode.decompose(task, profile)
+        const result = await coordinatorMode.execute(task, subtasks, new Map([[profile.id, profile]]))
+        toolResults.push({
+          type: 'tool_result' as const, tool_use_id: agentCall.id,
+          content: result.summary,
+        })
+        yield this.makeEvent(task, 'ToolCallFinished', {
+          toolCallId: agentCall.id, toolId: 'agent', toolName: 'agent',
+          output: result.summary, status: 'success', error: undefined, duration: 0,
+        })
+      } catch (err) {
+        yield this.makeEvent(task, 'ToolCallFinished', {
+          toolCallId: agentCall.id, toolId: 'agent', toolName: 'agent',
+          output: null, status: 'error', error: (err as Error).message, duration: 0,
+        })
+      }
+      state.toolUseCount++
+    }
+
+    // Handle regular tools via ToolOrchestrator
+    if (regularCalls.length > 0) {
+      const orchestrated = await orchestrateTools(
+        regularCalls, task.id, task.sessionId, task.projectId,
+        profile.execution.maxParallelTools,
+      )
+
+      for (const tr of orchestrated.results) {
+        if (signal.aborted) {
+          yield this.failEvent(task, 'Task cancelled by user')
+          return 'aborted'
+        }
+
+        yield this.makeEvent(task, 'ToolCallStarted', {
+          toolCallId: tr.toolCallId, toolId: tr.toolUse.name, toolName: tr.toolUse.name,
+          input: tr.toolUse.input, riskLevel: 'read',
+        })
+
+        yield this.makeEvent(task, 'ToolCallFinished', {
+          toolCallId: tr.toolCallId, toolId: tr.toolUse.name, toolName: tr.toolUse.name,
+          output: tr.output, status: tr.success ? 'success' : 'error',
+          error: tr.error?.message, duration: 0,
+        })
+
+        toolResults.push({
+          type: 'tool_result' as const,
+          tool_use_id: tr.toolUse.id,
+          content: (typeof tr.output === 'string'
+            ? (tr.output.length > CONTENT_TRUNCATE_LIMIT ? tr.output.slice(0, CONTENT_TRUNCATE_LIMIT) + `\n...[truncated ${tr.output.length - CONTENT_TRUNCATE_LIMIT} chars]` : tr.output)
+            : JSON.stringify(tr.output).slice(0, CONTENT_TRUNCATE_LIMIT)),
+        })
+        state.toolUseCount++
+      }
+
+      if (orchestrated.denied) {
+        return 'denied'
+      }
+    }
+
+    return toolResults
+  }
+
+  /** Append assistant response + tool results to message history with micro-compaction. */
+  private appendTurnToHistory(state: AgentState, contentBlocks: LLMContentBlock[], toolResults: LLMContentBlock[]): void {
+    const assistantBlocks = contentBlocks.filter(
+      (b) => b.type === 'text' || b.type === 'tool_use',
+    )
+    state.messages.push({ role: 'assistant', content: assistantBlocks as LLMContentBlock[] })
+    if (toolResults.length > 0) {
+      const compacted = microcompact(toolResults as { content: string }[])
+      state.messages.push({ role: 'user', content: compacted as LLMContentBlock[] })
+    }
+  }
+
   // ── Private: finalize as generator ──
 
   private async *finalizeGenerator(state: AgentState): AsyncGenerator<SessionEvent, void, void> {
@@ -291,10 +309,10 @@ export class AgentOrchestrator {
       try {
         const lastMsg = agentEventBus.getHistory(task.sessionId)
           .filter(e => e.type === 'AgentMessage').at(-1)
-        if (lastMsg?.payload?.content) {
+        if (lastMsg?.payload && 'content' in lastMsg.payload) {
           artifactService.create({
             sessionId: task.sessionId, taskId: task.id, type: 'markdown',
-            title: task.goal.slice(0, 50), content: lastMsg.payload.content as string,
+            title: task.goal.slice(0, 50), content: (lastMsg.payload as { content: string }).content,
           })
         }
       } catch (err) { console.warn('[AgentOrchestrator] artifact creation failed:', err) }
@@ -305,7 +323,7 @@ export class AgentOrchestrator {
       memoryService.store({
         scope: 'project', scopeId: task.projectId || task.sessionId,
         type: 'task_state', content: `Completed: ${task.goal}`,
-        source: 'agent', layer: 'L2',
+        source: 'agent',
         sessionId: task.sessionId, taskId: task.id,
       })
     } catch (err) { console.warn('[AgentOrchestrator] memory store failed:', err) }
@@ -314,7 +332,7 @@ export class AgentOrchestrator {
     try {
       auditService.log({
         eventType: 'agent_task_completed', sessionId: task.sessionId,
-        taskId: task.id, userId: 'local',
+        taskId: task.id,
         metadata: { goal: task.goal, turns: state.turnCount, toolsUsed: state.toolUseCount },
       })
     } catch (err) { console.warn('[AgentOrchestrator] audit log failed:', err) }
@@ -379,14 +397,12 @@ export class AgentOrchestrator {
 
   // ── Event helpers ──
 
-  private makeEvent(task: AgentTask, type: SessionEvent['type'], payload: SessionEvent['payload']): SessionEvent {
+  private makeEvent<K extends keyof SessionEventPayloadMap>(
+    task: AgentTask, type: K, payload: SessionEventPayloadMap[K],
+  ): SessionEvent {
     return {
-      id: newId(),
-      sessionId: task.sessionId,
-      taskId: task.id,
-      type,
-      payload,
-      createdAt: Date.now(),
+      id: newId(), sessionId: task.sessionId, taskId: task.id,
+      type, payload, createdAt: Date.now(),
     } as SessionEvent
   }
 

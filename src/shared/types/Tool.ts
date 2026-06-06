@@ -5,7 +5,7 @@
 
 export type ToolRiskLevel = 'read' | 'write' | 'risky'
 
-export type ToolCategory = 'filesystem' | 'network' | 'database' | 'code' | 'communication' | 'automation' | 'plugin'
+export type ToolCategory = 'filesystem' | 'network' | 'database' | 'code' | 'communication' | 'automation' | 'plugin' | 'research' | 'lsp' | 'notification'
 
 export interface ToolManifest {
   id: string

@@ -6,9 +6,13 @@
 
 import type { ToolManifest } from '../../../../shared/types/Tool'
 
+const outputSchema = { type: 'object' as const, properties: {} }
+const permissionPolicy = { default: 'allow' as const, requirePreview: false, allowAlways: false }
+
 export const RESEARCH_TOOLS: ToolManifest[] = [
   {
     id: 'web_search',
+    pluginId: 'builtin',
     name: 'Web Search',
     description: 'Search the web for information on a topic. Returns titles, URLs, and snippets.',
     riskLevel: 'read',
@@ -20,10 +24,13 @@ export const RESEARCH_TOOLS: ToolManifest[] = [
       },
       required: ['query'],
     },
+    outputSchema,
     category: 'research',
+    permissionPolicy,
   },
   {
     id: 'web_fetch',
+    pluginId: 'builtin',
     name: 'Web Fetch',
     description: 'Fetch and extract text content from a URL for analysis.',
     riskLevel: 'read',
@@ -34,10 +41,13 @@ export const RESEARCH_TOOLS: ToolManifest[] = [
       },
       required: ['url'],
     },
+    outputSchema,
     category: 'research',
+    permissionPolicy,
   },
   {
     id: 'source_verify',
+    pluginId: 'builtin',
     name: 'Source Verify',
     description: 'Cross-reference a claim against multiple sources to verify accuracy.',
     riskLevel: 'read',
@@ -49,10 +59,13 @@ export const RESEARCH_TOOLS: ToolManifest[] = [
       },
       required: ['claim'],
     },
+    outputSchema,
     category: 'research',
+    permissionPolicy,
   },
   {
     id: 'cite_source',
+    pluginId: 'builtin',
     name: 'Cite Source',
     description: 'Format a source citation in the specified style (APA, MLA, Chicago, etc.).',
     riskLevel: 'read',
@@ -67,6 +80,8 @@ export const RESEARCH_TOOLS: ToolManifest[] = [
       },
       required: ['title'],
     },
+    outputSchema,
     category: 'research',
+    permissionPolicy,
   },
 ]

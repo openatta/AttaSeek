@@ -16,15 +16,16 @@ export default function ChatsList() {
 
   const refresh = useCallback(() => {
     if (!window.api?.session) return
-    window.api.session.list().then((res: any) => { if (res.sessions) setSessions(res.sessions) }).catch(() => {})
+    window.api.session.list().then((res) => { if (res.sessions) setSessions(res.sessions) }).catch((e) => { console.warn('[ChatsList] refresh sessions failed:', e instanceof Error ? e.message : String(e)) })
   }, [])
 
   useEffect(() => {
     refresh()
-    const interval = setInterval(refresh, 30000)
-    const handler = (_e: any, _data: any) => refresh()
-    if (window.api?.session) window.api.session.onUpdate?.(handler)
-    return () => clearInterval(interval)
+    // Subscribe to real-time title updates from main process
+    const unsub = window.api?.session?.onUpdate?.((data) => {
+      setSessions((prev) => prev.map((s) => s.id === data.id ? { ...s, title: data.title } : s))
+    })
+    return () => { unsub?.() }
   }, [refresh])
 
   // Close context menu on click outside
@@ -39,11 +40,11 @@ export default function ChatsList() {
 
   const doRename = (id: string) => {
     if (!renameValue.trim()) return
-    window.api?.session?.update(id, { title: renameValue.trim() }).then(() => { setRenaming(null); refresh() }).catch(() => {})
+    window.api?.session?.update(id, { title: renameValue.trim() }).then(() => { setRenaming(null); refresh() }).catch((e) => { console.warn('[ChatsList] rename failed:', e instanceof Error ? e.message : String(e)) })
   }
 
   const doDelete = (id: string) => {
-    window.api?.session?.delete(id).then(() => refresh()).catch(() => {})
+    window.api?.session?.delete(id).then(() => refresh()).catch((e) => { console.warn('[ChatsList] delete failed:', e instanceof Error ? e.message : String(e)) })
   }
 
   return (

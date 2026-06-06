@@ -3,7 +3,7 @@
  * Policies are persisted in SQLite; pending requests are in-memory (request lifetime only).
  */
 
-import { getDb } from '../store/db'
+import { getDb, dbQuery, dbQueryOne } from '../store/db'
 import { newId } from '../store/id'
 import type { PermissionContext, PermissionDecision, PermissionPolicy, PermissionRequest as PermReq } from '../../shared/types/Permission'
 import type { ToolRiskLevel } from '../../shared/types/Tool'
@@ -24,7 +24,7 @@ export class PermissionService {
     if (row) {
       const id = row.id
       db.prepare('UPDATE permission_policies SET decision=?, updated_at=? WHERE id=?').run(policy.decision, now, id)
-      const r = db.prepare('SELECT * FROM permission_policies WHERE id=?').get(id) as any
+      const r = dbQueryOne<Record<string, unknown>>('SELECT * FROM permission_policies WHERE id=?', id)
       return this.rowToPolicy(r)
     }
 
@@ -35,7 +35,7 @@ export class PermissionService {
   }
 
   listPolicies(): PermissionPolicy[] {
-    return (getDb().prepare('SELECT * FROM permission_policies ORDER BY updated_at DESC LIMIT 200').all() as any[])
+    return dbQuery<Record<string, unknown>>('SELECT * FROM permission_policies ORDER BY updated_at DESC LIMIT 200')
       .map((r: any) => this.rowToPolicy(r))
   }
 
@@ -43,7 +43,7 @@ export class PermissionService {
     const db = getDb()
     const now = Date.now()
     db.prepare('UPDATE permission_policies SET decision=?, updated_at=? WHERE id=?').run(decision, now, id)
-    const r = db.prepare('SELECT * FROM permission_policies WHERE id=?').get(id) as any
+    const r = dbQueryOne<Record<string, unknown>>('SELECT * FROM permission_policies WHERE id=?', id)
     return r ? this.rowToPolicy(r) : null
   }
 

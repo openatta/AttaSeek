@@ -55,7 +55,7 @@ export async function extractMemories(
       const entry = memoryService.store({
         scope: 'project', scopeId: projectId || sessionId,
         type: 'task_state', content: taskContent,
-        source: 'auto_extract', layer: 'L2',
+        source: 'auto_extract',
         sessionId, taskId: '',
       })
       newEntries.push(entry)
@@ -111,7 +111,7 @@ export async function extractMemories(
         const entry = memoryService.store({
           scope: 'project', scopeId: projectId || sessionId,
           type: 'user_preference', content: fact,
-          source: 'auto_extract', layer: 'L2',
+          source: 'auto_extract',
           sessionId, taskId: '',
         })
         newEntries.push(entry)

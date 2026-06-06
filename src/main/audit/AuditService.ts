@@ -2,7 +2,7 @@
  * AuditService — SQLite-backed immutable audit log.
  */
 
-import { getDb } from '../store/db'
+import { getDb, dbQuery, dbQueryOne } from '../store/db'
 import { newId } from '../store/id'
 import type { AuditLog, AuditEventType, AuditFilters } from '../../shared/types/Audit'
 import type { ToolRiskLevel } from '../../shared/types/Tool'
@@ -34,12 +34,12 @@ export class AuditService {
     sql += ' ORDER BY created_at DESC'
     if (filters.limit) { sql += ' LIMIT ?'; p.push(filters.limit) }
     if (filters.offset) { sql += ' OFFSET ?'; p.push(filters.offset) }
-    return (db.prepare(sql).all(...p) as any[]).map((r: any) => this.rowToLog(r)).filter((l): l is AuditLog => !!l)
+    return dbQuery<Record<string, unknown>>(sql, ...p).map((r) => this.rowToLog(r)).filter((l): l is AuditLog => !!l)
   }
 
-  get(id: string): AuditLog | undefined { return this.rowToLog(getDb().prepare('SELECT * FROM audit_logs WHERE id=?').get(id) as any) }
+  get(id: string): AuditLog | undefined { return this.rowToLog(dbQueryOne<Record<string, unknown>>('SELECT * FROM audit_logs WHERE id=?', id)) }
 
-  get count(): number { return (getDb().prepare('SELECT COUNT(*) as c FROM audit_logs').get() as any)?.c || 0 }
+  get count(): number { return dbQueryOne<{ c: number }>('SELECT COUNT(*) as c FROM audit_logs')?.c || 0 }
 
   private rowToLog(r: any): AuditLog | undefined {
     if (!r) return undefined

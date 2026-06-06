@@ -13,8 +13,21 @@ import { languageAtom } from './atoms/settingsAtom'
 
 
 /**
+ * Persist a session title to the database. Extracted from sessionAtom to keep the
+ * atom pure — all side effects live in the hook layer.
+ */
+function persistSessionTitle(sessionId: string, title: string): void {
+  if (typeof window !== 'undefined' && window.api?.session?.update) {
+    window.api.session.update(sessionId, { title }).catch((err: unknown) => {
+      console.warn('[session] failed to update title:', err)
+    })
+  }
+}
+
+/**
  * Global agent event subscription hook.
  * Sets up the IPC→atom bridge once; useRef guards against double-subscription.
+ * Side effects (DB persistence) are isolated here — atoms stay pure.
  */
 function useAgentEventBridge() {
   const setSessionEvents = useSetAtom(sessionEventsAtom)
@@ -40,6 +53,7 @@ function useAgentEventBridge() {
         handleAgentEvent(event, {
           setSessionEvents, setAgentTasks, setStreamingBuffers, messageBufRef,
           setSessionTitle: handleSessionTitle,
+          persistTitle: persistSessionTitle,
         })
       })
     }
