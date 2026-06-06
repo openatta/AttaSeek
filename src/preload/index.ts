@@ -130,6 +130,8 @@ const api = {
       ipcRenderer.invoke('model:test', { id }),
     usage: (configId?: string, periodDays?: number): Promise<{ stats: Record<string, unknown> }> =>
       ipcRenderer.invoke('model:usage', { configId, periodDays }),
+    getKeyInfo: (id: string): Promise<{ info: { exists: boolean; preview: string } | null }> =>
+      ipcRenderer.invoke('model:get-key-info', { id }),
     hasConfig: (): Promise<{ configured: boolean }> =>
       ipcRenderer.invoke('model:has-config'),
   },

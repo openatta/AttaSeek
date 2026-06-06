@@ -5,6 +5,27 @@
  */
 import type { ModelTemplate } from '../ModelTemplateService'
 
+/** Flattened template for UI — one entry per interface */
+export interface UITemplate {
+  id: string; name: string
+  iface: 'anthropic' | 'openai_compatible'
+  endpoint: string; models: string; dmodel: string
+  altEndpoint?: string; altModels?: string; altDmodel?: string
+}
+
+export function toUITemplates(templates: ModelTemplate[]): UITemplate[] {
+  return templates.map(t => ({
+    id: t.id, name: t.name,
+    iface: t.interfaces[0].type,
+    endpoint: t.interfaces[0].endpointUrl,
+    models: t.interfaces[0].defaultModels.join(', '),
+    dmodel: t.interfaces[0].defaultModel,
+    altEndpoint: t.interfaces[1]?.endpointUrl,
+    altModels: t.interfaces[1]?.defaultModels.join(', '),
+    altDmodel: t.interfaces[1]?.defaultModel,
+  }))
+}
+
 export const BUILTIN_TEMPLATES: ModelTemplate[] = [
   // ── Anthropic — only native Messages API ──
   {
@@ -60,15 +81,15 @@ export const BUILTIN_TEMPLATES: ModelTemplate[] = [
     envKey:'COHERE_API_KEY', apiKeyUrl:'https://dashboard.cohere.com/api-keys', apiKeyHeader:'Authorization', apiKeyPrefix:'Bearer ',
     recommendedParams:{temperature:0.7,maxTokens:4096}, iconType:'cohere', region:'international', version:1,
   },
-  // ── DeepSeek — BOTH APIs (official) ──
+  // ── DeepSeek — BOTH APIs (official). V4 models as of 2026-04. Opus→Pro, Sonnet/Haiku→Flash ──
   {
     id:'deepseek', name:'DeepSeek', provider:'DeepSeek (深度求索)',
     interfaces: [
-      { type:'openai_compatible', endpointUrl:'https://api.deepseek.com/v1', defaultModels:['deepseek-chat','deepseek-reasoner'], defaultModel:'deepseek-chat' },
-      { type:'anthropic', endpointUrl:'https://api.deepseek.com/anthropic', defaultModels:['deepseek-chat','deepseek-reasoner'], defaultModel:'deepseek-chat' },
+      { type:'openai_compatible', endpointUrl:'https://api.deepseek.com/v1', defaultModels:['deepseek-v4-pro','deepseek-v4-flash'], defaultModel:'deepseek-v4-pro' },
+      { type:'anthropic', endpointUrl:'https://api.deepseek.com/anthropic', defaultModels:['deepseek-v4-pro','deepseek-v4-flash'], defaultModel:'deepseek-v4-pro' },
     ],
     envKey:'DEEPSEEK_API_KEY', apiKeyUrl:'https://platform.deepseek.com/api_keys', apiKeyHeader:'Authorization', apiKeyPrefix:'Bearer ',
-    recommendedParams:{temperature:0.7,maxTokens:4096}, iconType:'deepseek', region:'china', version:2,  // v2: added anthropic interface
+    recommendedParams:{temperature:0.7,maxTokens:4096}, iconType:'deepseek', region:'china', version:3,  // v3: v4 models replace deprecated chat/reasoner
   },
   // ── Qwen — BOTH APIs (official via Alibaba Model Studio / 百炼) ──
   {
@@ -80,15 +101,15 @@ export const BUILTIN_TEMPLATES: ModelTemplate[] = [
     envKey:'DASHSCOPE_API_KEY', apiKeyUrl:'https://bailian.console.aliyun.com/', apiKeyHeader:'Authorization', apiKeyPrefix:'Bearer ',
     recommendedParams:{temperature:0.7,maxTokens:4096}, iconType:'qwen', region:'china', version:2,
   },
-  // ── Kimi — BOTH APIs (official) ──
+  // ── Kimi — BOTH APIs (official). K2 series, 256K context ──
   {
     id:'kimi', name:'Kimi (月之暗面)', provider:'Moonshot AI',
     interfaces: [
-      { type:'openai_compatible', endpointUrl:'https://api.moonshot.cn/v1', defaultModels:['moonshot-v1-8k','moonshot-v1-32k','moonshot-v1-128k','kimi-k2-0905-preview'], defaultModel:'kimi-k2-0905-preview' },
+      { type:'openai_compatible', endpointUrl:'https://api.moonshot.cn/v1', defaultModels:['kimi-k2-0905-preview','kimi-k2-turbo-preview'], defaultModel:'kimi-k2-0905-preview' },
       { type:'anthropic', endpointUrl:'https://api.moonshot.cn/anthropic', defaultModels:['kimi-k2-0905-preview','kimi-k2-turbo-preview'], defaultModel:'kimi-k2-0905-preview' },
     ],
     envKey:'MOONSHOT_API_KEY', apiKeyUrl:'https://platform.moonshot.cn/console/api-keys', apiKeyHeader:'Authorization', apiKeyPrefix:'Bearer ',
-    recommendedParams:{temperature:0.7,maxTokens:4096}, iconType:'kimi', region:'china', version:2,
+    recommendedParams:{temperature:0.7,maxTokens:4096}, iconType:'kimi', region:'china', version:3,  // v3: unified to K2 series, removed legacy v1 models
   },
   // ── GLM — BOTH APIs (official) ──
   {

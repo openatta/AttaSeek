@@ -7,11 +7,9 @@ import {
   editTextAtom,
 } from '../../atoms/composerAtom'
 import {
-  permissionModeAtom,
-  reasoningEffortAtom,
-  type PermissionMode,
-  type ReasoningEffort
-} from '../../atoms/composerSettingsAtom'
+  permissionModeAtom, reasoningEffortAtom,
+  type PermissionMode, type ReasoningEffort,
+} from '../../atoms/settingsAtom'
 import { currentSessionIdAtom, agentTasksAtom, sessionEventsAtom, selectedProjectIdAtom } from '../../atoms/sessionAtom'
 import { activeActivityAtom } from '../../atoms/activityAtom'
 import { activeModelIdAtom, activeModelNameAtom, hasModelConfiguredAtom } from '../../atoms/modelConfigAtom'

@@ -11,7 +11,7 @@ import { registerPermissionHandlers } from './ipc/permission'
 import { registerAuditHandlers } from './ipc/audit'
 import { registerMemoryHandlers } from './ipc/memory'
 import { registerPluginHandlers } from './ipc/plugin'
-import { registerSessionHandlers } from './ipc/session'
+import { registerSessionHandlers, setSessionWindow } from './ipc/session'
 import { registerModelHandlers } from './ipc/model'
 import { registerAppHandlers } from './ipc/app'
 import { boot } from './boot'
@@ -72,7 +72,7 @@ function createWindow(): BrowserWindow {
   mainWindow = win
 
   // Wire agent event bus to this window
-  setAgentWindow(win)
+  setAgentWindow(win); setSessionWindow(win)
 
   win.on('ready-to-show', () => {
     win.show()

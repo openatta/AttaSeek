@@ -62,30 +62,25 @@ export default function ModelSettings() {
   if (editingId) {
     const config = configs.find((c) => c.id === editingId)
     return (
-      <ModelConfigForm
-        config={config}
-        onSaved={(updated) => {
-          setConfigs((prev) =>
-            updated
-              ? prev.map((c) => (c.id === updated.id ? updated : c))
-              : prev,
-          )
-          setEditingId(null)
-        }}
+      <div>
+        <button onClick={() => setEditingId(null)} className="inline-flex items-center gap-1 text-xs text-[var(--app-text-dim)] hover:text-[var(--app-text)] mb-4">← Back</button>
+        <ModelConfigForm config={config}
+          onSaved={(updated) => {
+            setConfigs((prev) => updated ? prev.map(c => c.id === updated.id ? updated : c) : prev)
+            setEditingId(null)
+          }}
         onCancel={() => setEditingId(null)}
       />
+      </div>
     )
   }
 
   if (showAdd) {
     return (
-      <ModelConfigForm
-        onSaved={(created) => {
-          if (created) setConfigs((prev) => [...prev, created])
-          setShowAdd(false)
-        }}
-        onCancel={() => setShowAdd(false)}
-      />
+      <div>
+        <button onClick={() => setShowAdd(false)} className="inline-flex items-center gap-1 text-xs text-[var(--app-text-dim)] hover:text-[var(--app-text)] mb-4">← Back</button>
+        <ModelConfigForm onSaved={(c) => { if (c) setConfigs(prev => [...prev, c]); setShowAdd(false) }} onCancel={() => setShowAdd(false)} />
+      </div>
     )
   }
 
@@ -93,13 +88,6 @@ export default function ModelSettings() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-[var(--app-text)]">Model Configure</h3>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="inline-flex items-center gap-1 px-3 py-1 rounded-md text-xs bg-[var(--app-accent)] text-white hover:opacity-90"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          Add Model
-        </button>
       </div>
 
       {configs.length === 0 ? (
@@ -130,6 +118,9 @@ export default function ModelSettings() {
               onTest={() => handleTest(config.id)}
             />
           ))}
+          <button onClick={() => setShowAdd(true)} className="w-full mt-2 inline-flex items-center justify-center gap-1 px-3 py-2 rounded-md text-xs border border-dashed border-[var(--app-border)] text-[var(--app-text-dim)] hover:text-[var(--app-text)] hover:border-[var(--app-text-dim)] transition-colors">
+            <Plus className="w-3.5 h-3.5" /> Add Model
+          </button>
         </div>
       )}
     </div>

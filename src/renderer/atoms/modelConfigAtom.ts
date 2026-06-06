@@ -21,5 +21,4 @@ export const activeModelNameAtom = atom<string | null>(null)
 /** Derived: whether any model is configured */
 export const hasModelConfiguredAtom = atom((get) => get(modelConfigsAtom).length > 0)
 
-/** Usage stats for the currently viewed config */
-export const modelUsageAtom = atom<UsageStats | null>(null)
+// modelUsageAtom removed — unused, tracked via main process ModelUsageTracker

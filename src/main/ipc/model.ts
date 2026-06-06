@@ -6,6 +6,7 @@
 import { ipcMain } from 'electron'
 import { modelConfigService } from '../model/ModelConfigService'
 import { modelUsageTracker } from '../model/ModelUsageTracker'
+import { getApiKeyPreview } from '../store/secrets'
 import { ipcWrap, ipcWrapAsync, validateStringField } from '../store/util'
 
 export function registerModelHandlers(): void {
@@ -52,6 +53,9 @@ export function registerModelHandlers(): void {
 
   ipcMain.handle('model:usage', async (_e, p: { configId?: string; periodDays?: number }) =>
     ipcWrap(() => ({ stats: modelUsageTracker.summary(p.configId, p.periodDays) })))
+
+  ipcMain.handle('model:get-key-info', async (_e, p: { id: string }) =>
+    ipcWrap(() => ({ info: getApiKeyPreview(`model:${p.id}`) })))
 
   ipcMain.handle('model:has-config', async () =>
     ipcWrap(() => ({ configured: modelConfigService.hasConfigured() })))

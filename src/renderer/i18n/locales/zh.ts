@@ -1,0 +1,75 @@
+export const zh: Record<string, string> = {
+  'activity.home': '首页', 'activity.chat': '新会话', 'activity.search': '搜索',
+  'activity.automation': '自动化', 'activity.plugins': '插件', 'activity.projects': '项目',
+  'activity.settings': '设置',
+
+  'settings.general': '常规', 'settings.appearance': '外观', 'settings.model': '模型',
+  'settings.agent': '智能体', 'settings.permissions': '权限', 'settings.memory': '记忆',
+  'settings.keyboard': '快捷键', 'settings.notifications': '通知',
+
+  'general.title': '常规', 'general.language': '语言',
+  'general.permissionMode': '权限模式', 'general.permissionMode.desc': '默认的工具审批行为',
+  'general.permission.default': '默认审查', 'general.permission.auto': '自动批准', 'general.permission.trust': '完全信任',
+  'general.sandbox': '沙箱模式', 'general.sandbox.desc': '智能体文件系统访问级别',
+  'general.sandbox.readonly': '只读', 'general.sandbox.workspace': '工作区写入', 'general.sandbox.full': '完全访问',
+
+  'appearance.title': '外观', 'appearance.theme': '主题',
+  'appearance.theme.dark': '深色', 'appearance.theme.light': '浅色', 'appearance.theme.system': '跟随系统',
+  'appearance.uifont': '界面字体', 'appearance.codefont': '代码字体',
+
+  'model.title': '模型配置', 'model.add': '添加模型', 'model.edit': '编辑',
+  'model.test': '测试', 'model.save': '保存', 'model.cancel': '取消', 'model.back': '返回',
+  'model.name': '名称', 'model.name.placeholder': '例如：我的 DeepSeek',
+  'model.apiKey': 'API 密钥', 'model.apiKey.placeholder': 'sk-...',
+  'model.apiKey.saved': '（已保存 — 输入新密钥以更改）',
+  'model.apiKey.none': '（未保存密钥）',
+  'model.template': '提供商模板', 'model.template.custom': '自定义配置...',
+  'model.advanced': '高级', 'model.interface': '接口类型',
+  'model.endpoint': '接口地址', 'model.defaultModel': '默认模型',
+  'model.models': '模型列表（逗号分隔）', 'model.extraParams': '额外参数 (JSON)',
+  'model.connected': '连接成功',
+  'model.connectionFailed': '连接失败',
+  'model.noModel': '未配置模型',
+  'model.noModelDesc': '添加 LLM 提供商以开始使用智能体。',
+  'model.deleteConfirm': '确定删除此模型配置？',
+  'model.setDefault': '设为默认',
+  'model.isDefault': '默认',
+  'model.copyId': '复制 ID',
+
+  'agent.title': '智能体行为', 'agent.personality': '个性',
+  'agent.personality.pragmatic': '务实', 'agent.personality.verbose': '详细', 'agent.personality.concise': '简洁',
+  'agent.thinking': '思考模式', 'agent.thinking.desc': '扩展思考（Opus 系列）',
+  'agent.thinking.auto': '自动', 'agent.thinking.enabled': '开启', 'agent.thinking.disabled': '关闭',
+  'agent.fastMode': '快速模式', 'agent.fastMode.off': '关闭', 'agent.fastMode.on': '开启', 'agent.fastMode.auto': '自动',
+  'agent.outputStyle': '输出风格',
+  'agent.outputStyle.default': '默认', 'agent.outputStyle.concise': '简洁', 'agent.outputStyle.detailed': '详细',
+  'agent.editorMode': '编辑器模式', 'agent.editorMode.normal': '标准', 'agent.editorMode.vim': 'Vim',
+  'agent.instructions': '自定义指令',
+  'agent.instructions.placeholder': '始终使用严格 TypeScript 模式...',
+
+  'permissions.title': '权限', 'permissions.desc': '配置允许、需要确认或拒绝的工具。',
+  'permissions.noData': '未定义自定义策略。',
+
+  'memory.title': '记忆', 'memory.noData': '无记忆条目。',
+
+  'keyboard.title': '快捷键', 'keyboard.desc': 'VS Code 格式。编辑文件：',
+  'keyboard.send': '发送消息', 'keyboard.clear': '清空输入',
+
+  'notifications.title': '通知',
+  'notifications.taskComplete': '任务完成', 'notifications.taskComplete.desc': '智能体完成任务时通知',
+  'notifications.inputNeeded': '需要输入', 'notifications.inputNeeded.desc': '智能体需要您的输入时通知',
+  'notifications.sound': '声音', 'notifications.sound.desc': '通知时播放声音',
+
+  'composer.placeholder': '输入任何内容…',
+  'composer.send': '发送', 'composer.stop': '停止生成',
+  'composer.defaultReview': '默认审查', 'composer.autoReview': '自动审查', 'composer.fullTrust': '完全信任',
+  'composer.reasoning.low': '低', 'composer.reasoning.medium': '中', 'composer.reasoning.high': '高',
+
+  'chats.search': '搜索会话...', 'chats.noConversations': '暂无会话',
+  'chats.rename': '重命名', 'chats.delete': '删除', 'chats.newSession': '新会话',
+  'chats.copyId': '复制 ID',
+
+  'common.save': '保存', 'common.cancel': '取消', 'common.delete': '删除',
+  'common.edit': '编辑', 'common.close': '关闭', 'common.loading': '加载中...',
+  'common.error': '错误', 'common.copied': '已复制！',
+}

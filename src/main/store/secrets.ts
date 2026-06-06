@@ -56,6 +56,14 @@ export function getApiKey(provider: string): string | null {
   }
 }
 
+/** Get masked preview of API key (last 4 chars) for display */
+export function getApiKeyPreview(provider: string): { exists: boolean; preview: string } | null {
+  const key = getApiKey(provider)
+  if (!key) return { exists: false, preview: '' }
+  const preview = key.length > 4 ? `...${key.slice(-4)}` : '****'
+  return { exists: true, preview }
+}
+
 /** Delete an API key for a provider */
 export function deleteApiKey(provider: string): boolean {
   const db = getDb()
