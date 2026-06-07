@@ -6,7 +6,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import type { ModelConfig, CreateModelConfig } from '../../../atoms/modelConfigAtom'
 import { type UITemplate, BUILTIN_TEMPLATES, toUITemplates } from '../../../../shared/types/model'
-import { Wifi, Loader2, Eye, EyeOff, X, Check, AlertTriangle, ChevronDown } from 'lucide-react'
+import { Plug, Unplug, Loader2, Eye, EyeOff, X, Check, AlertTriangle, ChevronDown } from 'lucide-react'
 
 interface Props { config?: ModelConfig; onSaved: (config: ModelConfig | null) => void; onCancel: () => void }
 interface TestStepInfo { step: number; label: string; status: string; detail: string; latencyMs?: number }
@@ -130,11 +130,34 @@ export default function ModelConfigForm({ config, onSaved, onCancel }: Props) {
   }
 
   const handleTest = async () => {
-    if (!config?.id) return; setTesting(true); setShowTestModal(true)
+    let testId = config?.id
+    // Add mode: save first to get an ID, then test
+    if (!testId) {
+      setSaving(true)
+      try {
+        const mList = modelsStr.split(',').map(m => m.trim()).filter(Boolean)
+        const interfaces: Record<string, string> = {}
+        if (tmplData.openai) interfaces.openai_compatible = tmplData.openai.endpoint
+        if (tmplData.anthropic) interfaces.anthropic = tmplData.anthropic.endpoint
+        interfaces[interfaceType] = endpointUrl.trim()
+        const slots = { opusModel: opusModel.trim() || undefined, sonnetModel: sonnetModel.trim() || undefined, haikuModel: haikuModel.trim() || undefined, effortLevel: effortLevel.trim() || undefined, maxTokens: maxTokens ? parseInt(maxTokens, 10) : undefined, compactThreshold: compactThreshold ? parseInt(compactThreshold, 10) : undefined }
+        const res = await window.api.model.create({
+          name: name.trim(), interfaceType, endpointUrl: endpointUrl.trim(), apiKey: apiKey.trim(),
+          models: mList, defaultModel: defaultModel.trim(), extraParams: extraParams.trim() ? JSON.parse(extraParams) : undefined,
+          interfaces, ...slots,
+        })
+        if (!res.config) { setTestResult({ ok: false, error: 'Save failed — cannot test' }); return }
+        testId = res.config.id
+        // Update parent with the new config so it shows in the list
+        onSaved(res.config)
+      } catch (e: any) { setTestResult({ ok: false, error: e.message || 'Save failed' }); return }
+      finally { setSaving(false) }
+    }
+    setTesting(true); setShowTestModal(true)
     try {
-      const res = await window.api.model.test(config.id)
+      const res = await window.api.model.test(testId)
       setTestResult({ ok: res.success, ms: res.latencyMs, error: res.error, steps: res.steps })
-    } catch (err: any) { setTestResult({ ok: false, error: err.message }) }
+    } catch (err: any) { setTestResult({ ok: false, error: err.message, steps: [{ step: 1, label: 'IPC Error', status: 'fail', detail: err.message || 'Unknown error' }] }) }
     finally { setTesting(false) }
   }
 
@@ -170,7 +193,17 @@ export default function ModelConfigForm({ config, onSaved, onCancel }: Props) {
           <div className="space-y-3 pl-2 border-l-2 border-[var(--app-border)]">
             {/* Interface type switch */}
             <div><label className="text-[11px] text-[var(--app-text-secondary)] block mb-1">Interface</label>
-              <div className="flex gap-2">{(['anthropic','openai_compatible'] as const).map(t => <button key={t} onClick={() => handleInterfaceChange(t)} className={`px-3 py-1 text-xs rounded-md border ${interfaceType===t?'border-[var(--app-accent)] bg-[var(--app-accent)]/10 text-[var(--app-accent)]':'border-[var(--app-border)] text-[var(--app-text-dim)]'}`}>{t==='anthropic'?'Anthropic':'OpenAI Compatible'}</button>)}</div>
+              <div className="flex gap-2">{(['anthropic','openai_compatible'] as const).map(t => {
+                const available = !!tmplData[t]
+                const selected = interfaceType === t
+                return <button key={t} disabled={!available} onClick={() => handleInterfaceChange(t)}
+                  className={`px-3 py-1 text-xs rounded-md border transition-colors
+                    ${!available ? 'border-[var(--app-border)] text-[var(--app-text-dim)]/30 cursor-not-allowed'
+                    : selected ? 'border-[var(--app-accent)] bg-[var(--app-accent)]/10 text-[var(--app-accent)]'
+                    : 'border-[var(--app-border)] text-[var(--app-text-dim)] hover:text-[var(--app-text)]'}`}>
+                  {t==='anthropic'?'Anthropic':'OpenAI Compatible'}
+                </button>
+              })}</div>
             </div>
 
             {/* Interface-specific fields */}
@@ -202,7 +235,7 @@ export default function ModelConfigForm({ config, onSaved, onCancel }: Props) {
       </div>
 
       <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-[var(--app-border)]">
-        {isEdit && <button onClick={handleTest} disabled={testing} className="inline-flex items-center gap-1 px-3 py-1 rounded-md text-xs border border-[var(--app-border)] text-[var(--app-text-secondary)] hover:text-[var(--app-text)] disabled:opacity-40">{testing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wifi className="w-3 h-3" />} Test</button>}
+        <button onClick={handleTest} disabled={testing || saving} className="inline-flex items-center gap-1 px-3 py-1 rounded-md text-xs border border-[var(--app-border)] text-[var(--app-text-secondary)] hover:text-[var(--app-text)] disabled:opacity-40">{testing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plug className="w-3 h-3" />} Test</button>
         <button onClick={onCancel} className="px-3 py-1 rounded-md text-xs border border-[var(--app-border)] text-[var(--app-text-secondary)] hover:text-[var(--app-text)]">Cancel</button>
         <button onClick={handleSave} disabled={saving} className="px-4 py-1 rounded-md text-xs bg-[var(--app-accent)] text-white hover:opacity-90 disabled:opacity-40">{saving ? 'Saving...' : isEdit ? 'Save' : 'Add Model'}</button>
       </div>
@@ -213,7 +246,7 @@ export default function ModelConfigForm({ config, onSaved, onCancel }: Props) {
           <div className="bg-[var(--app-bg-elevated)] border border-[var(--app-border)] rounded-lg shadow-xl p-4 max-w-sm w-full mx-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3"><h3 className="text-xs font-semibold text-[var(--app-text)]">Connection Test</h3><button onClick={() => setShowTestModal(false)}><X className="w-4 h-4 text-[var(--app-text-dim)]" /></button></div>
             {testing && <div className="flex items-center gap-2 text-xs text-[var(--app-text-dim)]"><Loader2 className="w-3 h-3 animate-spin" />Testing...</div>}
-            <div className="space-y-1.5 mt-2">{testResult.steps.map(s => <div key={s.step} className="flex items-center gap-2 text-[11px]"><span>{s.status==='ok'?<Check className="w-3 h-3 text-green-400"/>:s.status==='error'?<AlertTriangle className="w-3 h-3 text-red-400"/>:<Loader2 className="w-3 h-3 animate-spin"/>}</span><span className="text-[var(--app-text)]">{s.label}</span><span className="text-[var(--app-text-dim)] ml-auto">{s.latencyMs ? `${s.latencyMs}ms` : ''}</span></div>)}</div>
+            <div className="space-y-1.5 mt-2">{testResult.steps.map(s => <div key={s.step} className="text-[11px]"><div className="flex items-center gap-2"><span>{s.status==='ok'?<Check className="w-3 h-3 text-green-400"/>:s.status==='fail'?<AlertTriangle className="w-3 h-3 text-red-400"/>:<Loader2 className="w-3 h-3 animate-spin"/>}</span><span className={s.status==='fail'?'text-red-400':'text-[var(--app-text)]'}>{s.label}</span><span className="text-[var(--app-text-dim)] ml-auto">{s.latencyMs ? `${s.latencyMs}ms` : ''}</span></div>{s.status==='fail' && s.detail && <div className="ml-5 mt-0.5 text-[var(--app-text-dim)] break-all">{s.detail}</div>}</div>)}</div>
           </div>
         </div>
       )}
