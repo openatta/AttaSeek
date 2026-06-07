@@ -5,6 +5,7 @@
 
 import { getDb, dbQuery, dbQueryOne } from '../store/db'
 import { newId } from '../store/id'
+import { fromRow } from '../store/util'
 import type { PermissionContext, PermissionDecision, PermissionPolicy, PermissionRequest as PermReq } from '../../shared/types/Permission'
 import type { ToolRiskLevel } from '../../shared/types/Tool'
 
@@ -25,7 +26,7 @@ export class PermissionService {
       const id = row.id
       db.prepare('UPDATE permission_policies SET decision=?, updated_at=? WHERE id=?').run(policy.decision, now, id)
       const r = dbQueryOne<Record<string, unknown>>('SELECT * FROM permission_policies WHERE id=?', id)
-      return this.rowToPolicy(r)
+      return fromRow<PermissionPolicy>(r)!
     }
 
     const id = `perm_${newId().slice(0, 8)}`
@@ -36,7 +37,7 @@ export class PermissionService {
 
   listPolicies(): PermissionPolicy[] {
     return dbQuery<Record<string, unknown>>('SELECT * FROM permission_policies ORDER BY updated_at DESC LIMIT 200')
-      .map((r: any) => this.rowToPolicy(r))
+      .map((r) => fromRow<PermissionPolicy>(r))
   }
 
   updatePolicy(id: string, decision: PermissionDecision): PermissionPolicy | null {
@@ -44,7 +45,7 @@ export class PermissionService {
     const now = Date.now()
     db.prepare('UPDATE permission_policies SET decision=?, updated_at=? WHERE id=?').run(decision, now, id)
     const r = dbQueryOne<Record<string, unknown>>('SELECT * FROM permission_policies WHERE id=?', id)
-    return r ? this.rowToPolicy(r) : null
+    return r ? fromRow<PermissionPolicy>(r) : null
   }
 
   deletePolicy(id: string): boolean {
@@ -94,9 +95,6 @@ export class PermissionService {
     return req
   }
 
-  private rowToPolicy(r: any): PermissionPolicy {
-    return { id: r.id, scope: r.scope, scopeId: r.scope_id, toolId: r.tool_id, pluginId: r.plugin_id, riskLevel: r.risk_level, decision: r.decision as PermissionDecision, createdAt: r.created_at, updatedAt: r.updated_at }
-  }
 }
 
 export const permissionService = new PermissionService()

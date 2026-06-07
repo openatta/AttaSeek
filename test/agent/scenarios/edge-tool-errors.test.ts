@@ -2,7 +2,7 @@
  * Tool error handling depth tests.
  */
 import { describe, it, expect } from 'vitest'
-import { MockLLMProvider } from '../mock/MockLLMProvider'
+import { MockModelProvider } from '../mock/MockModelProvider'
 import { textDelta, toolUseStart, toolUseDelta, blockStop, messageStop, endTurnResult } from '../mock/helpers'
 import { AgentOrchestrator } from '../../../src/main/agent/orchestrator/AgentOrchestrator'
 import { validateProfile } from '../../../src/main/agent/profile/AgentProfile'
@@ -19,7 +19,7 @@ const mkTask = (g: string) => ({ id: 't', sessionId: 's', goal: g, status: 'idle
 
 describe('Tool Error — unknown tool', () => {
   it('should return error for non-existent tool but continue', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     mock.pushTurn([
       toolUseStart('tu_1', 'non_existent_tool'), toolUseDelta('tu_1', '{}'),
       blockStop(1), messageStop(),
@@ -40,7 +40,7 @@ describe('Tool Error — unknown tool', () => {
 
 describe('Tool Error — execution exception', () => {
   it('should catch tool execution errors and continue with error status', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     // Tool with invalid input that causes execution error
     mock.pushTurn([
       toolUseStart('tu_1', 'read_file'), toolUseDelta('tu_1', '{"path":""}'),
@@ -61,7 +61,7 @@ describe('Tool Error — execution exception', () => {
 
 describe('Tool Error — recoverable vs non-recoverable', () => {
   it('should distinguish recoverable from non-recoverable errors in payload', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     mock.pushTurn([
       toolUseStart('tu_1', 'read_file'), toolUseDelta('tu_1', '{"path":"/dev/null"}'),
       blockStop(1), messageStop(),

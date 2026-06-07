@@ -4,6 +4,7 @@
 
 import { getDb, dbQuery, dbQueryOne } from '../store/db'
 import { newId } from '../store/id'
+import { fromRow } from '../store/util'
 import type { AuditLog, AuditEventType, AuditFilters } from '../../shared/types/Audit'
 import type { ToolRiskLevel } from '../../shared/types/Tool'
 
@@ -34,17 +35,12 @@ export class AuditService {
     sql += ' ORDER BY created_at DESC'
     if (filters.limit) { sql += ' LIMIT ?'; p.push(filters.limit) }
     if (filters.offset) { sql += ' OFFSET ?'; p.push(filters.offset) }
-    return dbQuery<Record<string, unknown>>(sql, ...p).map((r) => this.rowToLog(r)).filter((l): l is AuditLog => !!l)
+    return dbQuery<Record<string, unknown>>(sql, ...p).map((r) => fromRow<AuditLog>(r, ['artifactRefs', 'metadata'])).filter((l): l is AuditLog => !!l)
   }
 
-  get(id: string): AuditLog | undefined { return this.rowToLog(dbQueryOne<Record<string, unknown>>('SELECT * FROM audit_logs WHERE id=?', id)) }
+  get(id: string): AuditLog | undefined { return fromRow<AuditLog>(dbQueryOne<Record<string, unknown>>('SELECT * FROM audit_logs WHERE id=?', id), ['artifactRefs', 'metadata']) }
 
   get count(): number { return dbQueryOne<{ c: number }>('SELECT COUNT(*) as c FROM audit_logs')?.c || 0 }
-
-  private rowToLog(r: any): AuditLog | undefined {
-    if (!r) return undefined
-    return { id: r.id, taskId: r.task_id, sessionId: r.session_id, projectId: r.project_id, eventType: r.event_type as AuditEventType, toolId: r.tool_id, riskLevel: r.risk_level, inputSummary: r.input_summary, outputSummary: r.output_summary, permissionResult: r.permission_result, artifactRefs: r.artifact_refs ? JSON.parse(r.artifact_refs) : undefined, metadata: r.metadata ? JSON.parse(r.metadata) : undefined, createdAt: r.created_at }
-  }
 }
 
 export const auditService = new AuditService()

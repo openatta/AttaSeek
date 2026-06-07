@@ -5,7 +5,7 @@
  * Pipeline: confidence → coaching → brief → memory (priority order).
  */
 
-import type { LLMMessage } from '../llm/LLMProvider'
+import type { LLMMessage } from '../llm/ModelProvider'
 import type { AgentTask } from '../../../shared/types/AgentTask'
 
 export interface HookContext {

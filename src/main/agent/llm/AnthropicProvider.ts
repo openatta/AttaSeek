@@ -1,5 +1,5 @@
 /**
- * AnthropicProvider — LLMProvider implementation for Anthropic Claude API.
+ * AnthropicProvider — ModelProvider implementation for Anthropic Claude API.
  *
  * Uses @anthropic-ai/sdk Messages API with streaming support.
  * Tool-use blocks are translated between our internal types and Anthropic's format.
@@ -7,41 +7,65 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import type { Tool as AnthropicTool } from '@anthropic-ai/sdk/resources/messages/messages.mjs'
-import type { LLMMessage, LLMContentBlock, LLMChatParams, LLMChatResult } from './LLMProvider'
-import { LLMError } from './LLMProvider'
-import type { LLMProvider, LLMChunkCallback } from './LLMProvider'
+import type { LLMMessage, LLMContentBlock, LLMChatParams, LLMChatResult } from './ModelProvider'
+import { LLMError } from './ModelProvider'
+import type { ModelProvider, LLMChunkCallback } from './ModelProvider'
+import { withRetry, retryOnOverload, retryOnRateLimit, retryOnServerError } from './withRetry'
+import { getModelFamily } from './ModelAliases'
 
 const DEFAULT_MAX_TOKENS = 4096
 
-export class AnthropicProvider implements LLMProvider {
+/** Minimal typed interface for Anthropic SDK client methods used by this provider. */
+interface AnthropicClientExt {
+  messages: {
+    create(params: Record<string, unknown>, options?: { signal?: AbortSignal }): Promise<{
+      content: Anthropic.ContentBlock[]
+      stop_reason: string
+      usage: { input_tokens: number; output_tokens: number }
+    }>
+    stream(params: Record<string, unknown>, options?: { signal?: AbortSignal }): {
+      on(event: 'text', handler: (text: string) => void): void
+      on(event: 'contentBlockStart', handler: (block: { type: string; index: number; content_block: { type: string; id: string; name: string } }) => void): void
+      on(event: 'contentBlockDelta', handler: (delta: { type: string; index: number; delta: { type: string; partial_json?: string } }) => void): void
+      on(event: 'contentBlockStop', handler: (block: { index: number }) => void): void
+      finalMessage(): Promise<{
+        content: Anthropic.ContentBlock[]
+        stop_reason: string
+        usage: { input_tokens: number; output_tokens: number }
+      }>
+    }
+  }
+}
+
+export class AnthropicProvider implements ModelProvider {
   readonly name = 'anthropic'
   readonly models: string[]
 
-  private client: Anthropic | null = null
+  private client: AnthropicClientExt | null = null
   private apiKey: string
+  private baseUrl: string
 
-  constructor(apiKey: string, models?: string[]) {
+  constructor(apiKey: string, models: string[], baseUrl?: string) {
     this.apiKey = apiKey
-    this.models = models || [
-      'claude-sonnet-4-6',
-      'claude-haiku-4-5-20251001',
-      'claude-opus-4-8',
-    ]
+    this.baseUrl = baseUrl || 'https://api.anthropic.com'
+    this.models = models
     if (apiKey) {
-      this.client = new Anthropic({ apiKey })
+      this.client = new Anthropic({ apiKey, baseURL: this.baseUrl }) as unknown as AnthropicClientExt
     }
   }
 
   /** Update the API key and recreate the client */
-  setApiKey(key: string): void {
+  setApiKey(key: string, baseUrl?: string): void {
     this.apiKey = key
-    this.client = new Anthropic({ apiKey: key })
+    if (baseUrl) this.baseUrl = baseUrl
+    this.client = new Anthropic({ apiKey: key, baseURL: this.baseUrl }) as unknown as AnthropicClientExt
   }
 
   private buildAnthropicParams(params: LLMChatParams): Record<string, unknown> {
     const cfg = params.config || {}
+    const model = params.model || this.models[0]
     const body: Record<string, unknown> = {
-      model: this.models[0],
+      model,
       max_tokens: cfg.maxTokens || DEFAULT_MAX_TOKENS,
       system: params.systemPrompt,
       messages: params.messages.map(toAnthropicMessage),
@@ -52,10 +76,15 @@ export class AnthropicProvider implements LLMProvider {
     if (cfg.topK !== undefined) body.top_k = cfg.topK
     if (cfg.stopSequences) body.stop_sequences = cfg.stopSequences
     if (cfg.toolChoice) {
-      body.tool_choice = cfg.toolChoice === 'none' ? undefined
-        : { type: cfg.toolChoice as string }
+      if (typeof cfg.toolChoice === 'object') {
+        body.tool_choice = { type: 'tool', name: cfg.toolChoice.name }
+      } else if (cfg.toolChoice !== 'none') {
+        body.tool_choice = { type: cfg.toolChoice as string }
+      }
+      // 'none' → omit tool_choice entirely (Anthropic default)
     }
-    if (cfg.thinkingBudget && typeof body.model === 'string' && body.model.includes('opus')) {
+    // Enable thinking budget for opus-family models (case-insensitive via getModelFamily)
+    if (cfg.thinkingBudget && getModelFamily(model as string) === 'opus') {
       body.thinking = { type: 'enabled' as const, budget_tokens: cfg.thinkingBudget }
     }
     return body
@@ -63,15 +92,25 @@ export class AnthropicProvider implements LLMProvider {
 
   async chat(params: LLMChatParams): Promise<LLMChatResult> {
     if (!this.client) throw new LLMError('auth', 'Anthropic client not initialized (no API key)')
+    const body = this.buildAnthropicParams(params)
     try {
-      const body = this.buildAnthropicParams(params)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await (this.client as any).messages.create(body, { signal: params.signal })
-      return {
-        content: response.content.map(toLLMBlock).filter((b: LLMContentBlock | null): b is LLMContentBlock => b !== null),
-        stopReason: response.stop_reason as LLMChatResult['stopReason'],
-        usage: { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens },
-      }
+      return await withRetry(
+        async () => {
+          const response = await this.client!.messages.create(body, { signal: params.signal })
+          return {
+            content: response.content.map(toLLMBlock).filter((b: LLMContentBlock | null): b is LLMContentBlock => b !== null),
+            stopReason: response.stop_reason as LLMChatResult['stopReason'],
+            usage: { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens },
+          }
+        },
+        {
+          maxRetries: 3,
+          shouldRetry: (err) => retryOnOverload(err) || retryOnRateLimit(err) || retryOnServerError(err),
+          onRetry: (err, attempt, delay) => {
+            console.warn(`[AnthropicProvider] retry ${attempt}/3 after ${delay}ms:`, (err as Error)?.message)
+          },
+        },
+      )
     } catch (err: unknown) {
       throw this.toLLMError(err)
     }
@@ -79,48 +118,61 @@ export class AnthropicProvider implements LLMProvider {
 
   async chatStream(params: LLMChatParams, onChunk: LLMChunkCallback): Promise<LLMChatResult> {
     if (!this.client) throw new LLMError('auth', 'Anthropic client not initialized (no API key)')
+    const body = this.buildAnthropicParams(params)
     try {
-      const body = this.buildAnthropicParams(params)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const stream = (this.client as any).messages.stream(body, { signal: params.signal })
+      return await withRetry(
+        async () => {
+          const stream = this.client!.messages.stream(body, { signal: params.signal })
 
-      // Wire up Anthropic stream events to our LLMChunk format
-      stream.on('text', (text: string) => {
-        onChunk({ type: 'text_delta', text })
-      })
+          // Map content block indices to IDs for correlating tool_use_delta events
+          const blockIdByIndex = new Map<number, string>()
 
-      stream.on('contentBlockStart', (block: { type: string; content_block: { type: string; id: string; name: string } }) => {
-        if (block.type === 'tool_use' && 'name' in block.content_block) {
-          onChunk({
-            type: 'tool_use_start',
-            id: block.content_block.id,
-            name: block.content_block.name,
+          // Wire up Anthropic stream events to our LLMChunk format
+          stream.on('text', (text: string) => {
+            onChunk({ type: 'text_delta', text })
           })
-        }
-      })
 
-      stream.on('contentBlockDelta', (delta: { type: string; delta: string }) => {
-        if (delta.type === 'input_json_delta') {
-          onChunk({
-            type: 'tool_use_delta',
-            id: '',
-            input_json: delta.delta,
+          stream.on('contentBlockStart', (block: { type: string; index: number; content_block: { type: string; id: string; name: string } }) => {
+            if (block.type === 'tool_use' && 'name' in block.content_block) {
+              blockIdByIndex.set(block.index, block.content_block.id)
+              onChunk({
+                type: 'tool_use_start',
+                id: block.content_block.id,
+                name: block.content_block.name,
+              })
+            }
           })
-        }
-      })
 
-      stream.on('contentBlockStop', (block: { index: number }) => {
-        onChunk({ type: 'content_block_stop', index: block.index })
-      })
+          stream.on('contentBlockDelta', (delta: { type: string; index: number; delta: { type: string; partial_json?: string } }) => {
+            if (delta.type === 'input_json_delta') {
+              onChunk({
+                type: 'tool_use_delta',
+                id: blockIdByIndex.get(delta.index) || '',
+                input_json: delta.delta.partial_json || '',
+              })
+            }
+          })
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (stream as any).finalMessage()
-      onChunk({ type: 'message_stop' })
-      return {
-        content: result.content.map(toLLMBlock).filter((b: LLMContentBlock | null): b is LLMContentBlock => b !== null),
-        stopReason: result.stop_reason as LLMChatResult['stopReason'],
-        usage: { inputTokens: result.usage.input_tokens, outputTokens: result.usage.output_tokens },
-      }
+          stream.on('contentBlockStop', (block: { index: number }) => {
+            onChunk({ type: 'content_block_stop', index: block.index })
+          })
+
+          const result = await stream.finalMessage()
+          onChunk({ type: 'message_stop' })
+          return {
+            content: result.content.map(toLLMBlock).filter((b: LLMContentBlock | null): b is LLMContentBlock => b !== null),
+            stopReason: result.stop_reason as LLMChatResult['stopReason'],
+            usage: { inputTokens: result.usage.input_tokens, outputTokens: result.usage.output_tokens },
+          }
+        },
+        {
+          maxRetries: 2,
+          shouldRetry: (err) => retryOnOverload(err) || retryOnRateLimit(err) || retryOnServerError(err),
+          onRetry: (err, attempt, delay) => {
+            console.warn(`[AnthropicProvider] stream retry ${attempt}/2 after ${delay}ms:`, (err as Error)?.message)
+          },
+        },
+      )
     } catch (err: unknown) {
       throw this.toLLMError(err)
     }
@@ -144,15 +196,17 @@ export class AnthropicProvider implements LLMProvider {
 
   async validateKey(apiKey: string): Promise<boolean> {
     try {
-      const temp = new Anthropic({ apiKey })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (temp as any).messages.create({
-        model: 'claude-haiku-4-5-20251001',
+      const temp = new Anthropic({ apiKey, baseURL: this.baseUrl })
+      // Use the provider's own model for validation (works for third-party Anthropic-protocol backends)
+      const validationModel = this.models[0]
+      await temp.messages.create({
+        model: validationModel,
         max_tokens: 1,
         messages: [{ role: 'user', content: 'ping' }],
       })
       return true
-    } catch {
+    } catch (e) {
+      console.warn('[Anthropic] validateKey failed:', e instanceof Error ? e.message : String(e))
       return false
     }
   }
@@ -197,6 +251,7 @@ function toLLMBlock(block: Anthropic.ContentBlock): LLMContentBlock | null {
     case 'tool_use':
       return { type: 'tool_use', id: block.id, name: block.name, input: block.input }
     default:
+      console.warn(`[AnthropicProvider] unknown content block type: "${block.type}" — this block will be dropped. Update toLLMBlock to support new Anthropic content types.`)
       return null
   }
 }

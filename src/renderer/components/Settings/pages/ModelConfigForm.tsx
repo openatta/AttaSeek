@@ -33,16 +33,10 @@ export default function ModelConfigForm({ config, onSaved, onCancel }: Props) {
   const [testResult, setTestResult] = useState<{ ok: boolean; ms?: number; error?: string; steps?: TestStepInfo[] } | null>(null)
   const [testing, setTesting] = useState(false)
   const [showTestModal, setShowTestModal] = useState(false)
-  const [keyPreview, setKeyPreview] = useState('')
-
-  // Load key preview on edit
-  useEffect(() => {
-    if (isEdit && config?.id) {
-      window.api?.model?.getKeyInfo(config.id).then((r) => {
-        if (r?.info?.exists) setKeyPreview(r.info.preview)
-      }).catch((e) => { console.warn('[ModelConfigForm] key preview load failed:', e instanceof Error ? e.message : String(e)) })
-    }
-  }, [isEdit, config?.id])
+  // Key status: when editing, a key is already stored in the provider config.
+  // Since keys are stored as plaintext (family-shared ~/.atta/settings.json),
+  // we indicate presence without revealing the key value.
+  const hasExistingKey = isEdit && !!config
 
   // Unified fields for BOTH interface types
   const [endpointUrl, setEndpointUrl] = useState(config?.endpointUrl || '')
@@ -50,6 +44,14 @@ export default function ModelConfigForm({ config, onSaved, onCancel }: Props) {
   const [modelsStr, setModelsStr] = useState(config?.models?.join(', ') || '')
   const [extraParams, setExtraParams] = useState(config?.extraParams ? JSON.stringify(config.extraParams, null, 2) : '')
   const jsonError = useMemo(() => { if (!extraParams.trim()) return null; try { JSON.parse(extraParams); return null } catch { return 'Invalid JSON' } }, [extraParams])
+
+  // Slot model fields (three-tier + options)
+  const [opusModel, setOpusModel] = useState(config?.opusModel || '')
+  const [sonnetModel, setSonnetModel] = useState(config?.sonnetModel || '')
+  const [haikuModel, setHaikuModel] = useState(config?.haikuModel || '')
+  const [effortLevel, setEffortLevel] = useState(config?.effortLevel || '')
+  const [maxTokens, setMaxTokens] = useState(config?.maxTokens ? String(config.maxTokens) : '')
+  const [compactThreshold, setCompactThreshold] = useState(config?.compactThreshold ? String(config.compactThreshold) : '')
 
   /** Apply template: store BOTH configs, set current interface */
   const applyTemplate = (tid: string) => {
@@ -82,19 +84,33 @@ export default function ModelConfigForm({ config, onSaved, onCancel }: Props) {
       const mList = modelsStr.split(',').map(m => m.trim()).filter(Boolean)
       let extra: Record<string, unknown> | undefined
       if (extraParams.trim()) extra = JSON.parse(extraParams)
+      // Build interfaces map: preserve both interfaces for dual-protocol providers
+      const interfaces: Record<string, string> = {}
+      if (tmplData.openai) interfaces.openai_compatible = tmplData.openai.endpoint
+      if (tmplData.anthropic) interfaces.anthropic = tmplData.anthropic.endpoint
+      interfaces[interfaceType] = endpointUrl.trim()  // current selection always included
+      const slotFields = {
+        opusModel: opusModel.trim() || undefined,
+        sonnetModel: sonnetModel.trim() || undefined,
+        haikuModel: haikuModel.trim() || undefined,
+        effortLevel: effortLevel.trim() || undefined,
+        maxTokens: maxTokens ? parseInt(maxTokens, 10) : undefined,
+        compactThreshold: compactThreshold ? parseInt(compactThreshold, 10) : undefined,
+      }
       const payload: CreateModelConfig = {
         name: name.trim(), interfaceType,
         endpointUrl: endpointUrl.trim(), apiKey: apiKey.trim(),
         models: mList, defaultModel: defaultModel.trim(), extraParams: extra,
+        interfaces,
+        ...slotFields,
       }
       if (isEdit) {
-        const up: Record<string, unknown> = { name: payload.name, interfaceType: payload.interfaceType, endpointUrl: payload.endpointUrl, models: payload.models, defaultModel: payload.defaultModel, extraParams: payload.extraParams }
-        if (apiKey.trim()) up.apiKey = apiKey.trim()
-        const res = await window.api.model.update(config.id, up)
-        onSaved((res as any).config || null)
+        const patch = { name: payload.name, interfaceType: payload.interfaceType, endpointUrl: payload.endpointUrl, models: payload.models, defaultModel: payload.defaultModel, extraParams: payload.extraParams, interfaces: payload.interfaces, ...slotFields, ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}) }
+        const res = await window.api.model.update(config.id, patch)
+        onSaved(res.config || null)
       } else {
-        const res = await window.api.model.create(payload as any)
-        onSaved((res as any).config || null)
+        const res = await window.api.model.create(payload)
+        onSaved(res.config || null)
       }
     } catch (err) { console.error('[ModelConfigForm] save failed:', err) }
     finally { setSaving(false) }
@@ -104,7 +120,7 @@ export default function ModelConfigForm({ config, onSaved, onCancel }: Props) {
     if (!config?.id) return; setTesting(true); setShowTestModal(true)
     try {
       const res = await window.api.model.test(config.id)
-      const r = res as any; setTestResult({ ok: r.success, ms: r.latencyMs, error: r.error, steps: r.steps })
+      setTestResult({ ok: res.success, ms: res.latencyMs, error: res.error, steps: res.steps })
     } catch (err: any) { setTestResult({ ok: false, error: err.message }) }
     finally { setTesting(false) }
   }
@@ -127,9 +143,9 @@ export default function ModelConfigForm({ config, onSaved, onCancel }: Props) {
         <div><label className="text-[11px] text-[var(--app-text-secondary)] block mb-1">Name</label><input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. My DeepSeek" className="w-full px-3 py-1.5 text-xs rounded-md border border-[var(--app-border)] bg-[var(--app-bg-inset)] text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]" /></div>
 
         {/* Common: API Key */}
-        <div><label className="text-[11px] text-[var(--app-text-secondary)] block mb-1">API Key {isEdit && keyPreview && <span className="text-[var(--app-text-dim)]">(saved: {keyPreview})</span>}{isEdit && !keyPreview && <span className="text-[var(--app-text-dim)]">(no key saved)</span>}</label>
+        <div><label className="text-[11px] text-[var(--app-text-secondary)] block mb-1">API Key {hasExistingKey && <span className="text-[var(--app-text-dim)]">(key saved — leave blank to keep)</span>}{!isEdit && <span className="text-[var(--app-text-dim)]">(required)</span>}</label>
           <div className="relative">
-            <input value={apiKey} onChange={e => setApiKey(e.target.value)} type={showKey ? 'text' : 'password'} placeholder={isEdit && keyPreview ? keyPreview : 'sk-...'} className="w-full px-3 py-1.5 pr-8 text-xs rounded-md border border-[var(--app-border)] bg-[var(--app-bg-inset)] text-[var(--app-text)] outline-none focus:border-[var(--app-accent)] font-mono" />
+            <input value={apiKey} onChange={e => setApiKey(e.target.value)} type={showKey ? 'text' : 'password'} placeholder={isEdit ? 'Leave blank to keep current key' : 'sk-...'} className="w-full px-3 py-1.5 pr-8 text-xs rounded-md border border-[var(--app-border)] bg-[var(--app-bg-inset)] text-[var(--app-text)] outline-none focus:border-[var(--app-accent)] font-mono" />
             <button onClick={() => setShowKey(!showKey)} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-[var(--app-bg-hover)]">{showKey ? <EyeOff className="w-3.5 h-3.5 text-[var(--app-text-dim)]" /> : <Eye className="w-3.5 h-3.5 text-[var(--app-text-dim)]" />}</button>
           </div>
         </div>
@@ -149,6 +165,23 @@ export default function ModelConfigForm({ config, onSaved, onCancel }: Props) {
             <div><label className="text-[11px] text-[var(--app-text-secondary)] block mb-1">Default Model</label><input value={defaultModel} onChange={e => setDefaultModel(e.target.value)} placeholder="claude-sonnet-4-6" className="w-full px-3 py-1.5 text-xs rounded-md border border-[var(--app-border)] bg-[var(--app-bg-inset)] text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]" /></div>
             <div><label className="text-[11px] text-[var(--app-text-secondary)] block mb-1">Available Models (comma-separated)</label><input value={modelsStr} onChange={e => setModelsStr(e.target.value)} placeholder="claude-sonnet-4-6, claude-haiku-4-5-20251001, claude-opus-4-8" className="w-full px-3 py-1.5 text-xs rounded-md border border-[var(--app-border)] bg-[var(--app-bg-inset)] text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]" /></div>
             <div><label className="text-[11px] text-[var(--app-text-secondary)] block mb-1">Extra Params (JSON, optional)</label><textarea value={extraParams} onChange={e => setExtraParams(e.target.value)} rows={2} className="w-full px-3 py-1.5 text-xs rounded-md border border-[var(--app-border)] bg-[var(--app-bg-inset)] text-[var(--app-text)] outline-none focus:border-[var(--app-accent)] font-mono resize-none" />{jsonError && <p className="text-[11px] text-red-400 mt-1">{jsonError}</p>}</div>
+
+            {/* Three-tier model slots */}
+            <div className="pt-2 border-t border-[var(--app-border)]">
+              <p className="text-[11px] text-[var(--app-text-dim)] mb-2">Model slots — leave empty to fall back to Default Model</p>
+              <div className="grid grid-cols-3 gap-2">
+                <div><label className="text-[11px] text-[var(--app-text-secondary)] block mb-1">Opus (deep think)</label><input value={opusModel} onChange={e => setOpusModel(e.target.value)} placeholder={defaultModel || 'opus model'} className="w-full px-2 py-1 text-[11px] rounded-md border border-[var(--app-border)] bg-[var(--app-bg-inset)] text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]" /></div>
+                <div><label className="text-[11px] text-[var(--app-text-secondary)] block mb-1">Sonnet (primary)</label><input value={sonnetModel} onChange={e => setSonnetModel(e.target.value)} placeholder={defaultModel || 'sonnet model'} className="w-full px-2 py-1 text-[11px] rounded-md border border-[var(--app-border)] bg-[var(--app-bg-inset)] text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]" /></div>
+                <div><label className="text-[11px] text-[var(--app-text-secondary)] block mb-1">Haiku (fast)</label><input value={haikuModel} onChange={e => setHaikuModel(e.target.value)} placeholder={defaultModel || 'haiku model'} className="w-full px-2 py-1 text-[11px] rounded-md border border-[var(--app-border)] bg-[var(--app-bg-inset)] text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]" /></div>
+              </div>
+            </div>
+
+            {/* Options */}
+            <div className="grid grid-cols-3 gap-2">
+              <div><label className="text-[11px] text-[var(--app-text-secondary)] block mb-1">Effort Level</label><input value={effortLevel} onChange={e => setEffortLevel(e.target.value)} placeholder="e.g. max" className="w-full px-2 py-1 text-[11px] rounded-md border border-[var(--app-border)] bg-[var(--app-bg-inset)] text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]" /></div>
+              <div><label className="text-[11px] text-[var(--app-text-secondary)] block mb-1">Max Tokens</label><input value={maxTokens} onChange={e => setMaxTokens(e.target.value.replace(/\D/g, ''))} placeholder="4096" className="w-full px-2 py-1 text-[11px] rounded-md border border-[var(--app-border)] bg-[var(--app-bg-inset)] text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]" /></div>
+              <div><label className="text-[11px] text-[var(--app-text-secondary)] block mb-1">Compact Threshold</label><input value={compactThreshold} onChange={e => setCompactThreshold(e.target.value.replace(/\D/g, ''))} placeholder="auto" className="w-full px-2 py-1 text-[11px] rounded-md border border-[var(--app-border)] bg-[var(--app-bg-inset)] text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]" /></div>
+            </div>
           </div>
         )}
 

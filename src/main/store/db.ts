@@ -33,7 +33,7 @@ export function getDb(): Database.Database {
 function runMigrations(db: Database.Database): void {
   // Add columns that may be missing from older schema versions
   const migrations: { table: string; col: string; def: string }[] = [
-    { table: 'model_configs', col: 'models', def: "TEXT NOT NULL DEFAULT '[]'" },
+    // model_configs table removed — LLM config now in ~/.atta/settings.json
   ]
   for (const m of migrations) {
     const cols = dbQuery<{ name: string }>(`PRAGMA table_info(${m.table})`)

@@ -52,7 +52,7 @@ export default function ModelSettings() {
       const res = await window.api.model.test(id)
       setTestResults((prev) => ({
         ...prev,
-        [id]: { ok: res.success, ms: res.latencyMs, error: res.error, errorCode: (res as { errorCode?: string }).errorCode },
+        [id]: { ok: res.success, ms: res.latencyMs, error: res.error, errorCode: res.errorCode },
       }))
     } catch (err) { console.error('[ModelSettings] test failed:', err) }
       finally { setTestingIds((prev) => { const s = new Set(prev); s.delete(id); return s }) }

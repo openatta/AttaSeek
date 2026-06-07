@@ -31,10 +31,10 @@ export function setAgentWindow(win: BrowserWindow): void {
 
 export function registerAgentHandlers(): void {
   ipcMain.handle('agent:create-task', async (_event, params: { sessionId: string; goal: string; projectId?: string; modelConfigId?: string; modelName?: string }) => {
-    validateRequiredString(params, 'sessionId', 'sessionId')
-    validateRequiredString(params, 'goal', 'goal')
     const t0 = performance.now()
     try {
+      validateRequiredString(params, 'sessionId', 'sessionId')
+      validateRequiredString(params, 'goal', 'goal')
       const task = agentRuntime.createTask(params)
       perf.mark('ipc', 'agent:create-task', performance.now() - t0)
       return { success: true, task }

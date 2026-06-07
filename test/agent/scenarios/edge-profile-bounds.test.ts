@@ -1,12 +1,12 @@
 /**
- * Profile boundary value + LLMProvider error mapping depth tests.
+ * Profile boundary value + ModelProvider error mapping depth tests.
  */
 import { describe, it, expect } from 'vitest'
-import { MockLLMProvider } from '../mock/MockLLMProvider'
+import { MockModelProvider } from '../mock/MockModelProvider'
 import { textDelta, messageStop, endTurnResult, toolUseStart, toolUseDelta, blockStop } from '../mock/helpers'
 import { AgentOrchestrator } from '../../../src/main/agent/orchestrator/AgentOrchestrator'
 import { validateProfile } from '../../../src/main/agent/profile/AgentProfile'
-import { LLMError } from '../../../src/main/agent/llm/LLMProvider'
+import { LLMError } from '../../../src/main/agent/llm/ModelProvider'
 
 const baseProfile = { id: 'test', name: 'Test', systemPrompt: { id: 't', sections: [{ name: 'i', priority: 10, content: 'Test.' }] } }
 const emptyCtx = { messages: [] as any[], tools: [] as any[] }
@@ -15,7 +15,7 @@ const mkTask = (g: string) => ({ id: 't', sessionId: 's', goal: g, status: 'idle
 describe('Profile — maxTurns boundary', () => {
   it('maxTurns=0 should stop before LLM call', async () => {
     const p = validateProfile({ ...baseProfile, execution: { maxTurns: 0 } })
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     mock.pushTurn([textDelta('hi'), messageStop()], endTurnResult('hi'))
 
     const orchestrator = new AgentOrchestrator()
@@ -30,7 +30,7 @@ describe('Profile — maxTurns boundary', () => {
 
   it('maxTurns=1 should allow exactly one LLM turn', async () => {
     const p = validateProfile({ ...baseProfile, execution: { maxTurns: 1 } })
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     mock.pushTurn([textDelta('one'), messageStop()], endTurnResult('one'))
 
     const orchestrator = new AgentOrchestrator()
@@ -49,7 +49,7 @@ describe('Profile — maxTurns boundary', () => {
 
   it('should work with artifact generation enabled', async () => {
     const p = validateProfile({ ...baseProfile, output: { generateArtifact: true } })
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     mock.pushTurn([textDelta('Artifact test'), messageStop()], endTurnResult('Artifact test'))
 
     const orchestrator = new AgentOrchestrator()
@@ -71,7 +71,7 @@ describe('LLMError — full classification', () => {
     ['timeout', 'timeout_error'],
     ['unknown', 'unknown_error'],
   ])('should classify error code: %s', async (code, _desc) => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     mock.pushError(code as LLMError['code'], `Simulated ${code} error`)
 
     const orchestrator = new AgentOrchestrator()
@@ -83,7 +83,7 @@ describe('LLMError — full classification', () => {
   })
 
   it('should throw with correct LLMError code', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     mock.pushError('auth', 'Invalid API key')
     try {
       await mock.chatStream({ systemPrompt: '', messages: [], tools: [] }, () => {})

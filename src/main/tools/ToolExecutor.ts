@@ -13,8 +13,9 @@ import { auditService } from '../audit/AuditService'
 import { permissionBridge } from '../permission/PermissionBridge'
 import { agentEventBus } from '../agent/AgentEventBus'
 import { newId } from '../store/id'
-import { TOOL_IMPLS, type ToolImpl } from './ToolImplementations'
+import { TOOL_IMPLS, type ToolImpl, type ToolExecContext } from './ToolImplementations'
 import type { ToolRiskLevel } from '../../shared/types/Tool'
+import { TRUNCATE_SHORT, TRUNCATE_MEDIUM, TRUNCATE_STANDARD } from '../../shared/constants'
 
 // ── Types ──
 
@@ -65,7 +66,7 @@ export class ToolExecutor {
       projectId,
       sessionId,
       riskLevel: manifest.riskLevel,
-      action: `Execute ${manifest.name} with ${JSON.stringify(input).slice(0, 200)}`,
+      action: `Execute ${manifest.name} with ${JSON.stringify(input).slice(0, TRUNCATE_SHORT)}`,
     })
 
     if (decision === 'deny') {
@@ -73,7 +74,7 @@ export class ToolExecutor {
         taskId, sessionId, projectId,
         eventType: 'permission_denied',
         toolId, riskLevel: manifest.riskLevel,
-        inputSummary: JSON.stringify(input).slice(0, 500),
+        inputSummary: JSON.stringify(input).slice(0, TRUNCATE_MEDIUM),
       })
       return { success: false, output: `Permission denied: ${toolId}`, error: { code: 'PERMISSION_DENIED', message: `Tool ${toolId} is denied by policy`, recoverable: false }, permissionDecision: 'deny' }
     }
@@ -85,7 +86,7 @@ export class ToolExecutor {
         toolName: manifest.name,
         riskLevel: manifest.riskLevel,
         action: `Execute ${manifest.name}`,
-        preview: JSON.stringify(input).slice(0, 1000),
+        preview: JSON.stringify(input).slice(0, TRUNCATE_STANDARD),
         impact: manifest.riskLevel === 'risky' ? 'This action cannot be undone' : 'This action can be reviewed',
         rollbackable: manifest.riskLevel !== 'risky',
       })
@@ -98,7 +99,7 @@ export class ToolExecutor {
           toolCallId, toolId, toolName: manifest.name,
           riskLevel: manifest.riskLevel,
           action: `Execute ${manifest.name}`,
-          preview: JSON.stringify(input).slice(0, 1000),
+          preview: JSON.stringify(input).slice(0, TRUNCATE_STANDARD),
           impact: manifest.riskLevel === 'risky' ? 'Cannot be undone' : 'Can be reviewed',
           rollbackable: manifest.riskLevel !== 'risky',
         },
@@ -111,7 +112,7 @@ export class ToolExecutor {
           taskId, sessionId, projectId,
           eventType: 'permission_denied',
           toolId, riskLevel: manifest.riskLevel,
-          inputSummary: JSON.stringify(input).slice(0, 500),
+          inputSummary: JSON.stringify(input).slice(0, TRUNCATE_MEDIUM),
           permissionResult: 'deny',
         })
         return { success: false, output: 'User denied the tool execution', error: { code: 'USER_DENIED', message: 'User denied the tool execution', recoverable: false }, permissionDecision: 'deny' }
@@ -123,7 +124,7 @@ export class ToolExecutor {
       taskId, sessionId, projectId,
       eventType: 'tool_call_started',
       toolId, riskLevel: manifest.riskLevel,
-      inputSummary: JSON.stringify(input).slice(0, 500),
+      inputSummary: JSON.stringify(input).slice(0, TRUNCATE_MEDIUM),
     })
 
     // 4. Execute tool implementation
@@ -144,8 +145,9 @@ export class ToolExecutor {
     }
 
     try {
+      const ctx: ToolExecContext = { taskId, sessionId, projectId }
       const fn = typeof impl === 'function' ? impl : impl.execute
-      const output = await fn(input)
+      const output = await fn(input, ctx)
       const duration = Date.now() - startTime
 
       // 5. Log success
@@ -153,8 +155,8 @@ export class ToolExecutor {
         taskId, sessionId, projectId,
         eventType: 'tool_call_completed',
         toolId, riskLevel: manifest.riskLevel,
-        inputSummary: JSON.stringify(input).slice(0, 500),
-        outputSummary: JSON.stringify(output).slice(0, 500),
+        inputSummary: JSON.stringify(input).slice(0, TRUNCATE_MEDIUM),
+        outputSummary: JSON.stringify(output).slice(0, TRUNCATE_MEDIUM),
       })
 
       // Ensure output is always a string (LLM needs string content)
@@ -168,7 +170,7 @@ export class ToolExecutor {
         taskId, sessionId, projectId,
         eventType: 'tool_call_completed',
         toolId, riskLevel: manifest.riskLevel,
-        inputSummary: JSON.stringify(input).slice(0, 500),
+        inputSummary: JSON.stringify(input).slice(0, TRUNCATE_MEDIUM),
         outputSummary: `Error: ${message}`,
       })
 

@@ -1,22 +1,118 @@
 /**
  * ModelConfigService — CRUD for LLM provider configurations.
- * Loads all configs from SQLite at boot, instantiates providers, registers them.
+ *
+ * Storage: JSON text files (no SQLite).
+ *   - Shared config: ~/.atta/settings.json (providers[])
+ *   - App selection:  ~/.atta/seek/settings.json (llm.provider)
+ *
+ * All read/write goes through AttaSettingsLoader.
+ * ModelConfig is a runtime representation mapped to/from ProviderDef.
  */
 
-import { getDb, dbQuery, dbQueryOne } from '../store/db'
-import { newId } from '../store/id'
-import { storeApiKey, getApiKey, deleteApiKey } from '../store/secrets'
-import { llmProviderRegistry } from '../agent/llm/LLMProviderRegistry'
+import { modelProviderRegistry } from '../agent/llm/ModelProviderRegistry'
 import { createProvider } from '../agent/llm/ProviderFactory'
+import {
+  loadLLMConfig,
+  listProviders,
+  saveProvider,
+  deleteProvider,
+  getSelectedProviderId,
+  getSelectedApiType,
+  readJSON,
+  writeJSON,
+  appConfigPath,
+} from '../agent/llm/AttaSettingsLoader'
+import type { ProviderDef } from '../agent/llm/ProviderDef'
+import { normalizeInterfaces } from '../agent/llm/ProviderDef'
 import * as https from 'https'
 import * as http from 'http'
 import type { ModelConfig, CreateModelConfig } from '../../shared/types/model'
 
-function keyId(configId: string): string {
-  return `model:${configId}`
+// ── ProviderDef ↔ ModelConfig mapping ──
+
+/** Get the primary interfaceType + endpointUrl from a provider def for display purposes.
+ *  Respects the user's llm.api_type selection from app config when available,
+ *  falling back to the first registered interface. */
+function primaryInterface(def: ProviderDef): { interfaceType: 'openai_compatible' | 'anthropic'; endpointUrl: string } {
+  const norm = normalizeInterfaces(def)
+  if (norm.apiTypes.length === 0) {
+    // Legacy fallback
+    return { interfaceType: def.api_type ?? 'anthropic', endpointUrl: def.base_url ?? '' }
+  }
+  // Check user's api_type preference first
+  const preferred = getSelectedApiType()
+  if (preferred && norm.apiTypes.includes(preferred)) {
+    return { interfaceType: preferred, endpointUrl: norm.interfaces[preferred] }
+  }
+  // Fall back to first available interface
+  return { interfaceType: norm.apiTypes[0], endpointUrl: norm.interfaces[norm.apiTypes[0]] }
 }
 
-const DEFAULT_ANTHROPIC_MODELS = ['claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-opus-4-8']
+function providerToModelConfig(def: ProviderDef, isDefault: boolean): ModelConfig {
+  const primary = primaryInterface(def)
+  return {
+    id: def.id,
+    name: def.name,
+    interfaceType: primary.interfaceType,
+    endpointUrl: primary.endpointUrl,
+    models: [
+      def.model,
+      def.opus_model,
+      def.sonnet_model,
+      def.haiku_model,
+      def.small_fast_model,
+      def.subagent_model,
+      def.strong_model,
+      def.fallback_model,
+      def.classifier_model,
+      def.compact_model,
+    ].filter((m): m is string => !!m),
+    defaultModel: def.model,
+    extraParams: undefined,
+    isDefault,
+    createdAt: def.created_at ?? 0,
+    updatedAt: def.updated_at ?? 0,
+    opusModel: def.opus_model,
+    sonnetModel: def.sonnet_model,
+    haikuModel: def.haiku_model,
+    smallFastModel: def.small_fast_model,
+    subagentModel: def.subagent_model,
+    strongModel: def.strong_model,
+    fallbackModel: def.fallback_model,
+    classifierModel: def.classifier_model,
+    compactModel: def.compact_model,
+    effortLevel: def.effort_level,
+    maxTokens: def.max_tokens,
+    compactThreshold: def.compact_threshold,
+  }
+}
+
+function configToProviderDef(config: Partial<ModelConfig> & { id: string; name: string; interfaceType: 'openai_compatible' | 'anthropic'; endpointUrl: string; defaultModel: string }, apiKey: string): ProviderDef {
+  // Build interfaces map: merge explicit interfaces with the primary interface
+  const interfaces: Record<string, string> = { ...((config as any).interfaces as Record<string, string> || {}) }
+  interfaces[config.interfaceType] = config.endpointUrl
+  return {
+    id: config.id,
+    name: config.name,
+    interfaces,
+    auth_token: apiKey,
+    model: config.defaultModel,
+    opus_model: config.opusModel,
+    sonnet_model: config.sonnetModel,
+    haiku_model: config.haikuModel,
+    small_fast_model: config.smallFastModel,
+    subagent_model: config.subagentModel,
+    strong_model: config.strongModel,
+    fallback_model: config.fallbackModel,
+    classifier_model: config.classifierModel,
+    compact_model: config.compactModel,
+    effort_level: config.effortLevel,
+    max_tokens: config.maxTokens,
+    compact_threshold: config.compactThreshold,
+  }
+}
+
+// ── Test types ──
 
 export interface TestStep {
   step: number
@@ -37,184 +133,223 @@ export interface TestResult {
   steps: TestStep[]
 }
 
+// ── Service ──
+
 export class ModelConfigService {
-  /** Load all configs from DB and register providers */
+  /** Load all configs from JSON files and register providers */
   loadAll(): ModelConfig[] {
-    const rows = dbQuery<Record<string, unknown>>('SELECT * FROM model_configs ORDER BY is_default DESC, created_at ASC')
+    const result = loadLLMConfig()
+    const allDefs = listProviders()
+    const selectedId = getSelectedProviderId() || (allDefs.length > 0 ? allDefs[0].id : null)
+
     const configs: ModelConfig[] = []
 
-    for (const row of rows) {
-      const config = this.rowToConfig(row)
-      configs.push(config)
+    for (const def of allDefs) {
+      const isDefault = def.id === selectedId
+      configs.push(providerToModelConfig(def, isDefault))
 
-      // Instantiate provider
-      const apiKey = getApiKey(keyId(row.id as string))
-      if (apiKey) {
-        const provider = createProvider(config, apiKey)
-        if (provider) {
-          llmProviderRegistry.registerById(config.id, provider, {
-            name: config.name,
-            interfaceType: config.interfaceType,
-            models: provider.models,
-          })
-          if (config.isDefault) {
-            llmProviderRegistry.setDefault(config.id)
-          }
+      // Instantiate and register provider
+      const provider = createProvider(
+        providerToModelConfig(def, isDefault),
+        def.auth_token,
+      )
+      if (provider) {
+        modelProviderRegistry.registerById(def.id, provider, {
+          name: def.name,
+          interfaceType: primaryInterface(def).interfaceType,
+          models: provider.models,
+        })
+        if (isDefault) {
+          modelProviderRegistry.setDefault(def.id)
         }
       }
     }
 
-    console.log(`[ModelConfigService] loaded ${configs.length} model configs`)
+    // If no providers from files but env-only provider was resolved, register it
+    if (allDefs.length === 0 && result.provider) {
+      const envDef = result.provider.def
+      const config = providerToModelConfig(envDef, true)
+      configs.push(config)
+      const provider = createProvider(config, envDef.auth_token)
+      if (provider) {
+        modelProviderRegistry.registerById(envDef.id, provider, {
+          name: envDef.name,
+          interfaceType: result.provider!.apiType,
+          models: provider.models,
+        })
+        modelProviderRegistry.setDefault(envDef.id)
+      }
+    }
+
+    if (result.error && configs.length === 0) {
+      console.warn(`[ModelConfigService] ${result.error}`)
+    }
+
+    console.log(`[ModelConfigService] loaded ${configs.length} model configs (JSON)`)
     return configs
   }
 
-  /** List all configs (without keys) */
+  /** List all configs from shared JSON */
   listAll(): ModelConfig[] {
-    const rows = dbQuery<Record<string, unknown>>('SELECT * FROM model_configs ORDER BY is_default DESC, created_at ASC')
-    return rows.map((r) => this.rowToConfig(r))
+    const allDefs = listProviders()
+    const selectedId = getSelectedProviderId() || (allDefs.length > 0 ? allDefs[0].id : null)
+    return allDefs.map(def => providerToModelConfig(def, def.id === selectedId))
   }
 
   /** Get a single config by ID */
   get(id: string): ModelConfig | null {
-    const row = dbQueryOne<Record<string, unknown>>('SELECT * FROM model_configs WHERE id = ?', id)
-    return row ? this.rowToConfig(row) : null
+    const def = listProviders().find(p => p.id === id)
+    if (!def) return null
+    const selectedId = getSelectedProviderId()
+    return providerToModelConfig(def, def.id === selectedId)
   }
 
-  /** Create a new model config */
+  /** Create a new provider and persist to shared JSON */
   create(params: CreateModelConfig): ModelConfig {
-    const db = getDb()
-    const id = `mc_${newId()}`
-    const now = Date.now()
+    const allDefs = listProviders()
 
     // Check uniqueness
-    const existing = db.prepare('SELECT id FROM model_configs WHERE name = ?').get(params.name)
-    if (existing) throw new Error(`Model config named "${params.name}" already exists`)
+    if (allDefs.some(d => d.id === params.name.toLowerCase().replace(/\s+/g, '-'))) {
+      throw new Error(`Model config named "${params.name}" already exists`)
+    }
 
-    // Default models per interface type
-    const models = params.models.length > 0 ? params.models
-      : params.interfaceType === 'anthropic'
-        ? DEFAULT_ANTHROPIC_MODELS
-        : [params.defaultModel]
-    const defaultModel = params.defaultModel || models[0]
+    const id = params.name.toLowerCase().replace(/\s+/g, '-')
+    const isDefault = allDefs.length === 0
 
-    const isDefault = llmProviderRegistry.listProviders().length === 0 ? 1 : 0
-
-    db.prepare(`INSERT INTO model_configs (id, name, interface_type, endpoint_url, models, default_model, extra_params, is_default, created_at, updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?)`).run(
-      id, params.name, params.interfaceType, params.endpointUrl,
-      JSON.stringify(models), defaultModel,
-      params.extraParams ? JSON.stringify(params.extraParams) : null,
-      isDefault, now, now,
+    const def = configToProviderDef(
+      {
+        id,
+        name: params.name,
+        interfaceType: params.interfaceType,
+        endpointUrl: params.endpointUrl,
+        defaultModel: params.defaultModel,
+        models: params.models,
+        opusModel: params.opusModel,
+        sonnetModel: params.sonnetModel,
+        haikuModel: params.haikuModel,
+        smallFastModel: params.smallFastModel,
+        subagentModel: params.subagentModel,
+        strongModel: params.strongModel,
+        fallbackModel: params.fallbackModel,
+        classifierModel: params.classifierModel,
+        compactModel: params.compactModel,
+        effortLevel: params.effortLevel,
+        maxTokens: params.maxTokens,
+        compactThreshold: params.compactThreshold,
+      },
+      params.apiKey,
     )
 
-    // Store API key
-    storeApiKey(keyId(id), params.apiKey)
+    saveProvider(def)
 
-    // Instantiate and register provider
-    const config: ModelConfig = { id, name: params.name, interfaceType: params.interfaceType, endpointUrl: params.endpointUrl, models, defaultModel, extraParams: params.extraParams, isDefault: isDefault === 1, createdAt: now, updatedAt: now }
+    // Register provider
+    const config = providerToModelConfig(def, isDefault)
     const provider = createProvider(config, params.apiKey)
     if (provider) {
-      llmProviderRegistry.registerById(id, provider, {
+      modelProviderRegistry.registerById(id, provider, {
         name: config.name,
         interfaceType: config.interfaceType,
-        models,
+        models: config.models,
       })
-      if (config.isDefault) llmProviderRegistry.setDefault(id)
+      if (isDefault) modelProviderRegistry.setDefault(id)
     }
 
-    return config
+    return providerToModelConfig(def, isDefault)
   }
 
-  /** Get default models for an interface type */
-  static defaultModels(interfaceType: string): string[] {
-    if (interfaceType === 'anthropic') {
-      return DEFAULT_ANTHROPIC_MODELS
+  /** Update an existing provider */
+  update(id: string, patch: Partial<Pick<ModelConfig, 'name' | 'endpointUrl' | 'defaultModel' | 'models' | 'extraParams'>> & { apiKey?: string; interfaceType?: 'openai_compatible' | 'anthropic'; opusModel?: string; sonnetModel?: string; haikuModel?: string; smallFastModel?: string; subagentModel?: string; strongModel?: string; fallbackModel?: string; classifierModel?: string; compactModel?: string; effortLevel?: string; maxTokens?: number; compactThreshold?: number }): ModelConfig | null {
+    const allDefs = listProviders()
+    const existing = allDefs.find(d => d.id === id)
+    if (!existing) return null
+
+    // Unregister old provider
+    modelProviderRegistry.unregister(id)
+
+    // Merge and save
+    // Handle interfaces: patch.interfaces takes priority (from UI dual-interface form),
+    // then fall back to existing, then patch.interfaceType + endpointUrl update
+    const existingNorm = normalizeInterfaces(existing)
+    const patchInterfaces = (patch as any).interfaces as Record<string, string> | undefined
+    const updatedInterfaces: Record<string, string> = patchInterfaces
+      ? { ...patchInterfaces }
+      : { ...existingNorm.interfaces }
+    if (!patchInterfaces) {
+      if (patch.interfaceType && patch.endpointUrl) {
+        updatedInterfaces[patch.interfaceType] = patch.endpointUrl
+      } else if (patch.endpointUrl && existingNorm.apiTypes.length > 0) {
+        updatedInterfaces[existingNorm.apiTypes[0]] = patch.endpointUrl
+      }
     }
-    return []
+    const merged: ProviderDef = {
+      ...existing,
+      name: patch.name ?? existing.name,
+      interfaces: Object.keys(updatedInterfaces).length > 0 ? updatedInterfaces : undefined,
+      api_type: undefined,   // clear legacy fields when using interfaces
+      base_url: undefined,
+      model: patch.defaultModel ?? existing.model,
+      opus_model: patch.opusModel !== undefined ? patch.opusModel : existing.opus_model,
+      sonnet_model: patch.sonnetModel !== undefined ? patch.sonnetModel : existing.sonnet_model,
+      haiku_model: patch.haikuModel !== undefined ? patch.haikuModel : existing.haiku_model,
+      small_fast_model: patch.smallFastModel !== undefined ? patch.smallFastModel : existing.small_fast_model,
+      subagent_model: patch.subagentModel !== undefined ? patch.subagentModel : existing.subagent_model,
+      strong_model: patch.strongModel !== undefined ? patch.strongModel : existing.strong_model,
+      fallback_model: patch.fallbackModel !== undefined ? patch.fallbackModel : existing.fallback_model,
+      classifier_model: patch.classifierModel !== undefined ? patch.classifierModel : existing.classifier_model,
+      compact_model: patch.compactModel !== undefined ? patch.compactModel : existing.compact_model,
+      effort_level: patch.effortLevel !== undefined ? patch.effortLevel : existing.effort_level,
+      max_tokens: patch.maxTokens !== undefined ? patch.maxTokens : existing.max_tokens,
+      compact_threshold: patch.compactThreshold !== undefined ? patch.compactThreshold : existing.compact_threshold,
+      auth_token: patch.apiKey ?? existing.auth_token,
+    }
+
+    saveProvider(merged)
+
+    // Re-register
+    const selectedId = getSelectedProviderId()
+    const config = providerToModelConfig(merged, merged.id === selectedId)
+    const provider = createProvider(config, merged.auth_token)
+    if (provider) {
+      modelProviderRegistry.registerById(id, provider, {
+        name: config.name, interfaceType: config.interfaceType, models: config.models,
+      })
+      if (config.isDefault) modelProviderRegistry.setDefault(id)
+    }
+
+    return providerToModelConfig(merged, merged.id === selectedId)
   }
 
-  /** Update an existing config */
-  update(id: string, patch: Partial<Pick<ModelConfig, 'name' | 'endpointUrl' | 'defaultModel' | 'models' | 'extraParams'>> & { apiKey?: string; interfaceType?: 'openai_compatible' | 'anthropic' }): ModelConfig | null {
-    const db = getDb()
-    const row = dbQueryOne<Record<string, unknown>>('SELECT * FROM model_configs WHERE id = ?', id)
-    if (!row) return null
+  /** Delete a provider from shared JSON */
+  delete(id: string): { success: boolean; needNewDefault: boolean } {
+    const wasDefault = getSelectedProviderId() === id
 
-    const now = Date.now()
-    const name = patch.name ?? row.name
-    const itype = patch.interfaceType ?? row.interface_type
-    const endpoint = patch.endpointUrl ?? row.endpoint_url
-    const model = patch.defaultModel ?? row.default_model
-    const models = patch.models ? JSON.stringify(patch.models) : row.models
-    const extra = patch.extraParams !== undefined ? JSON.stringify(patch.extraParams) : row.extra_params
+    modelProviderRegistry.unregister(id)
+    const ok = deleteProvider(id)
 
-    db.prepare(`UPDATE model_configs SET name=?, interface_type=?, endpoint_url=?, models=?, default_model=?, extra_params=?, updated_at=? WHERE id=?`).run(
-      name, itype, endpoint, models, model, extra, now, id,
-    )
-
-    // Update API key if provided
-    if (patch.apiKey) {
-      storeApiKey(keyId(id), patch.apiKey)
-    }
-
-    // Unregister old provider (DB has already been updated above)
-    llmProviderRegistry.unregister(id)
-
-    // Re-register provider with updated config if API key is available
-    const apiKey = getApiKey(keyId(id))
-    if (apiKey) {
-      const config = this.rowToConfig({ ...row, name, interface_type: itype, endpoint_url: endpoint, models, default_model: model, extra_params: extra, updated_at: now })
-      const provider = createProvider(config, apiKey)
-      if (provider) {
-        llmProviderRegistry.registerById(id, provider, {
-          name: config.name, interfaceType: config.interfaceType, models: config.models,
-        })
-        if (row.is_default) llmProviderRegistry.setDefault(id)
+    if (wasDefault && ok) {
+      const remaining = listProviders()
+      if (remaining.length > 0) {
+        this.setDefault(remaining[0].id)
       }
     }
 
-    return this.get(id)
+    return { success: ok, needNewDefault: wasDefault && ok }
   }
 
-  /** Delete a config */
-  delete(id: string): { success: boolean; needNewDefault: boolean } {
-    const db = getDb()
-    const row = dbQueryOne<Record<string, unknown>>('SELECT is_default FROM model_configs WHERE id = ?', id)
-    if (!row) return { success: false, needNewDefault: false }
-
-    const wasDefault = row.is_default === 1
-
-    // Unregister provider
-    llmProviderRegistry.unregister(id)
-
-    // Delete API key
-    deleteApiKey(keyId(id))
-
-    // Delete from DB
-    db.prepare('DELETE FROM model_configs WHERE id = ?').run(id)
-
-    // Auto-promote next if was default
-    if (wasDefault && llmProviderRegistry.listProviders().length > 0) {
-      const next = llmProviderRegistry.listProviders()[0]
-      this.setDefault(next.id)
-    }
-
-    return { success: true, needNewDefault: wasDefault }
-  }
-
-  /** Set a config as default */
+  /** Set a provider as the active one (writes to app config) */
   setDefault(id: string): boolean {
-    const db = getDb()
-    const row = dbQueryOne<Record<string, unknown>>('SELECT id FROM model_configs WHERE id = ?', id)
-    if (!row) return false
+    const allDefs = listProviders()
+    if (!allDefs.some(d => d.id === id)) return false
 
-    const now = Date.now()
-    db.prepare('UPDATE model_configs SET is_default = 0').run()
-    db.prepare('UPDATE model_configs SET is_default = 1, updated_at = ? WHERE id = ?').run(now, id)
-    llmProviderRegistry.setDefault(id)
+    const configPath = appConfigPath('seek')
+    const appConfig = readJSON<Record<string, unknown>>(configPath) ?? {}
+    appConfig.llm = { ...(appConfig.llm as Record<string, unknown> || {}), provider: id }
+    writeJSON(configPath, appConfig)
+    modelProviderRegistry.setDefault(id)
     return true
   }
 
-  /** Test connectivity — three-step diagnostic with detailed step info */
+  /** Test connectivity */
   async test(id: string): Promise<TestResult> {
     const steps: TestStep[] = []
     const start = performance.now()
@@ -230,7 +365,9 @@ export class ModelConfigService {
     }
 
     // Step 2: API key check
-    const apiKey = getApiKey(keyId(id))
+    const allDefs = listProviders()
+    const def = allDefs.find(d => d.id === id)
+    const apiKey = def?.auth_token
     steps.push({
       step: 2, label: 'API Key', status: apiKey ? 'ok' : 'fail',
       detail: apiKey ? 'Key configured' : 'No API key stored',
@@ -249,6 +386,13 @@ export class ModelConfigService {
     }
     return { success: false, latencyMs, error: apiResult.error, errorCode: apiResult.errorCode, steps }
   }
+
+  /** Check if any provider is configured */
+  hasConfigured(): boolean {
+    return modelProviderRegistry.hasProviders
+  }
+
+  // ── Network helpers (unchanged from SQLite version) ──
 
   private async checkNetwork(endpointUrl: string): Promise<{ ok: boolean; error?: string; step: TestStep }> {
     const t0 = performance.now()
@@ -282,7 +426,7 @@ export class ModelConfigService {
 
   private async doApiCheck(config: ModelConfig, apiKey: string): Promise<{ success: boolean; error?: string; errorCode?: TestResult['errorCode']; step: TestStep }> {
     const t0 = performance.now()
-    const provider = llmProviderRegistry.getById(config.id)
+    const provider = modelProviderRegistry.getById(config.id)
     if (!provider) {
       return { success: false, error: 'Provider not instantiated', errorCode: 'unknown',
         step: { step: 3, label: 'API Call', status: 'fail', detail: 'Provider not instantiated — re-save the config' } }
@@ -308,29 +452,6 @@ export class ModelConfigService {
         step: { step: 3, label: 'API Call', status: 'fail', detail, latencyMs, requestInfo: `POST ${config.endpointUrl} (model: ${config.defaultModel})`, responseInfo: typeof errBody === 'object' ? JSON.stringify(errBody).slice(0, 300) : String(errBody).slice(0, 300) } }
     }
   }
-
-  /** Check if any provider is configured (for renderer no-config check) */
-  hasConfigured(): boolean {
-    return llmProviderRegistry.hasProviders
-  }
-
-  // ── Helpers ──
-
-  private rowToConfig(r: any): ModelConfig {
-    return {
-      id: r.id,
-      name: r.name,
-      interfaceType: r.interface_type as ModelConfig['interfaceType'],
-      endpointUrl: r.endpoint_url,
-      models: r.models ? JSON.parse(r.models) : [],
-      defaultModel: r.default_model,
-      extraParams: r.extra_params ? JSON.parse(r.extra_params) : undefined,
-      isDefault: r.is_default === 1,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
-    }
-  }
-
 }
 
 export const modelConfigService = new ModelConfigService()

@@ -16,34 +16,44 @@
 import { agentEventBus } from '../AgentEventBus'
 import { contextBuilder } from '../ContextBuilder'
 import { orchestrateTools } from '../tools/ToolOrchestrator'
+import { StreamingToolExecutor } from '../tools/StreamingToolExecutor'
 import { artifactService } from '../../artifacts/ArtifactService'
 import { memoryService } from '../../memory/MemoryService'
 import { auditService } from '../../audit/AuditService'
-import { llmProviderRegistry } from '../llm/LLMProviderRegistry'
+import { modelProviderRegistry } from '../llm/ModelProviderRegistry'
 import { newId } from '../../store/id'
 import { renderPrompt } from '../prompt/PromptTemplate'
 import { shouldCompact, compactConversation, reactiveCompact, isContextLengthError, microcompact } from '../compact/ContextCompactor'
 import { extractMemories } from '../memory/MemoryExtractor'
 import { hookManager } from '../hooks/HookManager'
+import { hookPipeline } from '../hooks/HookPipeline'
+import { ModelResolver } from '../llm/ModelResolver'
+import { loadLLMConfig } from '../llm/AttaSettingsLoader'
 import { createInitialState, type AgentState, type TerminalReason, type RecoveryLevel } from './AgentState'
 import type { AgentTask } from '../../../shared/types/AgentTask'
 import type { AgentProfile } from '../profile/AgentProfile'
 import type { SessionEvent, SessionEventPayloadMap } from '../../../shared/types/SessionEvent'
-import type { LLMContentBlock, LLMToolUseBlock, LLMChatResult } from '../llm/LLMProvider'
-
-const CONTENT_TRUNCATE_LIMIT = 4000
+import type { LLMContentBlock, LLMToolUseBlock, LLMChatResult } from '../llm/ModelProvider'
+import {
+  ID_PREFIX_LENGTH, TRUNCATE_SHORT,
+  RECOVERY_L1_MAX_ATTEMPTS, RECOVERY_L2_MAX_ATTEMPTS, RECOVERY_L3_MAX_ATTEMPTS,
+  RECOVERY_L2_WAIT_BASE_MS, RECOVERY_L2_WAIT_MAX_MS, RECOVERY_L4_KEEP_TURNS,
+  TOOL_RESULT_TRUNCATE_LIMIT,
+} from '../../../shared/constants'
 
 export class AgentOrchestrator {
   private abortController: AbortController | null = null
 
   /** Main entry point — returns an async generator that yields SessionEvents.
-   *  @param provider Optional LLMProvider override (for testing). Falls back to registry lookup.
-   *  @param assembledContext Optional pre-built context (for testing). Bypasses ContextBuilder. */
+   *  @param providerOverride Optional ModelProvider override (for testing). Falls back to registry lookup.
+   *  @param assembledContext Optional pre-built context (for testing). Bypasses ContextBuilder.
+   *  @param modelSlot Which model slot to use for the main LLM call ('main' for sonnet, 'subagent' for subagent→sonnet→model). */
   async *submitMessage(
     task: AgentTask,
     profile: AgentProfile,
-    providerOverride?: import('../llm/LLMProvider').LLMProvider,
+    providerOverride?: import('../llm/ModelProvider').ModelProvider,
     assembledContext?: { messages: any[]; tools: any[]; systemPrompt?: string },
+    modelSlot: 'main' | 'subagent' = 'main',
   ): AsyncGenerator<SessionEvent, TerminalReason, void> {
     this.abortController = new AbortController()
     const state = createInitialState(task, profile)
@@ -52,12 +62,21 @@ export class AgentOrchestrator {
     try {
       // Check provider — use override if provided (for testing), else registry
       const provider = providerOverride
-        || (task.modelConfigId ? llmProviderRegistry.getById(task.modelConfigId) : null)
-        || llmProviderRegistry.getDefault()
+        || (task.modelConfigId ? modelProviderRegistry.getById(task.modelConfigId) : null)
+        || modelProviderRegistry.getDefault()
 
       if (!provider) {
         yield this.failEvent(task, 'No LLM provider configured. Please set an API key in Settings.')
         return 'no_provider'
+      }
+
+      // ── Slot resolver: matches the actual provider being used ──
+      // Determine which provider ID is in use (from task override or default)
+      const effectiveProviderId = task.modelConfigId || modelProviderRegistry.getDefaultId()
+      const llmConfig = loadLLMConfig(effectiveProviderId ?? undefined)
+      let slotResolver: ModelResolver | null = null
+      if (llmConfig.provider) {
+        slotResolver = new ModelResolver(llmConfig.provider)
       }
 
       // ── 1. Context Assembly ──
@@ -94,7 +113,10 @@ export class AgentOrchestrator {
 
         // ── 2. Context Management (compaction) ──
         if (state.turnCount > 0 && profile.context.autoCompact && shouldCompact(state.messages, profile)) {
-          const compacted = await compactConversation(state.messages, profile, state.compactSummary)
+          const compacted = await compactConversation(state.messages, profile, state.compactSummary, {
+            compactModel: slotResolver?.compact(),
+            providerId: effectiveProviderId ?? undefined,
+          })
           state.messages = compacted.compactedMessages
           state.compactSummary = compacted.summary
           agentEventBus.emit(this.makeEvent(task, 'CompactBoundary', {
@@ -105,9 +127,16 @@ export class AgentOrchestrator {
         }
 
         // ── 3. LLM Call ──
-        const messageId = `msg_${newId().slice(0, 8)}`
+        const messageId = `msg_${newId().slice(0, ID_PREFIX_LENGTH)}`
 
         yield this.makeEvent(task, 'AgentMessage', { content: '' })
+
+        // Streaming tool executor: start tools as they arrive from LLM
+        const streamExec = new StreamingToolExecutor(task.id, task.sessionId, task.projectId)
+
+        // Map SDK content block indices to tool IDs for content_block_stop correlation
+        let nextStreamIndex = 0
+        const streamToolIdByIndex = new Map<number, string>()
 
         let result: LLMChatResult
         try {
@@ -121,24 +150,45 @@ export class AgentOrchestrator {
                 input_schema: t.input_schema as Record<string, unknown>,
               })),
               signal,
+              // User-selected model name takes precedence; fall back to slot resolver
+              model: task.modelName || (modelSlot === 'subagent' ? slotResolver?.subagent() : slotResolver?.main()),
             },
             (chunk) => {
-              if (chunk.type === 'text_delta') {
-                agentEventBus.emit(this.makeEvent(task, 'AgentMessageChunk', {
-                  content: chunk.text,
-                  isFinal: false,
-                  messageId,
-                }))
+              switch (chunk.type) {
+                case 'text_delta':
+                  agentEventBus.emit(this.makeEvent(task, 'AgentMessageChunk', {
+                    content: chunk.text,
+                    isFinal: false,
+                    messageId,
+                  }))
+                  break
+                case 'tool_use_start': {
+                  const idx = nextStreamIndex++
+                  streamToolIdByIndex.set(idx, chunk.id)
+                  streamExec.addTool(idx, chunk.id, chunk.name)
+                  break
+                }
+                case 'tool_use_delta':
+                  streamExec.accumulateInput(chunk.id, chunk.input_json)
+                  break
+                case 'content_block_stop':
+                  // Complete the next accumulating tool (FIFO — tools complete in order)
+                  for (const [idx, id] of streamToolIdByIndex) {
+                    if (streamExec.tryCompleteTool(idx, id)) break
+                  }
+                  break
+                case 'message_stop':
+                  break
               }
             },
           )
         } catch (err) {
+          streamExec.cancelAll()
           const recovery = await this.recoverFromError(state, err)
           if (recovery === 'fail') {
             yield this.failEvent(task, err instanceof Error ? err.message : 'LLM call failed')
             return 'model_error'
           }
-          // retry / wait_retry / compact / collapse → continue loop; fail already returned above
           continue
         }
 
@@ -169,22 +219,85 @@ export class AgentOrchestrator {
           state.systemPrompt = `${state.systemPrompt}\n\n[Hook feedback]\n${hookResult.messages.join('\n')}`
         }
 
+        // ── Stop hooks (event-driven pipeline) ──
+        const stopHookResult = await hookPipeline.execute('Stop', {
+          task, turnCount: state.turnCount + 1,
+          messages: state.messages,
+          lastAssistantContent: lastText,
+          profileId: profile.id,
+        })
+        if (stopHookResult.preventContinuation) {
+          yield this.failEvent(task, stopHookResult.blocking || 'Stop hook prevented continuation')
+          return 'aborted'
+        }
+        if (stopHookResult.messages && stopHookResult.messages.length > 0) {
+          state.systemPrompt = `${state.systemPrompt}\n\n[Stop hooks]\n${stopHookResult.messages.join('\n')}`
+        }
+
         // ── 4. Tool Execution ──
         const toolUses = result.content.filter(
           (b): b is LLMToolUseBlock => b.type === 'tool_use',
         )
 
-        if (toolUses.length === 0) {
+        // Collect any tools already executed during streaming
+        const streamedResults = streamExec.allResults
+
+        if (toolUses.length === 0 && streamedResults.length === 0) {
           // end_turn → complete
           yield* this.finalizeGenerator(state)
           return 'completed'
         }
 
-        const toolResult = yield* this.runToolExecution(state, task, profile, toolUses, signal)
-        if (toolResult === 'denied' || toolResult === 'aborted') return toolResult
+        // Get remaining streaming results
+        const remainingStreamResults = await streamExec.getRemainingResults()
+        const allStreamResults = [...streamedResults, ...remainingStreamResults]
+
+        // If streaming executor completed some tools, yield events + merge results.
+        // Otherwise fall back to traditional batch execution for all tools.
+        let toolResultBlocks: LLMContentBlock[]
+        if (allStreamResults.length > 0) {
+          // Yield ToolCallStarted + ToolCallFinished for each streaming result
+          for (const r of allStreamResults) {
+            yield this.makeEvent(task, 'ToolCallStarted', {
+              toolCallId: r.toolCallId, toolId: r.toolUse.name, toolName: r.toolUse.name,
+              input: r.toolUse.input, riskLevel: 'read',
+            })
+            yield this.makeEvent(task, 'ToolCallFinished', {
+              toolCallId: r.toolCallId, toolId: r.toolUse.name, toolName: r.toolUse.name,
+              output: r.output, status: r.success ? 'success' : 'error',
+              error: r.error?.message, duration: 0,
+            })
+            state.toolUseCount++
+          }
+
+          const streamedToolNames = new Set(allStreamResults.map(r => r.toolUse.name))
+          const unstreamedUses = toolUses.filter(tu => !streamedToolNames.has(tu.name))
+
+          if (unstreamedUses.length > 0) {
+            const execResult = yield* this.runToolExecution(state, task, profile, unstreamedUses, signal)
+            if (execResult === 'denied' || execResult === 'aborted') return execResult
+            toolResultBlocks = execResult
+          } else {
+            toolResultBlocks = []
+          }
+
+          const streamedBlocks: LLMContentBlock[] = allStreamResults.map(r => ({
+            type: 'tool_result' as const,
+            tool_use_id: r.toolUse.id,
+            content: r.success
+              ? (typeof r.output === 'string' ? r.output : JSON.stringify(r.output))
+              : `Error: ${r.error?.message || 'Unknown error'}`,
+          }))
+          toolResultBlocks = [...toolResultBlocks, ...streamedBlocks]
+        } else {
+          // No streaming results — use traditional batch path for all tools
+          const execResult = yield* this.runToolExecution(state, task, profile, toolUses, signal)
+          if (execResult === 'denied' || execResult === 'aborted') return execResult
+          toolResultBlocks = execResult
+        }
 
         // Append assistant + tool results to message history
-        this.appendTurnToHistory(state, result.content, toolResult)
+        this.appendTurnToHistory(state, result.content, toolResultBlocks)
 
         state.turnCount++
       }
@@ -271,8 +384,8 @@ export class AgentOrchestrator {
           type: 'tool_result' as const,
           tool_use_id: tr.toolUse.id,
           content: (typeof tr.output === 'string'
-            ? (tr.output.length > CONTENT_TRUNCATE_LIMIT ? tr.output.slice(0, CONTENT_TRUNCATE_LIMIT) + `\n...[truncated ${tr.output.length - CONTENT_TRUNCATE_LIMIT} chars]` : tr.output)
-            : JSON.stringify(tr.output).slice(0, CONTENT_TRUNCATE_LIMIT)),
+            ? (tr.output.length > TOOL_RESULT_TRUNCATE_LIMIT ? tr.output.slice(0, TOOL_RESULT_TRUNCATE_LIMIT) + `\n...[truncated ${tr.output.length - TOOL_RESULT_TRUNCATE_LIMIT} chars]` : tr.output)
+            : JSON.stringify(tr.output).slice(0, TOOL_RESULT_TRUNCATE_LIMIT)),
         })
         state.toolUseCount++
       }
@@ -312,7 +425,7 @@ export class AgentOrchestrator {
         if (lastMsg?.payload && 'content' in lastMsg.payload) {
           artifactService.create({
             sessionId: task.sessionId, taskId: task.id, type: 'markdown',
-            title: task.goal.slice(0, 50), content: (lastMsg.payload as { content: string }).content,
+            title: task.goal.slice(0, TRUNCATE_SHORT), content: (lastMsg.payload as { content: string }).content,
           })
         }
       } catch (err) { console.warn('[AgentOrchestrator] artifact creation failed:', err) }
@@ -356,21 +469,21 @@ export class AgentOrchestrator {
     const code = (err as any)?.code as string | undefined
 
     // L1: Transparent retry (once) — for transient network/server errors
-    if (this.recoveryAttempts === 1 && (code === 'server' || code === 'timeout' || code === 'unknown')) {
+    if (this.recoveryAttempts <= RECOVERY_L1_MAX_ATTEMPTS && (code === 'server' || code === 'timeout' || code === 'unknown')) {
       return 'retry'
     }
 
     // L2: Wait-then-retry — for rate limits
     if (code === 'rate_limit') {
-      if (this.recoveryAttempts <= 2) {
-        const delay = this.recoveryAttempts === 1 ? 1000 : 3000
+      if (this.recoveryAttempts <= RECOVERY_L2_MAX_ATTEMPTS) {
+        const delay = Math.min(RECOVERY_L2_WAIT_BASE_MS * Math.pow(2, this.recoveryAttempts - 1), RECOVERY_L2_WAIT_MAX_MS)
         await new Promise(r => setTimeout(r, delay))
         return 'wait_retry'
       }
     }
 
     // L3: Reactive compaction — triggered by context-length API errors
-    if (this.recoveryAttempts <= 2 && isContextLengthError(err)) {
+    if (this.recoveryAttempts <= RECOVERY_L3_MAX_ATTEMPTS && isContextLengthError(err)) {
       try {
         const compacted = await reactiveCompact(state.messages, state.profile, state.compactSummary)
         state.messages = compacted.compactedMessages
@@ -385,8 +498,8 @@ export class AgentOrchestrator {
     }
 
     // L4: Context collapse — aggressive message truncation (last resort)
-    if (this.recoveryAttempts <= 3 && isContextLengthError(err)) {
-      state.messages = state.messages.slice(-4) // Keep only last 2 turns
+    if (this.recoveryAttempts <= RECOVERY_L3_MAX_ATTEMPTS + 1 && isContextLengthError(err)) {
+      state.messages = state.messages.slice(-RECOVERY_L4_KEEP_TURNS * 2) // Keep only last 2 turns
       return 'collapse'
     }
 

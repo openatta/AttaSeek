@@ -21,6 +21,7 @@ export type SessionEventPayloadMap = {
   SystemNotification: SystemNotificationPayload
   SessionTitleGenerated: SessionTitleGeneratedPayload
   CompactBoundary: CompactBoundaryPayload
+  UserQuestion: UserQuestionPayload
 }
 
 /** Discriminated union — `event.type` narrows `event.payload` without casts. */
@@ -136,4 +137,10 @@ export interface SystemNotificationPayload {
 
 export interface SessionTitleGeneratedPayload {
   title: string
+}
+
+export interface UserQuestionPayload {
+  questionId: string
+  question: string
+  options?: string[]
 }

@@ -4,7 +4,7 @@
  * Input schemas use standard JSON Schema format (required by Anthropic/OpenAI APIs).
  */
 
-import type { ToolManifest } from '../../../shared/types/Tool'
+import type { ToolManifest } from '../../../../shared/types/Tool'
 
 export const DEMO_TOOLS: ToolManifest[] = [
   {

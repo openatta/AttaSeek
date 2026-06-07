@@ -13,6 +13,19 @@ export interface ModelConfig {
   isDefault: boolean
   createdAt: number
   updatedAt: number
+  // ── Slot fields (per LLM_CONFIG.md) ──
+  opusModel?: string
+  sonnetModel?: string
+  haikuModel?: string
+  smallFastModel?: string
+  subagentModel?: string
+  strongModel?: string
+  fallbackModel?: string
+  classifierModel?: string
+  compactModel?: string
+  effortLevel?: string
+  maxTokens?: number
+  compactThreshold?: number
 }
 
 export interface CreateModelConfig {
@@ -23,6 +36,65 @@ export interface CreateModelConfig {
   models: string[]
   defaultModel: string
   extraParams?: Record<string, unknown>
+  /** Additional interfaces (for providers supporting both Anthropic and OpenAI protocols) */
+  interfaces?: Record<string, string>
+  opusModel?: string
+  sonnetModel?: string
+  haikuModel?: string
+  smallFastModel?: string
+  subagentModel?: string
+  strongModel?: string
+  fallbackModel?: string
+  classifierModel?: string
+  compactModel?: string
+  effortLevel?: string
+  maxTokens?: number
+  compactThreshold?: number
+}
+
+/** Patch shape for model:update IPC channel — all fields optional */
+export interface ModelConfigPatch {
+  name?: string
+  interfaceType?: 'openai_compatible' | 'anthropic'
+  endpointUrl?: string
+  defaultModel?: string
+  models?: string[]
+  extraParams?: Record<string, unknown>
+  apiKey?: string
+  opusModel?: string
+  sonnetModel?: string
+  haikuModel?: string
+  smallFastModel?: string
+  subagentModel?: string
+  strongModel?: string
+  fallbackModel?: string
+  classifierModel?: string
+  compactModel?: string
+  effortLevel?: string
+  maxTokens?: number
+  compactThreshold?: number
+  /** Additional interfaces (for providers supporting both Anthropic and OpenAI protocols) */
+  interfaces?: Record<string, string>
+}
+
+/** Return shape for model:test IPC channel */
+export interface ModelTestResult {
+  success: boolean
+  latencyMs?: number
+  model?: string
+  error?: string
+  errorCode?: 'network_unreachable' | 'auth_failed' | 'model_not_found' | 'unknown'
+  steps: ModelTestStep[]
+}
+
+export interface ModelTestStep {
+  step: number
+  label: string
+  status: 'pending' | 'running' | 'ok' | 'fail'
+  detail: string
+  latencyMs?: number
+  requestInfo?: string
+  responseInfo?: string
 }
 
 // ── Model provider templates (canonical source — consumed by main and renderer) ──

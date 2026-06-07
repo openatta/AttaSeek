@@ -13,6 +13,7 @@ import ArtifactCreatedEvent from './events/ArtifactCreatedEvent'
 import TaskCompletedEvent from './events/TaskCompletedEvent'
 import TaskFailedEvent from './events/TaskFailedEvent'
 import PermissionRequestedEvent from './events/PermissionRequestedEvent'
+import { UserQuestionEvent } from './events/UserQuestionEvent'
 import NoModelPrompt from './NoModelPrompt'
 import { ArrowDown } from 'lucide-react'
 
@@ -122,6 +123,8 @@ const EventCard = memo(function EventCard({ event, streamingMessageId }: { event
       return <TaskFailedEvent payload={event.payload} taskId={event.taskId} sessionId={event.sessionId} />
     case 'PermissionRequested':
       return <PermissionRequestedEvent payload={event.payload} />
+    case 'UserQuestion':
+      return <UserQuestionEvent payload={event.payload} />
     default:
       return null
   }

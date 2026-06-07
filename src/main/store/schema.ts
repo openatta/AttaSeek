@@ -100,22 +100,7 @@ CREATE TABLE IF NOT EXISTS app_state (
   value TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS model_configs (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
-  interface_type TEXT NOT NULL CHECK(interface_type IN ('openai_compatible','anthropic')),
-  endpoint_url TEXT NOT NULL,
-  models TEXT NOT NULL DEFAULT '[]',
-  default_model TEXT NOT NULL,
-  extra_params TEXT,
-  is_default INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-
--- Migration: add models column to pre-existing model_configs tables safely
--- (SQLite throws if column already exists, so we check first)
--- This runs as part of schema init; ignored if column already present
+-- model_configs table removed — LLM config is now in ~/.atta/settings.json (JSON text)
 
 CREATE TABLE IF NOT EXISTS token_usage (
   id TEXT PRIMARY KEY,
@@ -126,7 +111,7 @@ CREATE TABLE IF NOT EXISTS token_usage (
   input_tokens INTEGER NOT NULL,
   output_tokens INTEGER NOT NULL,
   created_at INTEGER NOT NULL,
-  FOREIGN KEY (config_id) REFERENCES model_configs(id) ON DELETE CASCADE
+  -- config_id references a provider id from ~/.atta/settings.json (no FK constraint)
 );
 
 CREATE INDEX IF NOT EXISTS idx_token_usage_config ON token_usage(config_id, created_at);

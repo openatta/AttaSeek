@@ -12,10 +12,29 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { app } from 'electron'
+import { walkDir } from './fs-utils'
 import { artifactService } from '../artifacts/ArtifactService'
 import type { ArtifactType } from '../../shared/types/Artifact'
+import { webSearchImpl, webFetchImpl, sourceVerifyImpl, citeSourceImpl } from '../agent/tools/implementations/web-tools'
+import { lspDiagnosticImpl, lspDefinitionImpl, lspReferencesImpl } from '../agent/tools/implementations/lsp'
+import { pushNotificationImpl } from '../agent/tools/implementations/notification'
+import { bashImpl } from '../agent/tools/implementations/bash'
+import { writeFileImpl, editFileImpl, globImpl, grepImpl } from '../agent/tools/implementations/file-ops'
+import { reviewDocumentImpl, formatDocumentImpl, outlineDocumentImpl } from '../agent/tools/implementations/document-tools'
+import { taskCreateImpl, taskUpdateImpl, taskListImpl, taskOutputImpl } from '../agent/tools/implementations/task-mgmt'
+import { spawnAgentImpl } from '../agent/tools/implementations/agent-tool-impl'
+import { invokeSkillImpl } from '../agent/tools/implementations/skill-tool-impl'
+import { askUserQuestionImpl } from '../agent/tools/implementations/question-impl'
+import { enterPlanModeImpl, exitPlanModeImpl } from '../agent/tools/implementations/plan-impl'
+import { todoWriteImpl } from '../agent/tools/implementations/todo-impl'
 
-export type ToolImplFn = (input: Record<string, unknown>) => Promise<unknown>
+export interface ToolExecContext {
+  taskId: string
+  sessionId: string
+  projectId?: string
+}
+
+export type ToolImplFn = (input: Record<string, unknown>, ctx?: ToolExecContext) => Promise<unknown>
 export type ToolImplObj = { toolId: string; execute: ToolImplFn }
 export type ToolImpl = ToolImplFn | ToolImplObj
 
@@ -85,37 +104,24 @@ export const TOOL_IMPLS: Record<string, ToolImpl> = {
     }
 
     const results: { file: string; line: number; content: string }[] = []
-    let stopped = false
     const MAX_RESULTS = 50
+    const FILE_FILTER = /\.(ts|tsx|js|jsx|json|md|css|html)$/
 
-    const walkDir = (dir: string): boolean => {
-      if (stopped) return false
-      const entries = fs.readdirSync(dir, { withFileTypes: true })
-      for (const entry of entries) {
-        if (stopped) return false
-        const full = path.join(dir, entry.name)
-        if (entry.isDirectory()) {
-          if (!entry.name.startsWith('.') && entry.name !== 'node_modules') {
-            walkDir(full)
-          }
-        } else if (entry.isFile() && /\.(ts|tsx|js|jsx|json|md|css|html)$/.test(entry.name)) {
-          try {
-            const lines = fs.readFileSync(full, 'utf-8').split('\n')
-            for (let i = 0; i < lines.length && !stopped; i++) {
-              if (lines[i].includes(pattern)) {
-                results.push({ file: path.relative(resolved, full), line: i + 1, content: lines[i].trim() })
-                if (results.length >= MAX_RESULTS) {
-                  stopped = true
-                  break
-                }
-              }
+    walkDir({
+      dir: resolved,
+      fileFilter: FILE_FILTER,
+      onFile: (full, rel) => {
+        try {
+          const lines = fs.readFileSync(full, 'utf-8').split('\n')
+          for (let i = 0; i < lines.length; i++) {
+            if (lines[i].includes(pattern)) {
+              results.push({ file: rel, line: i + 1, content: lines[i].trim() })
+              if (results.length >= MAX_RESULTS) return true
             }
-          } catch { /* skip unreadable files */ }
-        }
-      }
-      return !stopped
-    }
-    walkDir(resolved)
+          }
+        } catch { /* skip unreadable files */ }
+      },
+    })
     return { pattern, matches: results.slice(0, MAX_RESULTS), total: results.length }
   },
 
@@ -162,4 +168,54 @@ export const TOOL_IMPLS: Record<string, ToolImpl> = {
       note: 'This is a preview. No actual git commit created (mock mode).',
     }
   },
+
+  // ── Research tools ──
+  web_search: webSearchImpl,
+  web_fetch: webFetchImpl,
+  source_verify: sourceVerifyImpl,
+  cite_source: citeSourceImpl,
+
+  // ── LSP tools ──
+  lsp_diagnostic: lspDiagnosticImpl,
+  lsp_definition: lspDefinitionImpl,
+  lsp_references: lspReferencesImpl,
+
+  // ── Notification ──
+  push_notification: pushNotificationImpl,
+
+  // ── Shell ──
+  bash: bashImpl,
+
+  // ── File operations ──
+  write_file: writeFileImpl,
+  edit_file: editFileImpl,
+  glob: globImpl,
+  grep: grepImpl,
+
+  // ── Document / writing ──
+  review_document: reviewDocumentImpl,
+  format_document: formatDocumentImpl,
+  outline_document: outlineDocumentImpl,
+
+  // ── Task management ──
+  task_create: taskCreateImpl,
+  task_update: taskUpdateImpl,
+  task_list: taskListImpl,
+  task_output: taskOutputImpl,
+
+  // ── Sub-agent ──
+  spawn_agent: spawnAgentImpl,
+
+  // ── Skill ──
+  invoke_skill: invokeSkillImpl,
+
+  // ── User interaction ──
+  ask_user_question: askUserQuestionImpl,
+
+  // ── Plan mode ──
+  enter_plan_mode: enterPlanModeImpl,
+  exit_plan_mode: exitPlanModeImpl,
+
+  // ── Todo ──
+  todo_write: todoWriteImpl,
 }

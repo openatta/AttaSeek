@@ -5,21 +5,25 @@
  * on completion, and cleans up orphaned worktrees on startup.
  */
 
-import { execSync } from 'child_process'
+import { exec as execAsync } from 'child_process'
+import { promisify } from 'util'
 import * as fs from 'fs'
+import { promises as fsp } from 'fs'
 import * as path from 'path'
 import * as os from 'os'
+
+const exec = promisify(execAsync)
 
 export class WorktreeManager {
   private activeWorktrees = new Map<string, string>() // agentId → worktree path
 
   /** Create a new worktree for a sub-agent (each agent gets its own branch) */
-  create(agentId: string, baseBranch?: string): string {
+  async create(agentId: string, baseBranch?: string): Promise<string> {
     const branchName = `attaseek/${agentId}`
     const wtPath = path.join(os.tmpdir(), `attaseek-worktree-${agentId}`)
 
     try {
-      execSync(`git worktree add -b "${branchName}" "${wtPath}" ${baseBranch || 'main'}`, { stdio: 'pipe', timeout: 10000 })
+      await exec(`git worktree add -b "${branchName}" "${wtPath}" ${baseBranch || 'main'}`, { timeout: 10000 })
       this.activeWorktrees.set(agentId, wtPath)
       return wtPath
     } catch (err) {
@@ -28,15 +32,15 @@ export class WorktreeManager {
   }
 
   /** Merge worktree branch back to main branch */
-  merge(agentId: string, message: string): boolean {
+  async merge(agentId: string, message: string): Promise<boolean> {
     const wtPath = this.activeWorktrees.get(agentId)
     if (!wtPath) return false
     const branchName = `attaseek/${agentId}`
     const sanitized = message.replace(/"/g, "'").replace(/`/g, "'")
     try {
-      execSync(`git -C "${wtPath}" add . && git -C "${wtPath}" commit -m "${sanitized}"`, { stdio: 'pipe', timeout: 10000 })
-      execSync(`git merge "${branchName}"`, { stdio: 'pipe', timeout: 10000 })
-      this.discard(agentId)
+      await exec(`git -C "${wtPath}" add . && git -C "${wtPath}" commit -m "${sanitized}"`, { timeout: 10000 })
+      await exec(`git merge "${branchName}"`, { timeout: 10000 })
+      await this.discard(agentId)
       return true
     } catch {
       return false
@@ -44,32 +48,36 @@ export class WorktreeManager {
   }
 
   /** Discard worktree without merging */
-  discard(agentId: string): void {
+  async discard(agentId: string): Promise<void> {
     const wtPath = this.activeWorktrees.get(agentId)
     if (!wtPath) return
     try {
-      execSync(`git worktree remove --force "${wtPath}"`, { stdio: 'pipe', timeout: 10000 })
+      await exec(`git worktree remove --force "${wtPath}"`, { timeout: 10000 })
     } catch { /* force cleanup below */ }
     try {
-      if (fs.existsSync(wtPath)) fs.rmSync(wtPath, { recursive: true, force: true })
+      await fsp.rm(wtPath, { recursive: true, force: true })
     } catch { /* best effort */ }
     this.activeWorktrees.delete(agentId)
   }
 
   /** Clean orphaned worktrees on startup */
-  cleanupOrphans(): void {
+  async cleanupOrphans(): Promise<void> {
     try {
-      execSync('git worktree prune', { stdio: 'pipe', timeout: 5000 })
+      await exec('git worktree prune', { timeout: 5000 })
     } catch { /* best effort */ }
     // Clean any leftover temp directories from previous runs
     const tmpDir = os.tmpdir()
     try {
-      for (const entry of fs.readdirSync(tmpDir)) {
+      const entries = await fsp.readdir(tmpDir)
+      for (const entry of entries) {
         if (entry.startsWith('attaseek-worktree-')) {
           const full = path.join(tmpDir, entry)
-          if (fs.statSync(full).isDirectory()) {
-            try { fs.rmSync(full, { recursive: true, force: true }) } catch { /* skip locked dirs */ }
-          }
+          try {
+            const stat = await fsp.stat(full)
+            if (stat.isDirectory()) {
+              try { await fsp.rm(full, { recursive: true, force: true }) } catch { /* skip locked dirs */ }
+            }
+          } catch { /* skip */ }
         }
       }
     } catch { /* best effort */ }

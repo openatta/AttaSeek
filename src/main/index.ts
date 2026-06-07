@@ -12,10 +12,12 @@ import { registerMemoryHandlers } from './ipc/memory'
 import { registerSessionHandlers, setSessionWindow } from './ipc/session'
 import { registerModelHandlers } from './ipc/model'
 import { registerAppHandlers } from './ipc/app'
+import { registerQuestionHandlers } from './ipc/question'
 import { boot } from './boot'
 import { getDb, closeDb } from './store/db'
 import { agentEventBus } from './agent/AgentEventBus'
 import { permissionBridge } from './permission/PermissionBridge'
+import { questionBridge } from './tools/QuestionBridge'
 import { subAgentManager } from './agent/subagent/SubAgentManager'
 import { cleanupTaskStore } from './agent/tools/implementations/task-mgmt'
 import { startTimer } from './perf'
@@ -43,6 +45,7 @@ registerPluginHandlers()
 registerSessionHandlers()
 registerModelHandlers()
 registerAppHandlers()
+registerQuestionHandlers()
 
 // ── Window management ──
 
@@ -115,8 +118,9 @@ app.on('before-quit', () => {
   // Cleanup task store
   cleanupTaskStore()
 
-  // Cancel all pending permission requests
+  // Cancel all pending permission requests and questions
   permissionBridge.cancelAll()
+  questionBridge.cancelAll()
 
   // Cancel all running agent tasks and sub-agents
   subAgentManager.cancelAll()

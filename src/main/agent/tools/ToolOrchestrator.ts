@@ -9,7 +9,8 @@
  */
 
 import { toolExecutor } from '../../tools/ToolExecutor'
-import type { LLMToolUseBlock } from '../llm/LLMProvider'
+import { toolRegistry } from '../../tools/ToolRegistry'
+import type { LLMToolUseBlock } from '../llm/ModelProvider'
 
 export interface ToolExecResult {
   toolCallId: string
@@ -25,6 +26,22 @@ export interface ToolOrchestrationResult {
   denied: boolean
 }
 
+/** Determine if a tool is read-only, checking manifest first, then name heuristic */
+export function isReadOnly(name: string): boolean {
+  const manifest = toolRegistry.get(name)
+  if (manifest?.isReadOnly !== undefined) return manifest.isReadOnly
+  // Fallback: name-based heuristic
+  return /^(read|search|list|get|glob|grep|view|show|find|cite)/i.test(name)
+}
+
+/** Determine if a tool is concurrency-safe, checking manifest first */
+export function isConcurrencySafe(name: string): boolean {
+  const manifest = toolRegistry.get(name)
+  if (manifest?.isConcurrencySafe !== undefined) return manifest.isConcurrencySafe
+  // Fallback: read-only tools are concurrency-safe by default
+  return isReadOnly(name)
+}
+
 /** Execute a batch of tool calls with parallelism for read tools */
 export async function orchestrateTools(
   toolUses: LLMToolUseBlock[],
@@ -37,7 +54,7 @@ export async function orchestrateTools(
   const writes: LLMToolUseBlock[] = []
 
   for (const tu of toolUses) {
-    if (tu.name.includes('read') || tu.name.includes('search') || tu.name.includes('list') || tu.name.includes('get')) {
+    if (isConcurrencySafe(tu.name)) {
       reads.push(tu)
     } else {
       writes.push(tu)

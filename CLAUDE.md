@@ -62,7 +62,15 @@ AttaSeek/
 │   │   ├── ipc/                      # IPC handler（agent/artifact/model/session/…）
 │   │   ├── agent/                    # Agent 运行时（AgentRuntime, AgentLoop, LLMProvider, ContextBuilder）
 │   │   ├── model/                    # 模型配置与 Provider（ModelConfigService, ProviderFactory, OpenAICompatibleProvider）
-│   │   ├── tools/                    # 工具执行（ToolExecutor, ToolImplementations, ToolRegistry）
+│   │   ├── tools/                    # 工具执行基础设施（ToolExecutor, ToolImplementations, ToolRegistry）
+│   │   │   ├── ToolRegistry.ts       #   工具清单注册表（单例）
+│   │   │   ├── ToolRouter.ts         #   基于 Jaccard 相似度的 Top-K 工具选择
+│   │   │   ├── ToolExecutor.ts       #   完整执行流水线：权限→执行→审计
+│   │   │   ├── ToolImplementations.ts #   TOOL_IMPLS 查找表（映射 toolId→实现函数）
+│   │   │   └── QuestionBridge.ts     #   AskUserQuestion 的 Promise 桥接
+│   │   ├── agent/tools/              # 工具编排+清单+实现（实现细节在 implementations/ 子目录）
+│   │   │   ├── ToolOrchestrator.ts   #   批量并行/串行工具分派
+│   │   │   └── implementations/     #   所有工具清单（*-tools.ts）和实现（*.ts）
 │   │   ├── permission/              # 权限服务（PermissionService, PermissionBridge）
 │   │   ├── memory/ / audit/ / artifacts/ / plugins/ / skills/
 │   │   └── store/                    # SQLite 持久化、ID 生成、密钥存储、工具函数

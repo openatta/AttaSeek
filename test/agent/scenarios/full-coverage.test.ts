@@ -1,14 +1,14 @@
 /**
  * Agent Engine V2 — Full Coverage Test Suite
  *
- * All 12 execution paths tested via MockLLMProvider + assembledContext injection.
+ * All 12 execution paths tested via MockModelProvider + assembledContext injection.
  * Zero DB dependency. Zero Electron runtime requirement.
  *
  * Run: npm run test:agent:mock
  */
 
 import { describe, it, expect } from 'vitest'
-import { MockLLMProvider } from '../mock/MockLLMProvider'
+import { MockModelProvider } from '../mock/MockModelProvider'
 import { textDelta, toolUseStart, toolUseDelta, blockStop, messageStop, endTurnResult } from '../mock/helpers'
 import { AgentOrchestrator } from '../../../src/main/agent/orchestrator/AgentOrchestrator'
 import { validateProfile } from '../../../src/main/agent/profile/AgentProfile'
@@ -49,7 +49,7 @@ describe('Path: no_provider', () => {
 
 describe('Path: plain-text → completed', () => {
   it('should complete when LLM returns text without tools', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     mock.pushTurn([textDelta('Hello! How can I help?'), messageStop()], endTurnResult('Hello! How can I help?'))
 
     const orchestrator = new AgentOrchestrator()
@@ -72,7 +72,7 @@ describe('Path: plain-text → completed', () => {
 
 describe('Path: single-tool → completed', () => {
   it('should execute one tool and complete', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     // Turn 1: tool_use
     mock.pushTurn([
       toolUseStart('tu_1', 'read_file'),
@@ -97,7 +97,7 @@ describe('Path: single-tool → completed', () => {
 
 describe('Path: multi-tool → completed', () => {
   it('should execute 2 parallel read tools', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     mock.pushTurn([
       toolUseStart('tu_1', 'read_file'), toolUseDelta('tu_1', '{"path":"a.txt"}'), blockStop(1),
       toolUseStart('tu_2', 'read_file'), toolUseDelta('tu_2', '{"path":"b.txt"}'), blockStop(2),
@@ -125,7 +125,7 @@ describe('Path: multi-tool → completed', () => {
 
 describe('Path: permission-deny → denied', () => {
   it('should terminate with denied when tool is denied', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     mock.pushTurn([
       toolUseStart('tu_1', 'git_commit'),
       toolUseDelta('tu_1', '{"message":"fix"}'),
@@ -159,7 +159,7 @@ describe('Path: permission-deny → denied', () => {
 
 describe('Path: multi-turn-loop', () => {
   it('should execute 3 turns and complete', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     // Turn 1: tool_use read_file
     mock.pushTurn([
       toolUseStart('tu_1', 'read_file'), toolUseDelta('tu_1', '{"path":"a.ts"}'),
@@ -187,7 +187,7 @@ describe('Path: multi-turn-loop', () => {
 
 describe('Path: interrupt → aborted', () => {
   it('should abort when interrupt() is called mid-execution', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     // Use a turn that takes a moment so we can interrupt
     mock.pushTurn([
       textDelta('Hel'), textDelta('lo'), messageStop(),
@@ -211,7 +211,7 @@ describe('Path: interrupt → aborted', () => {
 
 describe('Path: llm-error → model_error', () => {
   it('should fail with model_error when LLM throws', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     mock.pushError('rate_limit', 'Too many requests')
 
     const orchestrator = new AgentOrchestrator()
@@ -227,7 +227,7 @@ describe('Path: llm-error → model_error', () => {
 
 describe('Path: error-recovery', () => {
   it('should retry server errors once then fail (L1)', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     mock.pushError('server', 'Internal server error')
     mock.pushError('server', 'Internal server error') // retry also fails
 
@@ -241,7 +241,7 @@ describe('Path: error-recovery', () => {
   })
 
   it('should retry rate_limit errors with wait (L2)', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     mock.pushError('rate_limit', 'Too many requests')
     mock.pushError('rate_limit', 'Still rate limited')
 
@@ -259,7 +259,7 @@ describe('Path: error-recovery', () => {
 
 describe('Path: end-turn-immediate', () => {
   it('should complete when first response has no tool_use', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     mock.pushTurn([textDelta('Done.'), messageStop()], {
       content: [{ type: 'text', text: 'Done.' }],
       stopReason: 'end_turn', usage: { inputTokens: 50, outputTokens: 20 },
@@ -279,7 +279,7 @@ describe('Path: end-turn-immediate', () => {
 
 describe('Path: tool-then-end-turn', () => {
   it('should run tool, append result, then complete on end_turn', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     mock.pushTurn([
       toolUseStart('tu_1', 'read_file'), toolUseDelta('tu_1', '{"path":"src/index.ts"}'),
       blockStop(1), messageStop(),
@@ -301,7 +301,7 @@ describe('Path: tool-then-end-turn', () => {
 
 describe('Path: max-turns', () => {
   it('should stop at maxTurns when LLM keeps returning tools', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     // Queue more turns than the profile allows (maxTurns=5)
     for (let i = 0; i < 6; i++) {
       mock.pushTurn([
@@ -326,7 +326,7 @@ describe('Path: max-turns', () => {
 
 describe('Edge: provider + context override', () => {
   it('should use both overrides together', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     mock.pushTurn([textDelta('Custom response'), messageStop()], endTurnResult('Custom response'))
 
     const orchestrator = new AgentOrchestrator()

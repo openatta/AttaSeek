@@ -6,8 +6,8 @@
 import { ipcMain } from 'electron'
 import { modelConfigService } from '../model/ModelConfigService'
 import { modelUsageTracker } from '../model/ModelUsageTracker'
-import { getApiKeyPreview } from '../store/secrets'
 import { ipcWrap, ipcWrapAsync, validateRequiredString } from '../store/util'
+import type { CreateModelConfig, ModelConfigPatch, ModelTestResult, UsageStats } from '../../shared/types/model'
 
 export function registerModelHandlers(): void {
   ipcMain.handle('model:list', async () =>
@@ -19,28 +19,42 @@ export function registerModelHandlers(): void {
       return { config: modelConfigService.get(p.id) }
     }))
 
-  ipcMain.handle('model:create', async (_e, p: { config: Record<string, unknown> }) =>
+  ipcMain.handle('model:create', async (_e, p: { config: CreateModelConfig }) =>
     ipcWrap(() => {
       const c = p.config
       if (!c || typeof c !== 'object') throw new Error('config is required')
-      validateRequiredString(c, 'name', 'name')
-      validateRequiredString(c, 'interfaceType', 'interfaceType')
-      validateRequiredString(c, 'endpointUrl', 'endpointUrl')
-      validateRequiredString(c, 'apiKey', 'apiKey')
-      validateRequiredString(c, 'defaultModel', 'defaultModel')
+      const raw = c as unknown as Record<string, unknown>
+      validateRequiredString(raw, 'name', 'name')
+      validateRequiredString(raw, 'interfaceType', 'interfaceType')
+      validateRequiredString(raw, 'endpointUrl', 'endpointUrl')
+      validateRequiredString(raw, 'apiKey', 'apiKey')
+      validateRequiredString(raw, 'defaultModel', 'defaultModel')
       const config = modelConfigService.create({
-        name: c.name as string,
-        interfaceType: c.interfaceType as 'openai_compatible' | 'anthropic',
-        endpointUrl: c.endpointUrl as string,
-        apiKey: c.apiKey as string,
-        defaultModel: c.defaultModel as string,
-        models: Array.isArray(c.models) ? c.models as string[] : [c.defaultModel as string],
-        extraParams: typeof c.extraParams === 'object' && c.extraParams !== null ? c.extraParams as Record<string, unknown> : undefined,
+        name: c.name,
+        interfaceType: c.interfaceType,
+        endpointUrl: c.endpointUrl,
+        apiKey: c.apiKey,
+        defaultModel: c.defaultModel,
+        models: Array.isArray(c.models) ? c.models : [c.defaultModel],
+        extraParams: c.extraParams,
+        opusModel: c.opusModel,
+        sonnetModel: c.sonnetModel,
+        haikuModel: c.haikuModel,
+        smallFastModel: c.smallFastModel,
+        subagentModel: c.subagentModel,
+        strongModel: c.strongModel,
+        fallbackModel: c.fallbackModel,
+        classifierModel: c.classifierModel,
+        compactModel: c.compactModel,
+        effortLevel: c.effortLevel,
+        maxTokens: c.maxTokens,
+        compactThreshold: c.compactThreshold,
+        interfaces: c.interfaces,
       })
       return { config }
     }))
 
-  ipcMain.handle('model:update', async (_e, p: { id: string; patch: Record<string, unknown> }) =>
+  ipcMain.handle('model:update', async (_e, p: { id: string; patch: ModelConfigPatch }) =>
     ipcWrap(() => {
       if (!p.id || typeof p.id !== 'string') throw new Error('id must be a string')
       return { config: modelConfigService.update(p.id, p.patch as Parameters<typeof modelConfigService.update>[1]) }
@@ -62,10 +76,7 @@ export function registerModelHandlers(): void {
     }))
 
   ipcMain.handle('model:usage', async (_e, p: { configId?: string; periodDays?: number }) =>
-    ipcWrap(() => ({ stats: modelUsageTracker.summary(p.configId, p.periodDays) })))
-
-  ipcMain.handle('model:get-key-info', async (_e, p: { id: string }) =>
-    ipcWrap(() => ({ info: getApiKeyPreview(`model:${p.id}`) })))
+    ipcWrap((): { stats: UsageStats } => ({ stats: modelUsageTracker.summary(p.configId, p.periodDays) })))
 
   ipcMain.handle('model:has-config', async () =>
     ipcWrap(() => ({ configured: modelConfigService.hasConfigured() })))

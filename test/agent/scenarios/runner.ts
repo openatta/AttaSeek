@@ -1,10 +1,10 @@
 /**
  * Scenario runner — loads JSON scenario files and executes them
- * against AgentOrchestrator with MockLLMProvider.
+ * against AgentOrchestrator with MockModelProvider.
  */
 
 import { describe, it } from 'vitest'
-import { MockLLMProvider } from '../mock/MockLLMProvider'
+import { MockModelProvider } from '../mock/MockModelProvider'
 import { AgentOrchestrator } from '../../../src/main/agent/orchestrator/AgentOrchestrator'
 import { setupTempDir, loadProfile } from './setup'
 import {
@@ -16,7 +16,7 @@ import {
   assertTaskCompleted,
 } from './assertions'
 import type { SessionEvent } from '../../../src/shared/types/SessionEvent'
-import type { LLMChunk } from '../../../src/main/agent/llm/LLMProvider'
+import type { LLMChunk } from '../../../src/main/agent/llm/ModelProvider'
 
 // ── Types matching scenario JSON format ──
 
@@ -48,7 +48,7 @@ export async function runScenario(scenario: ScenarioFile): Promise<void> {
   const env = setupTempDir(scenario.guestFiles)
   try {
     const profile = loadProfile(scenario.profile)
-    const mockProvider = new MockLLMProvider()
+    const mockProvider = new MockModelProvider()
     const orchestrator = new AgentOrchestrator()
 
     // For the first turn only (single-user-message scenarios)

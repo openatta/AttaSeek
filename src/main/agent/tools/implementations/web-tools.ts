@@ -10,9 +10,52 @@ export const webSearchImpl: ToolImpl = {
     const query = String(input.query || '')
     const maxResults = Number(input.maxResults || 10)
     if (!query) throw new Error('query is required')
-    // Placeholder — real implementation would call a search API
-    return `Web search results for "${query}" (max ${maxResults} results):\n` +
-      `[Search API integration pending — using duckduckgo or serpapi]`
+
+    try {
+      const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`
+      const resp = await fetch(url)
+      const data = await resp.json() as Record<string, unknown>
+
+      const results: string[] = []
+
+      // Abstract (main answer snippet)
+      if (data.AbstractText) {
+        results.push(`**Answer:** ${data.AbstractText}`)
+        if (data.AbstractURL) results.push(`Source: ${data.AbstractURL}`)
+        results.push('')
+      }
+
+      // Instant answer
+      if (data.Answer) {
+        results.push(`**Instant Answer:** ${data.Answer}`)
+      }
+
+      // Related topics
+      const topics = data.RelatedTopics as Array<Record<string, unknown>> | undefined
+      if (topics && topics.length > 0) {
+        results.push('**Related Results:**')
+        let count = 0
+        for (const topic of topics) {
+          if (count >= maxResults) break
+          const text = topic.Text as string | undefined
+          const url = topic.FirstURL as string | undefined
+          if (text) {
+            results.push(`- ${text}${url ? ` (${url})` : ''}`)
+            count++
+          }
+        }
+      }
+
+      if (results.length === 0) {
+        // Fallback: build a simple search URL
+        return `No instant results found for "${query}". Try: https://duckduckgo.com/?q=${encodeURIComponent(query)}`
+      }
+
+      return results.join('\n')
+    } catch (err) {
+      // Fallback on network error
+      return `Search for "${query}" failed: ${err instanceof Error ? err.message : 'Network error'}. Try: https://duckduckgo.com/?q=${encodeURIComponent(query)}`
+    }
   },
 }
 

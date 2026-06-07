@@ -1,8 +1,16 @@
 /**
- * LLMProvider — abstract interface for language model backends.
+ * ModelProvider — abstract interface for language model backends.
  *
- * Types and interface shared across agent/llm/ and model/ subsystems.
+ * This is the **API communication layer** — it sends chat requests to LLM
+ * backends (Anthropic, OpenAI, DeepSeek, etc.). The configuration/slot
+ * resolution layer is ModelResolver.
+ *
  * Concrete implementations: AnthropicProvider, OpenAICompatibleProvider.
+ *
+ * @remarks
+ * Design doc LLM_CONFIG.md §7 uses "ModelProvider" for the config-layer
+ * slot resolver. In code, that concept is `ModelResolver`; this interface
+ * is the lower-level API transport.
  */
 
 // ── Public types (shared with ContextBuilder, AgentOrchestrator, ToolExecutor) ──
@@ -43,7 +51,7 @@ export interface LLMProviderConfig {
   topP?: number
   topK?: number
   maxTokens?: number
-  toolChoice?: 'auto' | 'any' | 'tool' | 'none'
+  toolChoice?: 'auto' | 'any' | 'tool' | 'none' | { type: 'tool'; name: string }
   stopSequences?: string[]
   thinkingBudget?: number
   responseFormat?: 'text' | 'json_object'
@@ -51,15 +59,6 @@ export interface LLMProviderConfig {
   presencePenalty?: number
 }
 
-export function extractProviderConfig(extraParams?: Record<string, unknown>): LLMProviderConfig {
-  if (!extraParams) return {}
-  const allowed = ['temperature','topP','topK','maxTokens','toolChoice','stopSequences','thinkingBudget','responseFormat','frequencyPenalty','presencePenalty']
-  const cfg: Record<string, unknown> = {}
-  for (const key of allowed) {
-    if (key in extraParams) cfg[key] = extraParams[key]
-  }
-  return cfg as LLMProviderConfig
-}
 
 export interface LLMChatParams {
   systemPrompt: string
@@ -67,6 +66,7 @@ export interface LLMChatParams {
   tools: LLMToolDef[]
   config?: LLMProviderConfig
   signal?: AbortSignal  // For cancellation mid-stream
+  model?: string        // Override model for slot-based selection (falls back to provider default)
 }
 
 export interface LLMChatResult {
@@ -97,7 +97,10 @@ export type LLMChunkCallback = (chunk: LLMChunk) => void
 
 // ── Provider interface ──
 
-export interface LLMProvider {
+/** ModelProvider — interface for LLM API backends.
+ *  Implementations handle the wire protocol (Anthropic Messages, OpenAI Chat Completions).
+ *  For model selection, see ModelResolver. */
+export interface ModelProvider {
   readonly name: string
   readonly models: string[]
   /** Non-streaming chat completion */

@@ -1,15 +1,15 @@
 /**
- * MockLLMProvider — FIFO queue mock implementing the LLMProvider interface.
+ * MockModelProvider — FIFO queue mock implementing the ModelProvider interface.
  *
  * Pre-program responses with pushTurn() / pushFullTurn() / pushError(),
  * then inject into AgentOrchestrator. Each chatStream() call consumes
  * the next queued turn. Records all requests for assertion.
  */
 
-import type { LLMProvider, LLMChatParams, LLMChatResult, LLMChunk, LLMChunkCallback } from '../../../src/main/agent/llm/LLMProvider'
-import { LLMError } from '../../../src/main/agent/llm/LLMProvider'
+import type { ModelProvider, LLMChatParams, LLMChatResult, LLMChunk, LLMChunkCallback } from '../../../src/main/agent/llm/ModelProvider'
+import { LLMError } from '../../../src/main/agent/llm/ModelProvider'
 
-export class MockLLMProvider implements LLMProvider {
+export class MockModelProvider implements ModelProvider {
   readonly name = 'mock'
   readonly models = ['mock-model']
 
@@ -36,12 +36,12 @@ export class MockLLMProvider implements LLMProvider {
     ;(this.turns[this.turns.length - 1] as any)._error = err
   }
 
-  // ── LLMProvider implementation ──
+  // ── ModelProvider implementation ──
 
   async chat(params: LLMChatParams): Promise<LLMChatResult> {
     this.requests.push(params)
     const turn = this.turns.shift()
-    if (!turn) throw new LLMError('unknown', 'MockLLMProvider: no turns queued')
+    if (!turn) throw new LLMError('unknown', 'MockModelProvider: no turns queued')
     if ((turn as any)._error) throw (turn as any)._error
     return turn.result
   }
@@ -49,7 +49,7 @@ export class MockLLMProvider implements LLMProvider {
   async chatStream(params: LLMChatParams, onChunk: LLMChunkCallback): Promise<LLMChatResult> {
     this.requests.push(params)
     const turn = this.turns.shift()
-    if (!turn) throw new LLMError('unknown', 'MockLLMProvider: no turns queued')
+    if (!turn) throw new LLMError('unknown', 'MockModelProvider: no turns queued')
     if ((turn as any)._error) throw (turn as any)._error
 
     // Simulate streaming: call onChunk for each chunk with a microtask delay

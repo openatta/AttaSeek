@@ -2,7 +2,7 @@
  * Message history correctness + AbortController timing depth tests.
  */
 import { describe, it, expect } from 'vitest'
-import { MockLLMProvider } from '../mock/MockLLMProvider'
+import { MockModelProvider } from '../mock/MockModelProvider'
 import { textDelta, toolUseStart, toolUseDelta, blockStop, messageStop, endTurnResult } from '../mock/helpers'
 import { AgentOrchestrator } from '../../../src/main/agent/orchestrator/AgentOrchestrator'
 import { validateProfile } from '../../../src/main/agent/profile/AgentProfile'
@@ -19,7 +19,7 @@ const mkTask = (g: string) => ({ id: 't', sessionId: 's', goal: g, status: 'idle
 
 describe('Message history — multi-turn structure', () => {
   it('should append tool_result after each tool execution', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     // Turn 1: tool
     mock.pushTurn([
       toolUseStart('tu_1', 'read_file'), toolUseDelta('tu_1', '{"path":"a.txt"}'),
@@ -40,7 +40,7 @@ describe('Message history — multi-turn structure', () => {
   })
 
   it('should handle empty tools list without error', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     mock.pushTurn([textDelta('No tools needed'), messageStop()], {
       content: [{ type: 'text', text: 'No tools needed' }],
       stopReason: 'end_turn', usage: { inputTokens: 50, outputTokens: 20 },
@@ -56,7 +56,7 @@ describe('Message history — multi-turn structure', () => {
   })
 
   it('should correctly pass tools when provided in assembledContext', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     mock.pushTurn([textDelta('Used tools from context'), messageStop()], endTurnResult('Used tools'))
 
     const orchestrator = new AgentOrchestrator()
@@ -71,7 +71,7 @@ describe('Message history — multi-turn structure', () => {
 
 describe('AbortController — timing scenarios', () => {
   it('should handle abort during tool execution phase', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     mock.pushTurn([
       toolUseStart('tu_1', 'read_file'), toolUseDelta('tu_1', '{"path":"f.txt"}'),
       blockStop(1), messageStop(),
@@ -98,7 +98,7 @@ describe('AbortController — timing scenarios', () => {
   })
 
   it('should abort before LLM call via signal', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     mock.pushTurn([textDelta('Slow response'), messageStop()], endTurnResult('Slow'))
 
     const orchestrator = new AgentOrchestrator()
@@ -113,7 +113,7 @@ describe('AbortController — timing scenarios', () => {
   })
 
   it('should allow multiple interrupt calls without error', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     mock.pushTurn([textDelta('Testing'), messageStop()], endTurnResult('Testing'))
 
     const orchestrator = new AgentOrchestrator()

@@ -1,19 +1,23 @@
 /**
  * MemoryExtractor — Automatic memory extraction from completed conversations.
  *
- * After each task completes, calls LLM to extract key facts, preferences,
- * decisions, and project conventions. Deduplicates against existing memories
- * before writing to L0 (file system) + L2 (SQLite).
- *
- * Fire-and-forget pattern — failures are logged but never block the user.
+ * Features:
+ *   - ExtractionCursor: differential extraction (only new messages since last run)
+ *   - ExtractionCoalescer: queues overlapping requests, drains once
+ *   - MemdirManager: loads existing MEMORY.md context for dedup
+ *   - Fire-and-forget: failures are logged but never block
  *
  * Inspired by Claude Code's extractMemories/ service.
  */
 
 import { memoryService } from '../../memory/MemoryService'
+import { loadMemoryPrompt } from './MemdirManager'
 import type { MemoryEntry } from '../../../shared/types/Memory'
-import type { LLMMessage } from '../llm/LLMProvider'
-import { llmProviderRegistry } from '../llm/LLMProviderRegistry'
+import type { LLMMessage } from '../llm/ModelProvider'
+import { modelProviderRegistry } from '../llm/ModelProviderRegistry'
+import {
+  MEMORY_DRAIN_TIMEOUT_MS, MEMORY_PREVIEW_CHARS, MEMORY_MAX_CONTEXT_CHARS,
+} from '../../../shared/constants'
 
 export const EXTRACT_MEMORIES_PROMPT = `You are a memory extraction assistant. Analyze the conversation below and extract key information worth remembering for future interactions.
 
@@ -37,12 +41,111 @@ export const EXTRACT_MEMORIES_PROMPT = `You are a memory extraction assistant. A
 
 Return ONLY the JSON array. No other text.`
 
+// ── Extraction cursor (differential extraction) ──
+
+interface ExtractionCursor {
+  lastMessageId: string
+  lastExtractedAt: number
+  turnsSinceLastExtraction: number
+}
+
+const extractionCursors = new Map<string, ExtractionCursor>()
+
+/** Minimum turns between extractions (throttle) */
+const MIN_EXTRACTION_INTERVAL = 3
+
+// ── Extraction coalescer ──
+
+interface PendingExtraction {
+  messages: LLMMessage[]
+  goal: string
+  sessionId: string
+  projectId?: string
+  projectRoot?: string
+  resolve: (entries: MemoryEntry[]) => void
+}
+
+let pendingExtraction: PendingExtraction | null = null
+let drainTimer: ReturnType<typeof setTimeout> | null = null
+
 export async function extractMemories(
   messages: LLMMessage[],
   goal: string,
   sessionId: string,
   projectId?: string,
-  _projectRoot?: string,
+  projectRoot?: string,
+): Promise<MemoryEntry[]> {
+  // Cursor check: skip if not enough turns since last extraction
+  const cursor = extractionCursors.get(sessionId)
+  if (cursor && cursor.turnsSinceLastExtraction < MIN_EXTRACTION_INTERVAL) {
+    cursor.turnsSinceLastExtraction++
+    return []
+  }
+
+  // Coalesce: if extraction is already pending, stash and wait for drain
+  if (pendingExtraction) {
+    return new Promise<MemoryEntry[]>((resolve) => {
+      pendingExtraction = {
+        messages: [...pendingExtraction!.messages, ...messages],
+        goal: `${pendingExtraction!.goal}; ${goal}`,
+        sessionId,
+        projectId,
+        projectRoot,
+        resolve: (entries) => {
+          pendingExtraction = null
+          resolve(entries)
+        },
+      }
+      // Reset drain timer
+      if (drainTimer) clearTimeout(drainTimer)
+      drainTimer = setTimeout(() => drainExtraction(), MEMORY_DRAIN_TIMEOUT_MS)
+    })
+  }
+
+  return new Promise<MemoryEntry[]>((resolve) => {
+    pendingExtraction = {
+      messages, goal, sessionId, projectId, projectRoot,
+      resolve: (entries) => {
+        pendingExtraction = null
+        resolve(entries)
+      },
+    }
+    drainTimer = setTimeout(() => drainExtraction(), MEMORY_DRAIN_TIMEOUT_MS)
+  })
+}
+
+async function drainExtraction(): Promise<void> {
+  if (!pendingExtraction) return
+  const req = pendingExtraction
+  pendingExtraction = null
+  if (drainTimer) { clearTimeout(drainTimer); drainTimer = null }
+
+  try {
+    const entries = await doExtract(req.messages, req.goal, req.sessionId, req.projectId, req.projectRoot)
+    // Update cursor
+    if (req.messages.length > 0) {
+      const lastMsg = req.messages[req.messages.length - 1]
+      const lastId = typeof lastMsg.content === 'string' ? lastMsg.content.slice(0, MEMORY_PREVIEW_CHARS) : JSON.stringify(lastMsg.content).slice(0, MEMORY_PREVIEW_CHARS)
+      extractionCursors.set(req.sessionId, {
+        lastMessageId: lastId,
+        lastExtractedAt: Date.now(),
+        turnsSinceLastExtraction: 0,
+      })
+    }
+    req.resolve(entries)
+  } catch {
+    req.resolve([])
+  }
+}
+
+// ── Core extraction logic ──
+
+async function doExtract(
+  messages: LLMMessage[],
+  goal: string,
+  sessionId: string,
+  projectId?: string,
+  projectRoot?: string,
 ): Promise<MemoryEntry[]> {
   const newEntries: MemoryEntry[] = []
 
@@ -62,19 +165,28 @@ export async function extractMemories(
     } catch { /* best effort */ }
   }
 
-  // Try LLM-powered extraction first
+  // Load existing memory context from MEMORY.md
+  let memoryContext = ''
+  try {
+    const memPrompt = loadMemoryPrompt(projectRoot)
+    if (memPrompt.entries.length > 0) {
+      memoryContext = `\n## Existing memories (avoid duplicates)\n${memPrompt.entries.map(e => `- [${e.type}] ${e.name}: ${e.description}`).join('\n')}`
+    }
+  } catch { /* best effort */ }
+
+  // Try LLM-powered extraction
   const allText = messages
     .map(m => typeof m.content === 'string' ? m.content : JSON.stringify(m.content))
     .join('\n')
 
   let extractedFacts: string[] = []
   try {
-    const provider = llmProviderRegistry.getDefault()
+    const provider = modelProviderRegistry.getDefault()
     if (provider) {
       const result = await provider.chat({
-        systemPrompt: EXTRACT_MEMORIES_PROMPT,
+        systemPrompt: EXTRACT_MEMORIES_PROMPT + memoryContext,
         messages: [
-          { role: 'user', content: `Goal: ${goal}\n\nConversation:\n${allText.slice(0, 20_000)}` },
+          { role: 'user', content: `Goal: ${goal}\n\nConversation:\n${allText.slice(0, MEMORY_MAX_CONTEXT_CHARS)}` },
         ],
         tools: [],
       })
@@ -86,7 +198,7 @@ export async function extractMemories(
     }
   } catch { /* LLM extraction failed — fall back to heuristics below */ }
 
-  // Heuristic fallback (when LLM unavailable or fails)
+  // Heuristic fallback
   if (extractedFacts.length === 0) {
     const patterns = [
       { regex: /prefer[s]?\s+(?:to\s+)?(use|using)\s+([^.,]+)/gi },
@@ -122,3 +234,4 @@ export async function extractMemories(
 
   return newEntries
 }
+

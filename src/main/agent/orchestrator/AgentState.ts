@@ -5,7 +5,7 @@
  * The state is immutable — each iteration produces a new State.
  */
 
-import type { LLMMessage, LLMToolUseBlock } from '../llm/LLMProvider'
+import type { LLMMessage, LLMToolUseBlock } from '../llm/ModelProvider'
 import type { AgentTask } from '../../../shared/types/AgentTask'
 import type { AgentProfile } from '../profile/AgentProfile'
 

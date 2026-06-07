@@ -8,9 +8,22 @@
 
 import { estimateMessagesTokens, isOverBudget } from './token-counter'
 import { COMPACT_SYSTEM_PROMPT, COMPACT_USER_PROMPT } from './compact-prompt'
-import type { LLMMessage } from '../llm/LLMProvider'
+import type { LLMMessage } from '../llm/ModelProvider'
 import type { AgentProfile } from '../profile/AgentProfile'
-import { llmProviderRegistry } from '../llm/LLMProviderRegistry'
+import { modelProviderRegistry } from '../llm/ModelProviderRegistry'
+import { loadLLMConfig } from '../llm/AttaSettingsLoader'
+import { ModelResolver } from '../llm/ModelResolver'
+import {
+  COMPACT_MSG_TRUNCATE_CHARS, MICROCOMPACT_MAX_TOOL_RESULT_CHARS,
+  REACTIVE_COMPACT_MIN_CHARS,
+} from '../../../shared/constants'
+
+export interface CompactOptions {
+  /** Optional model name for compaction (use compact slot by default) */
+  compactModel?: string
+  /** Optional provider ID for slot resolution */
+  providerId?: string
+}
 
 export interface CompactResult {
   summary: string
@@ -37,6 +50,7 @@ export async function compactConversation(
   messages: LLMMessage[],
   profile: AgentProfile,
   existingSummary?: string,
+  opts?: CompactOptions,
 ): Promise<CompactResult> {
   const keepCount = profile.context.keepRecentTurns * 2 // user + assistant per turn
   if (messages.length <= keepCount) {
@@ -58,14 +72,24 @@ export async function compactConversation(
           if (b.type === 'tool_result') return `[Tool Result: ${b.content.slice(0, 200)}]`
           return ''
         }).join('\n')
-    return `${role}: ${content.slice(0, 2000)}`
+    return `${role}: ${content.slice(0, COMPACT_MSG_TRUNCATE_CHARS)}`
   }).join('\n\n---\n\n')
 
   // Try LLM compact; fall back to simple truncation
   let summary = existingSummary || ''
   try {
-    const provider = llmProviderRegistry.getDefault()
+    const provider = opts?.providerId
+      ? modelProviderRegistry.getById(opts.providerId)
+      : modelProviderRegistry.getDefault()
     if (provider) {
+      // Use provided compact model, or resolve from compact slot (compact → haiku → model)
+      let compactModel = opts?.compactModel
+      if (!compactModel) {
+        const llmConfig = loadLLMConfig(opts?.providerId)
+        compactModel = llmConfig.provider
+          ? new ModelResolver(llmConfig.provider).compact()
+          : undefined
+      }
       const result = await provider.chat({
         systemPrompt: COMPACT_SYSTEM_PROMPT,
         messages: [
@@ -73,14 +97,16 @@ export async function compactConversation(
           { role: 'user', content: COMPACT_USER_PROMPT },
         ],
         tools: [],
+        model: compactModel,
       })
       summary = result.content
         .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
         .map(b => b.text)
         .join('\n')
     }
-  } catch {
+  } catch (e) {
     // LLM compact failed — fall back to truncation summary
+    console.warn(`[ContextCompactor] LLM compaction failed, falling back to truncation:`, e instanceof Error ? e.message : String(e))
     summary = `[Compacted ${toCompact.length} messages. ${existingSummary || ''}]`.trim()
   }
 
@@ -105,7 +131,7 @@ export async function compactConversation(
 
 // ── Microcompact: per-turn tool result size capping ──
 
-const MAX_TOOL_RESULT_CHARS = 10_000
+const MAX_TOOL_RESULT_CHARS = MICROCOMPACT_MAX_TOOL_RESULT_CHARS
 
 /** Compress individual tool results to avoid context bloat. Called per-turn before message append. */
 export function microcompact(toolResults: { content: string }[]): { content: string }[] {
@@ -138,8 +164,8 @@ export async function reactiveCompact(
     const compacted = messages.map(m => {
       if (typeof m.content === 'string') return m
       return { ...m, content: (m.content as any[]).map((b: any) => {
-        if (b.type === 'tool_result' && b.content?.length > 5000) {
-          return { ...b, content: b.content.slice(0, 5000) + '\n...[truncated]' }
+        if (b.type === 'tool_result' && b.content?.length > REACTIVE_COMPACT_MIN_CHARS) {
+          return { ...b, content: b.content.slice(0, REACTIVE_COMPACT_MIN_CHARS) + '\n...[truncated]' }
         }
         return b
       })}

@@ -8,7 +8,7 @@
  * Cache scope: within a single task's agent tree (parent + children).
  * Not persisted across tasks or sessions.
  */
-import type { LLMToolDef } from '../llm/LLMProvider'
+import type { LLMToolDef } from '../llm/ModelProvider'
 
 export interface CacheSafeParams {
   /** Static (pre-boundary) portion of the system prompt */

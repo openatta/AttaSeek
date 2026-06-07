@@ -1,5 +1,5 @@
 /**
- * OpenAICompatibleProvider — LLMProvider over /v1/chat/completions endpoint.
+ * OpenAICompatibleProvider — ModelProvider over /v1/chat/completions endpoint.
  *
  * Compatible with OpenAI, DeepSeek, Qwen, Moonshot, and any service
  * that implements the /v1/chat/completions API.
@@ -8,11 +8,13 @@
  */
 
 import type {
-  LLMProvider, LLMChatParams, LLMChatResult,
+  ModelProvider, LLMChatParams, LLMChatResult,
   LLMContentBlock, LLMToolDef, LLMMessage,
   LLMChunkCallback,
-} from './LLMProvider'
-import { LLMError } from './LLMProvider'
+} from './ModelProvider'
+import { LLMError } from './ModelProvider'
+import { withRetry, retryOnRateLimit, retryOnServerError } from './withRetry'
+import { parseSSEStream, tryParseJson, toStopReason } from './OpenAIStreamParser'
 
 interface OpenAIMessage {
   role: string
@@ -31,7 +33,7 @@ interface OpenAIResponse {
   usage: { prompt_tokens: number; completion_tokens: number }
 }
 
-export class OpenAICompatibleProvider implements LLMProvider {
+export class OpenAICompatibleProvider implements ModelProvider {
   readonly name = 'openai_compatible'
   readonly models: string[]
 
@@ -50,13 +52,24 @@ export class OpenAICompatibleProvider implements LLMProvider {
 
   async chat(params: LLMChatParams): Promise<LLMChatResult> {
     try {
-      const body = this.buildRequestBody(params, false)
-      const res = await this.fetchWithTimeout(`${this.endpointUrl}/chat/completions`, {
-        method: 'POST', headers: this.headers(), body: JSON.stringify(body),
-      })
-      const json = await res.json() as OpenAIResponse
-      if (!res.ok) throw this.toLLMError(res.status, json as unknown as Record<string, unknown>)
-      return this.toChatResult(json)
+      return await withRetry(
+        async () => {
+          const body = this.buildRequestBody(params, false)
+          const res = await this.fetchWithTimeout(`${this.endpointUrl}/chat/completions`, {
+            method: 'POST', headers: this.headers(), body: JSON.stringify(body),
+          })
+          const json = await res.json() as OpenAIResponse
+          if (!res.ok) throw this.toLLMError(res.status, json as unknown as Record<string, unknown>)
+          return this.toChatResult(json)
+        },
+        {
+          maxRetries: 3,
+          shouldRetry: (err) => retryOnRateLimit(err) || retryOnServerError(err),
+          onRetry: (err, attempt, delay) => {
+            console.warn(`[OpenAIProvider] retry ${attempt}/3 after ${delay}ms:`, (err as Error)?.message)
+          },
+        },
+      )
     } catch (err: unknown) {
       if (err instanceof LLMError) throw err
       throw new LLMError('unknown', err instanceof Error ? err.message : 'Unknown error')
@@ -65,18 +78,29 @@ export class OpenAICompatibleProvider implements LLMProvider {
 
   async chatStream(params: LLMChatParams, onChunk: LLMChunkCallback): Promise<LLMChatResult> {
     try {
-      const body = this.buildRequestBody(params, true)
-      const res = await this.fetchWithTimeout(`${this.endpointUrl}/chat/completions`, {
-        method: 'POST', headers: this.headers(), body: JSON.stringify(body),
-      })
-      if (!res.ok) {
-        const errText = (await res.text()).slice(0, 300)
-        throw this.toLLMError(res.status, JSON.parse(errText || '{}'))
-      }
+      return await withRetry(
+        async () => {
+          const body = this.buildRequestBody(params, true)
+          const res = await this.fetchWithTimeout(`${this.endpointUrl}/chat/completions`, {
+            method: 'POST', headers: this.headers(), body: JSON.stringify(body),
+          })
+          if (!res.ok) {
+            const errText = (await res.text()).slice(0, 300)
+            throw this.toLLMError(res.status, JSON.parse(errText || '{}'))
+          }
 
-      const result = await parseSSEStream(res.body!.getReader(), onChunk)
-      onChunk({ type: 'message_stop' })
-      return result
+          const result = await parseSSEStream(res.body!.getReader(), onChunk)
+          onChunk({ type: 'message_stop' })
+          return result
+        },
+        {
+          maxRetries: 2,
+          shouldRetry: (err) => retryOnRateLimit(err) || retryOnServerError(err),
+          onRetry: (err, attempt, delay) => {
+            console.warn(`[OpenAIProvider] stream retry ${attempt}/2 after ${delay}ms:`, (err as Error)?.message)
+          },
+        },
+      )
     } catch (err: unknown) {
       if (err instanceof LLMError) throw err
       const e = err as Error | undefined
@@ -118,9 +142,17 @@ export class OpenAICompatibleProvider implements LLMProvider {
 
   private buildRequestBody(params: LLMChatParams, stream: boolean) {
     const cfg = params.config || {}
-    const messages = params.messages.map((m) => toOpenAIMessage(m))
+    const messages: OpenAIMessage[] = []
+
+    // Insert system prompt as first message (OpenAI format: role='system')
+    if (params.systemPrompt) {
+      messages.push({ role: 'system', content: params.systemPrompt })
+    }
+
+    messages.push(...params.messages.map((m) => toOpenAIMessage(m)))
+
     const body: Record<string, unknown> = {
-      model: this.defaultModel,
+      model: params.model || this.defaultModel,
       messages,
       max_tokens: cfg.maxTokens || 4096,
       stream,
@@ -132,9 +164,15 @@ export class OpenAICompatibleProvider implements LLMProvider {
     if (cfg.stopSequences) body.stop = cfg.stopSequences
     if (cfg.responseFormat === 'json_object') body.response_format = { type: 'json_object' }
     if (cfg.toolChoice) {
-      body.tool_choice = cfg.toolChoice === 'none' ? 'none'
-        : cfg.toolChoice === 'any' || cfg.toolChoice === 'tool' ? 'required'
-        : 'auto'
+      if (typeof cfg.toolChoice === 'object') {
+        body.tool_choice = { type: 'function', function: { name: cfg.toolChoice.name } }
+      } else if (cfg.toolChoice === 'none') {
+        body.tool_choice = 'none'
+      } else if (cfg.toolChoice === 'any' || cfg.toolChoice === 'tool') {
+        body.tool_choice = 'required'
+      } else {
+        body.tool_choice = 'auto'
+      }
     }
     // Safe extraParams: exclude internal keys to prevent overwrite
     const internalKeys = ['model', 'messages', 'tools', 'stream', 'max_tokens']
@@ -148,10 +186,19 @@ export class OpenAICompatibleProvider implements LLMProvider {
   }
 
   private async fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 30000)
+    // Combine timeout + external signal so both can abort the request
+    const timeoutController = new AbortController()
+    const timer = setTimeout(() => timeoutController.abort(), 30000)
+
+    // Merge external signal if present
+    const externalSignal = init.signal
+    const signal = externalSignal
+      ? AbortSignal.any([timeoutController.signal, externalSignal])
+      : timeoutController.signal
+
     try {
-      const res = await fetch(url, { ...init, signal: controller.signal })
+      const { signal: _, ...restInit } = init
+      const res = await fetch(url, { ...restInit, signal })
       return res
     } finally {
       clearTimeout(timer)
@@ -193,109 +240,6 @@ export class OpenAICompatibleProvider implements LLMProvider {
         outputTokens: json.usage.completion_tokens,
       },
     }
-  }
-}
-
-// ── SSE stream parser ──
-
-interface StreamState {
-  contentBlocks: LLMContentBlock[]
-  currentToolCalls: Map<number, { id: string; name: string; args: string }>
-  usage: { inputTokens: number; outputTokens: number }
-  stopReason: LLMChatResult['stopReason']
-}
-
-async function parseSSEStream(
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-  onChunk: LLMChunkCallback,
-): Promise<LLMChatResult> {
-  const decoder = new TextDecoder()
-  let buffer = ''
-  const state: StreamState = {
-    contentBlocks: [],
-    currentToolCalls: new Map(),
-    usage: { inputTokens: 0, outputTokens: 0 },
-    stopReason: 'end_turn',
-  }
-
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-
-    let idx: number
-    while ((idx = buffer.indexOf('\n')) !== -1) {
-      const line = buffer.slice(0, idx)
-      buffer = buffer.slice(idx + 1)
-      if (!line.startsWith('data: ')) continue
-      const data = line.slice(6).trim()
-      if (data === '[DONE]') continue
-
-      try {
-        processSSELine(data, state, onChunk)
-      } catch (e) { console.warn('[OpenAI] malformed streaming chunk:', e instanceof Error ? e.message : String(e)) }
-    }
-  }
-
-  // Build content blocks from accumulated tool calls
-  for (const [, tc] of state.currentToolCalls) {
-    if (tc.name) {
-      state.contentBlocks.push({
-        type: 'tool_use',
-        id: tc.id,
-        name: tc.name,
-        input: tryParseJson(tc.args) || tc.args,
-      })
-    }
-  }
-
-  return { content: state.contentBlocks, stopReason: state.stopReason, usage: state.usage }
-}
-
-function processSSELine(
-  data: string,
-  state: StreamState,
-  onChunk: LLMChunkCallback,
-): void {
-  const chunk = JSON.parse(data)
-  const choice = chunk.choices?.[0]
-  if (!choice) return
-
-  const delta = choice.delta
-
-  // Text delta
-  if (delta?.content) {
-    onChunk({ type: 'text_delta', text: delta.content })
-  }
-
-  // Tool call delta
-  if (delta?.tool_calls) {
-    for (const tc of delta.tool_calls) {
-      const tcIdx = tc.index
-      if (!state.currentToolCalls.has(tcIdx)) {
-        state.currentToolCalls.set(tcIdx, { id: tc.id || '', name: '', args: '' })
-        if (tc.function?.name) {
-          state.currentToolCalls.get(tcIdx)!.name = tc.function.name
-          onChunk({ type: 'tool_use_start', id: tc.id || `tc_${tcIdx}`, name: tc.function.name })
-        }
-      }
-      const cur = state.currentToolCalls.get(tcIdx)!
-      if (tc.id) cur.id = tc.id
-      if (tc.function?.arguments) {
-        cur.args += tc.function.arguments
-        onChunk({ type: 'tool_use_delta', id: cur.id, input_json: tc.function.arguments })
-      }
-    }
-  }
-
-  // Finish
-  if (choice.finish_reason) {
-    state.stopReason = toStopReason(choice.finish_reason)
-    onChunk({ type: 'content_block_stop', index: choice.index ?? 0 })
-  }
-
-  if (chunk.usage) {
-    state.usage = { inputTokens: chunk.usage.prompt_tokens, outputTokens: chunk.usage.completion_tokens }
   }
 }
 
@@ -341,12 +285,4 @@ function toOpenAITool(tool: LLMToolDef) {
   }
 }
 
-function tryParseJson(s: string): unknown {
-  try { return JSON.parse(s) } catch { return null }
-}
 
-function toStopReason(finishReason: string): LLMChatResult['stopReason'] {
-  if (finishReason === 'tool_calls') return 'tool_use'
-  if (finishReason === 'length') return 'max_tokens'
-  return 'end_turn'
-}

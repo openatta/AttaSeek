@@ -4,6 +4,7 @@
 
 import { getDb, dbQuery, dbQueryOne } from '../store/db'
 import { newId } from '../store/id'
+import { fromRow } from '../store/util'
 import type { MemoryEntry, MemoryQuery } from '../../shared/types/Memory'
 
 export class MemoryService {
@@ -38,10 +39,10 @@ export class MemoryService {
     if (query.query) { sql += ' AND content LIKE ?'; params.push(`%${query.query}%`) }
     sql += ' ORDER BY updated_at DESC'
     if (query.limit) { sql += ' LIMIT ?'; params.push(query.limit) }
-    return dbQuery<Record<string, unknown>>(sql, ...params).map((r) => this.rowToEntry(r)).filter((e): e is MemoryEntry => !!e)
+    return dbQuery<Record<string, unknown>>(sql, ...params).map((r) => fromRow<MemoryEntry>(r)!).filter((e): e is MemoryEntry => !!e)
   }
 
-  get(id: string): MemoryEntry | undefined { return this.rowToEntry(dbQueryOne<Record<string, unknown>>('SELECT * FROM memory_entries WHERE id = ?', id)) }
+  get(id: string): MemoryEntry | undefined { return fromRow<MemoryEntry>(dbQueryOne<Record<string, unknown>>('SELECT * FROM memory_entries WHERE id = ?', id)) }
 
   update(id: string, patch: Partial<Pick<MemoryEntry, 'content' | 'scope' | 'scopeId' | 'type'>>): MemoryEntry | null {
     const ex = dbQueryOne<Record<string, unknown>>('SELECT * FROM memory_entries WHERE id = ?', id)
@@ -49,19 +50,14 @@ export class MemoryService {
     const c = patch.content ?? ex.content; const sc = patch.scope ?? ex.scope; const si = patch.scopeId ?? ex.scope_id; const t = patch.type ?? ex.type; const now = Date.now()
     const db = getDb()
     db.prepare('UPDATE memory_entries SET content=?, scope=?, scope_id=?, type=?, updated_at=? WHERE id=?').run(c, sc, si, t, now, id)
-    return this.rowToEntry({ ...ex, content: c, scope: sc, scope_id: si, type: t, updated_at: now }) || null
+    return fromRow<MemoryEntry>({ ...ex, content: c, scope: sc, scope_id: si, type: t, updated_at: now }) || null
   }
 
   delete(id: string): boolean { return getDb().prepare('DELETE FROM memory_entries WHERE id=?').run(id).changes > 0 }
 
-  listAll(): MemoryEntry[] { return dbQuery<Record<string, unknown>>('SELECT * FROM memory_entries ORDER BY updated_at DESC LIMIT 200').map((r) => this.rowToEntry(r)).filter((e): e is MemoryEntry => !!e) }
+  listAll(): MemoryEntry[] { return dbQuery<Record<string, unknown>>('SELECT * FROM memory_entries ORDER BY updated_at DESC LIMIT 200').map((r) => fromRow<MemoryEntry>(r)!).filter((e): e is MemoryEntry => !!e) }
 
   get count(): number { return dbQueryOne<{ c: number }>('SELECT COUNT(*) as c FROM memory_entries')?.c || 0 }
-
-  private rowToEntry(r: any): MemoryEntry | undefined {
-    if (!r) return undefined
-    return { id: r.id, layer: r.layer, scope: r.scope, scopeId: r.scope_id, type: r.type, content: r.content, source: r.source, sessionId: r.session_id, taskId: r.task_id, createdAt: r.created_at, updatedAt: r.updated_at }
-  }
 }
 
 export const memoryService = new MemoryService()

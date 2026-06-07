@@ -6,8 +6,8 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import { newId } from '../store/id'
 import { agentEventBus } from '../agent/AgentEventBus'
-import { ipcWrap, ipcWrapAsync, validateRequiredString } from '../store/util'
-import { createSession, getSession, listSessions, updateSession, deleteSession, appendEvents, readEvents, setProjectSessions } from '../store/SessionStore'
+import { ipcWrapAsync, validateRequiredString } from '../store/util'
+import { createSession, getSession, listSessions, updateSession, deleteSession, setProjectSessions } from '../store/SessionStore'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -29,13 +29,15 @@ export function registerSessionHandlers(): void {
   })
 
   ipcMain.handle('session:get', async (_e, p: { id: string }) => {
-    validateRequiredString(p, 'id', 'id')
-    return ipcWrapAsync(async () => ({ session: await getSession(p.id) || null }))
+    return ipcWrapAsync(async () => {
+      validateRequiredString(p, 'id', 'id')
+      return { session: await getSession(p.id) || null }
+    })
   })
 
   ipcMain.handle('session:update', async (_e, p: { id: string; title?: string }) => {
-    validateRequiredString(p, 'id', 'id')
     return ipcWrapAsync(async () => {
+      validateRequiredString(p, 'id', 'id')
       const s = await updateSession(p.id, { title: p.title })
       if (s && mainWindow) mainWindow.webContents.send('session:updated', { id: s.id, title: s.title })
       return { session: s || null }
@@ -43,26 +45,16 @@ export function registerSessionHandlers(): void {
   })
 
   ipcMain.handle('session:delete', async (_e, p: { id: string }) => {
-    validateRequiredString(p, 'id', 'id')
     return ipcWrapAsync(async () => {
+      validateRequiredString(p, 'id', 'id')
       agentEventBus.clearHistory(p.id); return { success: await deleteSession(p.id) }
     })
   })
 
-  // Event persistence: append events to JSONL on save
-  ipcMain.handle('session:save-events', async (_e, p: { sessionId: string }) => {
-    validateRequiredString(p, 'sessionId', 'sessionId')
-    return ipcWrapAsync(async () => {
-      const events = agentEventBus.getHistory(p.sessionId)
-      await appendEvents(p.sessionId, events)
-      return { success: true, count: events.length }
-    })
-  })
-
-  ipcMain.handle('session:load-events', async (_e, p: { sessionId: string }) => {
-    validateRequiredString(p, 'sessionId', 'sessionId')
-    return ipcWrapAsync(async () => ({ events: await readEvents(p.sessionId) }))
-  })
+  // Event persistence is handled directly in main/index.ts quit sequence
+  // (appendEvents / readEvents called without IPC). The session:save-events
+  // and session:load-events channels were registered but never exposed through
+  // the preload bridge, making them unreachable from the renderer.
 
   console.log('[IPC:session] handlers registered')
 }

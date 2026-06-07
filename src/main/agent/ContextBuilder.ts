@@ -12,7 +12,7 @@
  *   system: ~8K | tools: ~12K | messages: ~60K | reserve: ~20K
  */
 
-import type { LLMMessage, LLMToolDef } from './llm/LLMProvider'
+import type { LLMMessage, LLMToolDef } from './llm/ModelProvider'
 import { toolRegistry } from '../tools/ToolRegistry'
 import { toolRouter } from '../tools/ToolRouter'
 import { memoryService } from '../memory/MemoryService'

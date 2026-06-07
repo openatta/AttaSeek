@@ -16,13 +16,13 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { AgentTask, SessionInfo } from '../shared/types/AgentTask'
 import type { SessionEvent } from '../shared/types/SessionEvent'
 import type { Artifact, ArtifactSummary } from '../shared/types/Artifact'
-import type { MemoryEntry } from '../shared/types/Memory'
-import type { AuditLog } from '../shared/types/Audit'
+import type { MemoryEntry, MemoryQuery } from '../shared/types/Memory'
+import type { AuditLog, AuditFilters } from '../shared/types/Audit'
 import type { PermissionPolicy } from '../shared/types/Permission'
 import type { PluginManifest } from '../shared/types/Plugin'
 import type { SkillManifest } from '../shared/types/Skill'
 import type { ToolManifest } from '../shared/types/Tool'
-import type { ModelConfig } from '../shared/types/model'
+import type { ModelConfig, CreateModelConfig, ModelConfigPatch, ModelTestResult, UsageStats } from '../shared/types/model'
 
 const api = {
   platform: process.platform,
@@ -65,7 +65,7 @@ const api = {
       ipcRenderer.invoke('artifact:list', { sessionId }),
     get: (artifactId: string): Promise<{ artifact: Artifact | null }> =>
       ipcRenderer.invoke('artifact:get', { artifactId }),
-    update: (artifactId: string, patch: Record<string, unknown>): Promise<{ artifact: Artifact | null }> =>
+    update: (artifactId: string, patch: { content?: string; title?: string }): Promise<{ artifact: Artifact | null }> =>
       ipcRenderer.invoke('artifact:update', { artifactId, patch }),
   },
 
@@ -93,9 +93,9 @@ const api = {
 
   // Memory API
   memory: {
-    list: (filters?: Record<string, unknown>): Promise<{ entries: MemoryEntry[] }> =>
+    list: (filters?: MemoryQuery): Promise<{ entries: MemoryEntry[] }> =>
       ipcRenderer.invoke('memory:list', filters || {}),
-    store: (entry: Record<string, unknown>): Promise<{ entry: MemoryEntry }> =>
+    store: (entry: Omit<MemoryEntry, 'id' | 'layer' | 'createdAt' | 'updatedAt'>): Promise<{ entry: MemoryEntry }> =>
       ipcRenderer.invoke('memory:store', entry),
     delete: (id: string): Promise<{ success: boolean }> =>
       ipcRenderer.invoke('memory:delete', { id }),
@@ -103,7 +103,7 @@ const api = {
 
   // Audit API
   audit: {
-    list: (filters?: Record<string, unknown>): Promise<{ logs: AuditLog[] }> =>
+    list: (filters?: AuditFilters): Promise<{ logs: AuditLog[] }> =>
       ipcRenderer.invoke('audit:list', filters || {}),
   },
 
@@ -113,20 +113,18 @@ const api = {
       ipcRenderer.invoke('model:list'),
     get: (id: string): Promise<{ config: ModelConfig | null }> =>
       ipcRenderer.invoke('model:get', { id }),
-    create: (config: Record<string, unknown>): Promise<{ config: ModelConfig }> =>
+    create: (config: CreateModelConfig): Promise<{ config: ModelConfig }> =>
       ipcRenderer.invoke('model:create', { config }),
-    update: (id: string, patch: Record<string, unknown>): Promise<{ config: ModelConfig | null }> =>
+    update: (id: string, patch: ModelConfigPatch): Promise<{ config: ModelConfig | null }> =>
       ipcRenderer.invoke('model:update', { id, patch }),
     delete: (id: string): Promise<{ success: boolean; needNewDefault?: boolean }> =>
       ipcRenderer.invoke('model:delete', { id }),
     setDefault: (id: string): Promise<{ success: boolean }> =>
       ipcRenderer.invoke('model:set-default', { id }),
-    test: (id: string): Promise<{ success: boolean; latencyMs?: number; model?: string; error?: string }> =>
+    test: (id: string): Promise<ModelTestResult> =>
       ipcRenderer.invoke('model:test', { id }),
-    usage: (configId?: string, periodDays?: number): Promise<{ stats: Record<string, unknown> }> =>
+    usage: (configId?: string, periodDays?: number): Promise<{ stats: UsageStats }> =>
       ipcRenderer.invoke('model:usage', { configId, periodDays }),
-    getKeyInfo: (id: string): Promise<{ info: { exists: boolean; preview: string } | null }> =>
-      ipcRenderer.invoke('model:get-key-info', { id }),
     hasConfig: (): Promise<{ configured: boolean }> =>
       ipcRenderer.invoke('model:has-config'),
   },
@@ -139,7 +137,7 @@ const api = {
       ipcRenderer.invoke('session:list'),
     get: (id: string): Promise<{ session: SessionInfo | null }> =>
       ipcRenderer.invoke('session:get', { id }),
-    update: (id: string, patch: Record<string, unknown>): Promise<{ session: SessionInfo | null }> =>
+    update: (id: string, patch: { title?: string }): Promise<{ session: SessionInfo | null }> =>
       ipcRenderer.invoke('session:update', { id, ...patch }),
     delete: (id: string): Promise<{ success: boolean }> =>
       ipcRenderer.invoke('session:delete', { id }),
@@ -154,6 +152,12 @@ const api = {
   plugin: {
     list: (): Promise<{ plugins: PluginManifest[] }> =>
       ipcRenderer.invoke('plugin:list'),
+  },
+
+  // User question API
+  question: {
+    respond: (questionId: string, answer: string): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('question:respond', { questionId, answer }),
   },
 
   // App state persistence

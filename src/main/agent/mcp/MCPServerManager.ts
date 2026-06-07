@@ -1,28 +1,30 @@
 /**
- * MCPServerManager — MCP server process lifecycle management.
+ * MCPServerManager — MCP server lifecycle management with real connectivity.
  *
- * Each MCP server runs as an independent child process communicating
- * via JSON-RPC 2.0 over stdin/stdout.
+ * Boot sequence:
+ *   1. Load configs from .claude/mcp.json (user + project)
+ *   2. Create transport (stdio) + MCPClient per server
+ *   3. Connect and initialize MCP session
+ *   4. Discover tools → register via MCPBridge → toolRegistry
+ *   5. Discover prompts → register via MCPBridge → skillRegistry
  *
  * Crash recovery: auto-restart up to 3 times with exponential backoff.
- * After 3 failures, server is marked unhealthy and user is notified.
  */
 
-export interface MCPServerConfig {
-  id: string
-  command: string
-  args?: string[]
-  env?: Record<string, string>
-  cwd?: string
-  restartDelayMs?: number
-}
+import { toolRegistry } from '../../tools/ToolRegistry'
+import { skillRegistry } from '../../skills/SkillRegistry'
+import { createTransport, type MCPTransport } from './MCPTransport'
+import { MCPClient } from './MCPClient'
+import { loadMCPConfigs, type MCPServerConfig } from './MCPConfigLoader'
+import { mcpToolToManifest, mcpPromptToSkill } from './MCPBridge'
 
 export type MCPServerStatus = 'starting' | 'healthy' | 'unhealthy' | 'stopped'
 
 export interface MCPServerState {
-  config: MCPServerConfig
+  id: string
   status: MCPServerStatus
-  pid?: number
+  transport: MCPTransport
+  client: MCPClient
   crashCount: number
   lastError?: string
   startedAt?: number
@@ -32,31 +34,100 @@ export class MCPServerManager {
   private servers = new Map<string, MCPServerState>()
   private maxRestarts = 3
 
+  /** Boot all configured MCP servers. Called from boot.ts. */
+  async boot(workspaceRoot?: string): Promise<{ connected: string[]; failed: string[] }> {
+    const configs = loadMCPConfigs(workspaceRoot)
+    const connected: string[] = []
+    const failed: string[] = []
+
+    for (const config of configs) {
+      try {
+        await this.startServer(config)
+        connected.push(config.id)
+      } catch (err) {
+        failed.push(config.id)
+        console.warn(`[MCP] boot: server "${config.id}" failed:`, err instanceof Error ? err.message : 'Unknown')
+      }
+    }
+
+    console.log(`[MCP] boot complete: ${connected.length} connected, ${failed.length} failed`)
+    return { connected, failed }
+  }
+
+  /** Start a single MCP server */
   async startServer(config: MCPServerConfig): Promise<void> {
+    const transport = createTransport(config.transport)
+    const client = new MCPClient(config.id, transport)
+
     const state: MCPServerState = {
-      config,
+      id: config.id,
       status: 'starting',
+      transport,
+      client,
       crashCount: 0,
       startedAt: Date.now(),
     }
     this.servers.set(config.id, state)
 
     try {
-      // In production: child_process.spawn(config.command, config.args, { env, cwd, stdio: ['pipe','pipe','pipe'] })
-      // For MVP: mark as healthy (actual spawn to be wired in integration phase)
+      await client.connect()
       state.status = 'healthy'
-      console.log(`[MCP] server "${config.id}" started`)
+
+      // Discover and register tools
+      try {
+        const tools = await client.listTools()
+        for (const tool of tools) {
+          const manifest = mcpToolToManifest(config.id, tool)
+          toolRegistry.register(manifest)
+        }
+        if (tools.length > 0) {
+          console.log(`[MCP:${config.id}] registered ${tools.length} tools`)
+        }
+      } catch (err) {
+        console.warn(`[MCP:${config.id}] tool discovery failed:`, err)
+      }
+
+      // Discover and register prompts as skills
+      try {
+        const prompts = await client.listPrompts()
+        for (const prompt of prompts) {
+          const skill = mcpPromptToSkill(config.id, prompt)
+          skillRegistry.register(skill)
+        }
+        if (prompts.length > 0) {
+          console.log(`[MCP:${config.id}] registered ${prompts.length} skills`)
+        }
+      } catch (err) {
+        console.warn(`[MCP:${config.id}] prompt discovery failed:`, err)
+      }
     } catch (err) {
       await this.handleCrash(config.id, err instanceof Error ? err.message : 'Unknown')
     }
   }
 
+  /** Stop an MCP server and unregister its tools/skills */
   async stopServer(id: string): Promise<void> {
     const state = this.servers.get(id)
     if (!state) return
+
+    // Unregister tools and skills
+    toolRegistry.unregisterByPlugin(`mcp:${id}`)
+    skillRegistry.unregisterByPlugin(`mcp:${id}`)
+
+    await state.client.disconnect()
     state.status = 'stopped'
     this.servers.delete(id)
-    console.log(`[MCP] server "${id}" stopped`)
+    console.log(`[MCP:${id}] stopped`)
+  }
+
+  /** Restart a server */
+  async restartServer(id: string): Promise<void> {
+    const state = this.servers.get(id)
+    if (!state) return
+    const config = loadMCPConfigs().find(c => c.id === id)
+    if (!config) return
+    await this.stopServer(id)
+    await this.startServer(config)
   }
 
   getStatus(id: string): MCPServerState | undefined {
@@ -70,11 +141,13 @@ export class MCPServerManager {
   async healthCheck(id: string): Promise<boolean> {
     const state = this.servers.get(id)
     if (!state || state.status !== 'healthy') return false
-    try {
-      // Ping via JSON-RPC: { jsonrpc: '2.0', method: 'ping', id: 'health' }
-      return true
-    } catch {
-      return false
+    return state.client.isConnected
+  }
+
+  /** Shutdown all servers */
+  async shutdown(): Promise<void> {
+    for (const [id] of this.servers) {
+      await this.stopServer(id)
     }
   }
 
@@ -86,12 +159,14 @@ export class MCPServerManager {
 
     if (state.crashCount <= this.maxRestarts) {
       const delay = Math.min(1000 * Math.pow(2, state.crashCount - 1), 10000)
-      console.warn(`[MCP] server "${id}" crashed (attempt ${state.crashCount}), restarting in ${delay}ms`)
+      console.warn(`[MCP:${id}] crashed (attempt ${state.crashCount}/${this.maxRestarts}), restarting in ${delay}ms`)
       await new Promise(r => setTimeout(r, delay))
-      await this.startServer(state.config)
+      await this.startServer({ id, transport: state.transport.type === 'stdio'
+        ? { type: 'stdio', command: (state.transport as unknown as { config: Record<string, unknown> }).config?.command as string }
+        : { type: 'sse', url: '' }, enabled: true })
     } else {
       state.status = 'unhealthy'
-      console.error(`[MCP] server "${id}" failed after ${this.maxRestarts} restarts: ${error}`)
+      console.error(`[MCP:${id}] failed after ${this.maxRestarts} restarts: ${error}`)
     }
   }
 }

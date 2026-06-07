@@ -9,10 +9,12 @@
 
 import { AgentOrchestrator } from '../orchestrator/AgentOrchestrator'
 import { cacheManager } from '../cache/CacheManager'
+import { recursionGuard } from './RecursionGuard'
 import type { AgentTask } from '../../../shared/types/AgentTask'
 import type { AgentProfile } from '../profile/AgentProfile'
 import type { SubAgentContext } from './SubAgentContext'
 import type { SessionEvent } from '../../../shared/types/SessionEvent'
+import { SUBAGENT_IDLE_CLEANUP_MS } from '../../../shared/constants'
 
 export interface SubAgentInfo {
   agentId: string
@@ -32,7 +34,7 @@ export interface SubAgentResult {
 }
 
 export class SubAgentManager {
-  private agents = new Map<string, { orchestrator: AgentOrchestrator; info: SubAgentInfo }>()
+  private agents = new Map<string, { orchestrator: AgentOrchestrator; info: SubAgentInfo; cleanupTimer?: ReturnType<typeof setTimeout> }>()
   private nextId = 1
 
   /** Fork a new sub-agent */
@@ -42,6 +44,18 @@ export class SubAgentManager {
     goal: string,
     context: SubAgentContext,
   ): Promise<SubAgentResult> {
+    // Recursion guard: prevent nested sub-agent creation
+    const guard = recursionGuard.enter(profile.id)
+    if (!guard.allowed) {
+      return {
+        agentId: 'rejected',
+        summary: guard.message!,
+        events: [],
+        status: 'failed',
+        errorMessage: guard.message,
+      }
+    }
+
     const agentId = `subagent_${this.nextId++}`
     const orchestrator = new AgentOrchestrator()
 
@@ -50,7 +64,7 @@ export class SubAgentManager {
     if (context.isolation === 'worktree') {
       try {
         const { worktreeManager } = await import('./worktree/WorktreeManager')
-        worktreePath = worktreeManager.create(agentId)
+        worktreePath = await worktreeManager.create(agentId)
       } catch (err) {
         console.warn(`[SubAgentManager] worktree creation failed for ${agentId}:`, err)
         // Fall through to inline execution
@@ -75,11 +89,12 @@ export class SubAgentManager {
       startedAt: Date.now(),
     }
 
-    this.agents.set(agentId, { orchestrator, info })
+    const cleanupTimer = setTimeout(() => this.agents.delete(agentId), SUBAGENT_IDLE_CLEANUP_MS)
+    this.agents.set(agentId, { orchestrator, info, cleanupTimer })
 
     const events: SessionEvent[] = []
     try {
-      for await (const event of orchestrator.submitMessage(task, profile)) {
+      for await (const event of orchestrator.submitMessage(task, profile, undefined, undefined, 'subagent')) {
         events.push(event)
       }
       info.status = info.status === 'cancelled' ? 'cancelled' : 'completed'
@@ -88,12 +103,13 @@ export class SubAgentManager {
       info.errorMessage = err instanceof Error ? err.message : 'Unknown error'
       console.warn(`[SubAgentManager] agent ${agentId} failed:`, info.errorMessage)
     } finally {
+      // Cleanup recursion guard
+      recursionGuard.exit()
+
       // Cleanup worktree if used
       if (worktreePath) {
-        try { const { worktreeManager } = await import('./worktree/WorktreeManager'); worktreeManager.discard(agentId) } catch { /* best effort */ }
+        try { const { worktreeManager } = await import('./worktree/WorktreeManager'); await worktreeManager.discard(agentId) } catch { /* best effort */ }
       }
-      // Clean up completed/failed/cancelled agents after 5 minutes
-      setTimeout(() => this.agents.delete(agentId), 300_000)
     }
 
     return {
@@ -109,6 +125,7 @@ export class SubAgentManager {
   cancel(agentId: string): void {
     const entry = this.agents.get(agentId)
     if (entry) {
+      if (entry.cleanupTimer) clearTimeout(entry.cleanupTimer)
       entry.orchestrator.interrupt()
       entry.info.status = 'cancelled'
     }
@@ -117,6 +134,7 @@ export class SubAgentManager {
   /** Cancel all running sub-agents */
   cancelAll(): void {
     for (const [, entry] of this.agents) {
+      if (entry.cleanupTimer) clearTimeout(entry.cleanupTimer)
       if (entry.info.status === 'running') {
         entry.orchestrator.interrupt()
         entry.info.status = 'cancelled'

@@ -1,5 +1,5 @@
 /**
- * Agent Mock Tests — MockLLMProvider + AgentOrchestrator unit/integration tests.
+ * Agent Mock Tests — MockModelProvider + AgentOrchestrator unit/integration tests.
  *
  * Run: npm run test:agent:mock
  *
@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { MockLLMProvider } from '../mock/MockLLMProvider'
+import { MockModelProvider } from '../mock/MockModelProvider'
 import { textDelta, toolUseStart, toolUseDelta, blockStop, messageStop, endTurnResult, textTurn, toolTurn } from '../mock/helpers'
 import { AgentOrchestrator } from '../../../src/main/agent/orchestrator/AgentOrchestrator'
 import { validateProfile } from '../../../src/main/agent/profile/AgentProfile'
@@ -24,9 +24,9 @@ const testProfile = validateProfile({
   context: { autoCompact: false },
 })
 
-describe('MockLLMProvider (unit)', () => {
+describe('MockModelProvider (unit)', () => {
   it('should enqueue and dequeue turns in FIFO order', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
 
     mock.pushTurn([textDelta('hello'), messageStop()], endTurnResult('hello'))
     mock.pushTurn([textDelta('world'), messageStop()], endTurnResult('world'))
@@ -40,20 +40,20 @@ describe('MockLLMProvider (unit)', () => {
   })
 
   it('should throw when no turns queued', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     await expect(mock.chatStream({ systemPrompt: '', messages: [], tools: [] }, () => {}))
       .rejects.toThrow('no turns queued')
   })
 
   it('should throw LLMError when error queued', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     mock.pushError('rate_limit', 'Too many requests')
     await expect(mock.chatStream({ systemPrompt: '', messages: [], tools: [] }, () => {}))
       .rejects.toThrow('Too many requests')
   })
 
   it('should record all requests for assertion', async () => {
-    const mock = new MockLLMProvider()
+    const mock = new MockModelProvider()
     mock.pushTurn([textDelta('a'), messageStop()], endTurnResult('a'))
 
     await mock.chat({ systemPrompt: 'sys', messages: [{ role: 'user', content: 'hi' }], tools: [] })
@@ -63,7 +63,7 @@ describe('MockLLMProvider (unit)', () => {
   })
 })
 
-describe('MockLLMProvider + Orchestrator (integration-light)', () => {
+describe('MockModelProvider + Orchestrator (integration-light)', () => {
   it('should return no_provider when provider registry is empty and no override given', async () => {
     const orchestrator = new AgentOrchestrator()
     const task = { id: 't1', sessionId: 's1', goal: 'hi', status: 'idle' as const, createdAt: Date.now(), updatedAt: Date.now() }
@@ -77,8 +77,8 @@ describe('MockLLMProvider + Orchestrator (integration-light)', () => {
     expect(events[0]?.payload?.recoverable).toBe(false)
   })
 
-  it('should accept MockLLMProvider override (provider injection verified)', async () => {
-    const mock = new MockLLMProvider()
+  it('should accept MockModelProvider override (provider injection verified)', async () => {
+    const mock = new MockModelProvider()
     mock.pushTurn([textDelta('Hello from mock'), messageStop()], endTurnResult('Hello from mock'))
 
     const orchestrator = new AgentOrchestrator()

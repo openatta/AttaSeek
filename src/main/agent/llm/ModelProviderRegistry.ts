@@ -1,11 +1,11 @@
 /**
- * LLMProviderRegistry — typed provider registry.
+ * ModelProviderRegistry — typed provider registry.
  *
- * Holds all configured LLM providers, manages default selection,
+ * Holds all configured ModelProvider instances, manages default selection,
  * and provides metadata for the renderer's model settings UI.
  */
 
-import type { LLMProvider } from './LLMProvider'
+import type { ModelProvider } from './ModelProvider'
 
 export interface ProviderInfo {
   id: string
@@ -15,13 +15,13 @@ export interface ProviderInfo {
   isDefault: boolean
 }
 
-export class LLMProviderRegistry {
-  private providers = new Map<string, LLMProvider>()
+export class ModelProviderRegistry {
+  private providers = new Map<string, ModelProvider>()
   private infos = new Map<string, ProviderInfo>()
   private defaultId: string | null = null
 
   /** Register a provider by config ID */
-  registerById(id: string, provider: LLMProvider, info: Omit<ProviderInfo, 'id' | 'isDefault'>): void {
+  registerById(id: string, provider: ModelProvider, info: Omit<ProviderInfo, 'id' | 'isDefault'>): void {
     this.providers.set(id, provider)
     this.infos.set(id, { ...info, id, isDefault: false })
     if (!this.defaultId) {
@@ -31,12 +31,12 @@ export class LLMProviderRegistry {
   }
 
   /** Get a provider by config ID */
-  getById(id: string): LLMProvider | undefined {
+  getById(id: string): ModelProvider | undefined {
     return this.providers.get(id)
   }
 
   /** Get the default provider */
-  getDefault(): LLMProvider | undefined {
+  getDefault(): ModelProvider | undefined {
     return this.defaultId ? this.providers.get(this.defaultId) : undefined
   }
 
@@ -85,4 +85,4 @@ export class LLMProviderRegistry {
 }
 
 /** Singleton */
-export const llmProviderRegistry = new LLMProviderRegistry()
+export const modelProviderRegistry = new ModelProviderRegistry()

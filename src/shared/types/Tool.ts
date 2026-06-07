@@ -17,6 +17,10 @@ export interface ToolManifest {
   riskLevel: ToolRiskLevel
   category: ToolCategory
   permissionPolicy: ToolPermissionPolicy
+  /** Whether this tool only reads data (safe to run concurrently with other reads) */
+  isReadOnly?: boolean
+  /** Whether multiple instances of this tool can run concurrently */
+  isConcurrencySafe?: boolean
 }
 
 export interface ToolPermissionPolicy {

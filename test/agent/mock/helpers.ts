@@ -5,7 +5,7 @@
  * objects. Use these to build mock response sequences in scenario files.
  */
 
-import type { LLMChunk, LLMChatResult, LLMContentBlock } from '../../../src/main/agent/llm/LLMProvider'
+import type { LLMChunk, LLMChatResult, LLMContentBlock } from '../../../src/main/agent/llm/ModelProvider'
 
 // ── Chunk builders ──
 
