@@ -21,12 +21,14 @@ export default function ModelConfigForm({ config, onSaved, onCancel }: Props) {
   const [name, setName] = useState(config?.name || '')
   const [interfaceType, setInterfaceType] = useState<'openai_compatible' | 'anthropic'>(config?.interfaceType || 'anthropic')
   const [apiKey, setApiKey] = useState('')
+  // Per-interface template data including slot defaults
+  type TmplEntry = { endpoint: string; models: string; dmodel: string; slots?: { opusModel?: string; sonnetModel?: string; haikuModel?: string; effortLevel?: string; maxTokens?: number } }
   // Init tmplData from detected template (editing) or empty (new)
   const initData = detectedTemplate ? {
-    openai: detectedTemplate.endpoint ? { endpoint: detectedTemplate.endpoint, models: detectedTemplate.models, dmodel: detectedTemplate.dmodel } : undefined,
-    anthropic: detectedTemplate.altEndpoint ? { endpoint: detectedTemplate.altEndpoint, models: detectedTemplate.altModels!, dmodel: detectedTemplate.altDmodel! } : undefined,
+    openai: detectedTemplate.endpoint ? { endpoint: detectedTemplate.endpoint, models: detectedTemplate.models, dmodel: detectedTemplate.dmodel, slots: detectedTemplate.slots } : undefined,
+    anthropic: detectedTemplate.altEndpoint ? { endpoint: detectedTemplate.altEndpoint, models: detectedTemplate.altModels!, dmodel: detectedTemplate.altDmodel!, slots: detectedTemplate.altSlots } : undefined,
   } : {}
-  const [tmplData, setTmplData] = useState<{ openai?: { endpoint: string; models: string; dmodel: string }; anthropic?: { endpoint: string; models: string; dmodel: string } }>(initData)
+  const [tmplData, setTmplData] = useState<{ openai?: TmplEntry; anthropic?: TmplEntry }>(initData)
   const [showKey, setShowKey] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -53,25 +55,36 @@ export default function ModelConfigForm({ config, onSaved, onCancel }: Props) {
   const [maxTokens, setMaxTokens] = useState(config?.maxTokens ? String(config.maxTokens) : '')
   const [compactThreshold, setCompactThreshold] = useState(config?.compactThreshold ? String(config.compactThreshold) : '')
 
-  /** Apply template: store BOTH configs, set current interface */
+  /** Apply template: store BOTH configs, set current interface + slot defaults */
   const applyTemplate = (tid: string) => {
     const t = TEMPLATES.find(t => t.id === tid); if (!t) return
     setTemplateId(tid); setName(t.name)
+    const entry = (ep: string, mdls: string, dm: string, sl?: TmplEntry['slots']): TmplEntry => ({ endpoint: ep, models: mdls, dmodel: dm, slots: sl })
     const data = {
-      openai: t.endpoint ? { endpoint: t.endpoint, models: t.models, dmodel: t.dmodel } : undefined,
-      anthropic: t.altEndpoint ? { endpoint: t.altEndpoint, models: t.altModels!, dmodel: t.altDmodel! } : (t.iface === 'anthropic' ? { endpoint: t.endpoint, models: t.models, dmodel: t.dmodel } : undefined),
+      openai: t.endpoint ? entry(t.endpoint, t.models, t.dmodel, t.slots) : undefined,
+      anthropic: t.altEndpoint ? entry(t.altEndpoint, t.altModels!, t.altDmodel!, t.altSlots) : (t.iface === 'anthropic' ? entry(t.endpoint, t.models, t.dmodel, t.slots) : undefined),
     }
     setTmplData(data)
     setInterfaceType(t.iface)
     const selected = data[t.iface] || data.openai || data.anthropic!
     setEndpointUrl(selected.endpoint); setModelsStr(selected.models); setDefaultModel(selected.dmodel)
+    applySlots(selected.slots)
   }
 
-  /** Switch interface: load from template data */
+  /** Apply slot defaults from template to form fields */
+  const applySlots = (s?: TmplEntry['slots']) => {
+    setOpusModel(s?.opusModel || '')
+    setSonnetModel(s?.sonnetModel || '')
+    setHaikuModel(s?.haikuModel || '')
+    setEffortLevel(s?.effortLevel || '')
+    setMaxTokens(s?.maxTokens ? String(s.maxTokens) : '')
+  }
+
+  /** Switch interface: load endpoint/models + slot defaults from template data */
   const handleInterfaceChange = (type: typeof interfaceType) => {
     setInterfaceType(type)
     const d = tmplData[type]
-    if (d) { setEndpointUrl(d.endpoint); setModelsStr(d.models); setDefaultModel(d.dmodel) }
+    if (d) { setEndpointUrl(d.endpoint); setModelsStr(d.models); setDefaultModel(d.dmodel); applySlots(d.slots) }
   }
 
   const handleSave = async () => {

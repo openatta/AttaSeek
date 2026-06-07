@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS token_usage (
   model TEXT NOT NULL,
   input_tokens INTEGER NOT NULL,
   output_tokens INTEGER NOT NULL,
-  created_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
   -- config_id references a provider id from ~/.atta/settings.json (no FK constraint)
 );
 

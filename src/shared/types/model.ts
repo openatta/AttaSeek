@@ -104,6 +104,14 @@ export interface ProviderInterface {
   endpointUrl: string
   defaultModels: string[]
   defaultModel: string
+  /** Per-interface slot defaults (model tiers + options) */
+  slots?: {
+    opusModel?: string
+    sonnetModel?: string
+    haikuModel?: string
+    effortLevel?: string
+    maxTokens?: number
+  }
 }
 
 export interface ModelTemplate {
@@ -114,12 +122,16 @@ export interface ModelTemplate {
   iconType: string; region: 'international' | 'china'; version: number
 }
 
-/** Flattened template for UI — one entry per interface */
+/** Flattened template for UI — one entry per interface, with per-interface slot defaults */
 export interface UITemplate {
   id: string; name: string
   iface: 'anthropic' | 'openai_compatible'
   endpoint: string; models: string; dmodel: string
   altEndpoint?: string; altModels?: string; altDmodel?: string
+  /** Slot defaults for the primary interface */
+  slots?: { opusModel?: string; sonnetModel?: string; haikuModel?: string; effortLevel?: string; maxTokens?: number }
+  /** Slot defaults for the alternate interface */
+  altSlots?: { opusModel?: string; sonnetModel?: string; haikuModel?: string; effortLevel?: string; maxTokens?: number }
 }
 
 export function toUITemplates(templates: ModelTemplate[]): UITemplate[] {
@@ -129,9 +141,11 @@ export function toUITemplates(templates: ModelTemplate[]): UITemplate[] {
     endpoint: t.interfaces[0].endpointUrl,
     models: t.interfaces[0].defaultModels.join(', '),
     dmodel: t.interfaces[0].defaultModel,
+    slots: t.interfaces[0].slots,
     altEndpoint: t.interfaces[1]?.endpointUrl,
     altModels: t.interfaces[1]?.defaultModels.join(', '),
     altDmodel: t.interfaces[1]?.defaultModel,
+    altSlots: t.interfaces[1]?.slots,
   }))
 }
 
@@ -162,10 +176,12 @@ export const BUILTIN_TEMPLATES: ModelTemplate[] = [
     recommendedParams:{temperature:0.7,maxTokens:4096}, iconType:'cohere', region:'international', version:1 },
   { id:'deepseek', name:'DeepSeek', provider:'DeepSeek (深度求索)',
     interfaces: [
-      { type:'openai_compatible', endpointUrl:'https://api.deepseek.com/v1', defaultModels:['deepseek-v4-pro','deepseek-v4-flash'], defaultModel:'deepseek-v4-pro' },
-      { type:'anthropic', endpointUrl:'https://api.deepseek.com/anthropic', defaultModels:['deepseek-v4-pro','deepseek-v4-flash'], defaultModel:'deepseek-v4-pro' }],
+      { type:'openai_compatible', endpointUrl:'https://api.deepseek.com/v1', defaultModels:['deepseek-v4-pro[1m]','deepseek-v4-flash'], defaultModel:'deepseek-v4-pro[1m]',
+        slots: { opusModel:'deepseek-v4-pro[1m]', sonnetModel:'deepseek-v4-flash', haikuModel:'deepseek-v4-flash', effortLevel:'max', maxTokens:8192 } },
+      { type:'anthropic', endpointUrl:'https://api.deepseek.com/anthropic', defaultModels:['deepseek-v4-pro[1m]','deepseek-v4-flash'], defaultModel:'deepseek-v4-pro[1m]',
+        slots: { opusModel:'deepseek-v4-pro[1m]', sonnetModel:'deepseek-v4-flash', haikuModel:'deepseek-v4-flash', effortLevel:'max', maxTokens:8192 } }],
     envKey:'DEEPSEEK_API_KEY', apiKeyUrl:'https://platform.deepseek.com/api_keys', apiKeyHeader:'Authorization', apiKeyPrefix:'Bearer ',
-    recommendedParams:{temperature:0.7,maxTokens:4096}, iconType:'deepseek', region:'china', version:3 },
+    recommendedParams:{temperature:0.7,maxTokens:8192}, iconType:'deepseek', region:'china', version:4 },
   { id:'qwen', name:'Qwen (通义千问)', provider:'Alibaba Cloud',
     interfaces: [
       { type:'openai_compatible', endpointUrl:'https://dashscope.aliyuncs.com/compatible-mode/v1', defaultModels:['qwen-max','qwen-plus','qwen-turbo'], defaultModel:'qwen-max' },
