@@ -23,12 +23,18 @@ export default function ModelConfigForm({ config, onSaved, onCancel }: Props) {
   const [apiKey, setApiKey] = useState('')
   // Per-interface template data including slot defaults
   type TmplEntry = { endpoint: string; models: string; dmodel: string; slots?: { opusModel?: string; sonnetModel?: string; haikuModel?: string; effortLevel?: string; maxTokens?: number } }
-  // Init tmplData from detected template (editing) or empty (new)
-  const initData = detectedTemplate ? {
-    openai: detectedTemplate.endpoint ? { endpoint: detectedTemplate.endpoint, models: detectedTemplate.models, dmodel: detectedTemplate.dmodel, slots: detectedTemplate.slots } : undefined,
-    anthropic: detectedTemplate.altEndpoint ? { endpoint: detectedTemplate.altEndpoint, models: detectedTemplate.altModels!, dmodel: detectedTemplate.altDmodel!, slots: detectedTemplate.altSlots } : undefined,
-  } : {}
-  const [tmplData, setTmplData] = useState<{ openai?: TmplEntry; anthropic?: TmplEntry }>(initData)
+  // Init tmplData from detected template (editing) or empty (new). Keys match ApiType values.
+  const initData: Record<string, TmplEntry | undefined> = {}
+  if (detectedTemplate) {
+    if (detectedTemplate.endpoint) {
+      initData[detectedTemplate.iface] = { endpoint: detectedTemplate.endpoint, models: detectedTemplate.models, dmodel: detectedTemplate.dmodel, slots: detectedTemplate.slots }
+    }
+    if (detectedTemplate.altEndpoint) {
+      const altIface = detectedTemplate.iface === 'anthropic' ? 'openai_compatible' : 'anthropic'
+      initData[altIface] = { endpoint: detectedTemplate.altEndpoint, models: detectedTemplate.altModels!, dmodel: detectedTemplate.altDmodel!, slots: detectedTemplate.altSlots }
+    }
+  }
+  const [tmplData, setTmplData] = useState<Record<string, TmplEntry | undefined>>(initData)
   const [showKey, setShowKey] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -55,18 +61,22 @@ export default function ModelConfigForm({ config, onSaved, onCancel }: Props) {
   const [maxTokens, setMaxTokens] = useState(config?.maxTokens ? String(config.maxTokens) : '')
   const [compactThreshold, setCompactThreshold] = useState(config?.compactThreshold ? String(config.compactThreshold) : '')
 
-  /** Apply template: store BOTH configs, set current interface + slot defaults */
+  /** Apply template: store BOTH configs keyed by actual interface type, set current interface */
   const applyTemplate = (tid: string) => {
     const t = TEMPLATES.find(t => t.id === tid); if (!t) return
     setTemplateId(tid); setName(t.name)
     const entry = (ep: string, mdls: string, dm: string, sl?: TmplEntry['slots']): TmplEntry => ({ endpoint: ep, models: mdls, dmodel: dm, slots: sl })
-    const data = {
-      openai: t.endpoint ? entry(t.endpoint, t.models, t.dmodel, t.slots) : undefined,
-      anthropic: t.altEndpoint ? entry(t.altEndpoint, t.altModels!, t.altDmodel!, t.altSlots) : (t.iface === 'anthropic' ? entry(t.endpoint, t.models, t.dmodel, t.slots) : undefined),
+    const data: Record<string, TmplEntry | undefined> = {}
+    // Map primary interface to its correct type key
+    data[t.iface] = entry(t.endpoint, t.models, t.dmodel, t.slots)
+    // Map alternate interface if available
+    if (t.altEndpoint) {
+      const altIface = t.iface === 'anthropic' ? 'openai_compatible' : 'anthropic'
+      data[altIface] = entry(t.altEndpoint, t.altModels!, t.altDmodel!, t.altSlots)
     }
     setTmplData(data)
     setInterfaceType(t.iface)
-    const selected = data[t.iface] || data.openai || data.anthropic!
+    const selected = data[t.iface]!
     setEndpointUrl(selected.endpoint); setModelsStr(selected.models); setDefaultModel(selected.dmodel)
     applySlots(selected.slots)
   }
@@ -99,7 +109,7 @@ export default function ModelConfigForm({ config, onSaved, onCancel }: Props) {
       if (extraParams.trim()) extra = JSON.parse(extraParams)
       // Build interfaces map: preserve both interfaces for dual-protocol providers
       const interfaces: Record<string, string> = {}
-      if (tmplData.openai) interfaces.openai_compatible = tmplData.openai.endpoint
+      if (tmplData.openai_compatible) interfaces.openai_compatible = tmplData.openai_compatible.endpoint
       if (tmplData.anthropic) interfaces.anthropic = tmplData.anthropic.endpoint
       interfaces[interfaceType] = endpointUrl.trim()  // current selection always included
       const slotFields = {
@@ -137,7 +147,7 @@ export default function ModelConfigForm({ config, onSaved, onCancel }: Props) {
       try {
         const mList = modelsStr.split(',').map(m => m.trim()).filter(Boolean)
         const interfaces: Record<string, string> = {}
-        if (tmplData.openai) interfaces.openai_compatible = tmplData.openai.endpoint
+        if (tmplData.openai_compatible) interfaces.openai_compatible = tmplData.openai_compatible.endpoint
         if (tmplData.anthropic) interfaces.anthropic = tmplData.anthropic.endpoint
         interfaces[interfaceType] = endpointUrl.trim()
         const slots = { opusModel: opusModel.trim() || undefined, sonnetModel: sonnetModel.trim() || undefined, haikuModel: haikuModel.trim() || undefined, effortLevel: effortLevel.trim() || undefined, maxTokens: maxTokens ? parseInt(maxTokens, 10) : undefined, compactThreshold: compactThreshold ? parseInt(compactThreshold, 10) : undefined }
@@ -170,7 +180,7 @@ export default function ModelConfigForm({ config, onSaved, onCancel }: Props) {
           <div><label className="text-[11px] text-[var(--app-text-secondary)] block mb-1">Provider Template</label>
             <select value={templateId} onChange={e => applyTemplate(e.target.value)} className="w-full px-3 py-1.5 text-xs rounded-md border border-[var(--app-border)] bg-[var(--app-bg-inset)] text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]">
               <option value="">Custom configuration...</option>
-              {TEMPLATES.map(t => <option key={t.id} value={t.id}>{t.name} ({t.iface==='anthropic'?'Anthropic':'OpenAI'})</option>)}
+              {TEMPLATES.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           </div>
         )}
