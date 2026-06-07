@@ -230,8 +230,11 @@ export function loadLLMConfig(preferredProviderId?: string): LoadResult {
     if (projectOverrides.base_url) resolvedBaseUrl = projectOverrides.base_url
   }
 
-  // 8. Auto-persist if this was an auto-selection (no explicit app config)
-  if (!llmSection?.provider || !llmSection?.api_type) {
+  // 8. Auto-persist if the selection was missing, stale, or needed fallback correction
+  const needsPersist = !llmSection?.provider || !llmSection?.api_type
+    || llmSection.provider !== providerDef.id
+    || llmSection.api_type !== resolvedApiType
+  if (needsPersist) {
     persistAppSelection(providerDef.id, resolvedApiType)
   }
 

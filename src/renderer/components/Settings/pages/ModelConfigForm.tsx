@@ -8,12 +8,12 @@ import type { ModelConfig, CreateModelConfig } from '../../../atoms/modelConfigA
 import { type UITemplate, BUILTIN_TEMPLATES, toUITemplates } from '../../../../shared/types/model'
 import { Plug, Unplug, Loader2, Eye, EyeOff, X, Check, AlertTriangle, ChevronDown } from 'lucide-react'
 
-interface Props { config?: ModelConfig; onSaved: (config: ModelConfig | null) => void; onCancel: () => void }
+interface Props { config?: ModelConfig; onSaved: (config: ModelConfig | null) => void; onCancel: () => void; onCreated?: (config: ModelConfig) => void }
 interface TestStepInfo { step: number; label: string; status: string; detail: string; latencyMs?: number }
 
 const TEMPLATES: UITemplate[] = toUITemplates(BUILTIN_TEMPLATES)
 
-export default function ModelConfigForm({ config, onSaved, onCancel }: Props) {
+export default function ModelConfigForm({ config, onSaved, onCancel, onCreated }: Props) {
   const isEdit = !!config
   // Detect template from existing config
   const detectedTemplate = isEdit ? TEMPLATES.find(t => t.endpoint === config?.endpointUrl) : null
@@ -75,8 +75,10 @@ export default function ModelConfigForm({ config, onSaved, onCancel }: Props) {
       data[altIface] = entry(t.altEndpoint, t.altModels!, t.altDmodel!, t.altSlots)
     }
     setTmplData(data)
-    setInterfaceType(t.iface)
-    const selected = data[t.iface]!
+    // Default to Anthropic interface when available (preferred protocol)
+    const defaultIface = data.anthropic ? 'anthropic' : t.iface
+    setInterfaceType(defaultIface)
+    const selected = data[defaultIface]!
     setEndpointUrl(selected.endpoint); setModelsStr(selected.models); setDefaultModel(selected.dmodel)
     applySlots(selected.slots)
   }
@@ -158,8 +160,8 @@ export default function ModelConfigForm({ config, onSaved, onCancel }: Props) {
         })
         if (!res.config) { setTestResult({ ok: false, error: 'Save failed — cannot test' }); return }
         testId = res.config.id
-        // Update parent with the new config so it shows in the list
-        onSaved(res.config)
+        // Notify parent of new config WITHOUT closing the form
+        onCreated?.(res.config)
       } catch (e: any) { setTestResult({ ok: false, error: e.message || 'Save failed' }); return }
       finally { setSaving(false) }
     }
@@ -222,7 +224,8 @@ export default function ModelConfigForm({ config, onSaved, onCancel }: Props) {
             <div><label className="text-[11px] text-[var(--app-text-secondary)] block mb-1">Available Models (comma-separated)</label><input value={modelsStr} onChange={e => setModelsStr(e.target.value)} placeholder="claude-sonnet-4-6, claude-haiku-4-5-20251001, claude-opus-4-8" className="w-full px-3 py-1.5 text-xs rounded-md border border-[var(--app-border)] bg-[var(--app-bg-inset)] text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]" /></div>
             <div><label className="text-[11px] text-[var(--app-text-secondary)] block mb-1">Extra Params (JSON, optional)</label><textarea value={extraParams} onChange={e => setExtraParams(e.target.value)} rows={2} className="w-full px-3 py-1.5 text-xs rounded-md border border-[var(--app-border)] bg-[var(--app-bg-inset)] text-[var(--app-text)] outline-none focus:border-[var(--app-accent)] font-mono resize-none" />{jsonError && <p className="text-[11px] text-red-400 mt-1">{jsonError}</p>}</div>
 
-            {/* Three-tier model slots */}
+            {/* Three-tier model slots — Anthropic protocol only */}
+            {interfaceType === 'anthropic' && (
             <div className="pt-2 border-t border-[var(--app-border)]">
               <p className="text-[11px] text-[var(--app-text-dim)] mb-2">Model slots — leave empty to fall back to Default Model</p>
               <div className="grid grid-cols-3 gap-2">
@@ -231,6 +234,7 @@ export default function ModelConfigForm({ config, onSaved, onCancel }: Props) {
                 <div><label className="text-[11px] text-[var(--app-text-secondary)] block mb-1">Haiku (fast)</label><input value={haikuModel} onChange={e => setHaikuModel(e.target.value)} placeholder={defaultModel || 'haiku model'} className="w-full px-2 py-1 text-[11px] rounded-md border border-[var(--app-border)] bg-[var(--app-bg-inset)] text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]" /></div>
               </div>
             </div>
+            )}
 
             {/* Options */}
             <div className="grid grid-cols-3 gap-2">

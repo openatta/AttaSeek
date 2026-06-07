@@ -17,6 +17,7 @@ export default function ModelSettings() {
   const [testingIds, setTestingIds] = useState<Set<string>>(new Set())
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   // Load configs on mount
   useEffect(() => {
@@ -34,18 +35,18 @@ export default function ModelSettings() {
 
   const handleDeleteConfirm = async () => {
     const id = deleteConfirm; if (!id) return
-    setDeleting(true)
+    setDeleting(true); setDeleteError(null)
     try {
       const res = await window.api.model.delete(id)
       if (res.success) {
         setConfigs((prev) => prev.filter((c) => c.id !== id))
         setDeleteConfirm(null)
       } else {
-        console.error('[ModelSettings] delete returned false for', id)
+        setDeleteError('Delete failed — the configuration file may be read-only or the provider no longer exists.')
         setDeleteConfirm(null)
       }
     } catch (err) {
-      console.error('[ModelSettings] delete failed:', err)
+      setDeleteError(err instanceof Error ? err.message : 'Delete failed')
       setDeleteConfirm(null)
     } finally { setDeleting(false) }
   }
@@ -92,7 +93,11 @@ export default function ModelSettings() {
     return (
       <div>
         <button onClick={() => setShowAdd(false)} className="inline-flex items-center gap-1 text-xs text-[var(--app-text-dim)] hover:text-[var(--app-text)] mb-4">← Back</button>
-        <ModelConfigForm onSaved={(c) => { if (c) setConfigs(prev => [...prev, c]); setShowAdd(false) }} onCancel={() => setShowAdd(false)} />
+        <ModelConfigForm
+          onCreated={(c) => setConfigs(prev => [...prev, c])}
+          onSaved={(c) => { if (c) setConfigs(prev => [...prev, c]); setShowAdd(false) }}
+          onCancel={() => setShowAdd(false)}
+        />
       </div>
     )
   }
@@ -103,6 +108,12 @@ export default function ModelSettings() {
         <h3 className="text-sm font-semibold text-[var(--app-text)]">Model Configure</h3>
       </div>
 
+      {deleteError && (
+        <div className="mb-3 p-2 rounded border border-red-500/30 bg-red-500/5 text-xs text-red-400 flex items-center justify-between">
+          <span>{deleteError}</span>
+          <button onClick={() => setDeleteError(null)} className="ml-2 text-red-400 hover:text-red-300">✕</button>
+        </div>
+      )}
       {configs.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-sm text-[var(--app-text-secondary)] mb-1">No model configured</p>
