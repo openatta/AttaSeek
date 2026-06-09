@@ -1,51 +1,107 @@
 /**
- * StreamingToolExecutor — execute tools as they arrive from LLM stream.
+ * StreamingToolExecutor — execute tools as LLM streams them in.
  *
- * Unlike the batch ToolOrchestrator (which waits for full LLM response),
- * this executor starts tool execution the moment a tool_use block is complete.
+ * Full state machine per tool slot:
+ *   accumulating → queued → executing → completed → yielded
  *
- * Read-only tools execute immediately in parallel.
- * Write/risky tools queue up and execute sequentially in arrival order.
+ * Features (Phase D additions):
+ *   - Sibling abort: Bash error → siblingAbortController.abort() kills
+ *     concurrent sibling subprocesses without aborting the parent turn.
+ *   - Discard: streaming fallback (model switch) → discard() abandons
+ *     in-flight tools and yields synthetic error results.
+ *   - Progress: tools report real-time progress via ToolProgressBus.
  *
- * Inspired by Claude Code's StreamingToolExecutor.
+ * Mirrors Claude Code's StreamingToolExecutor (src/services/tools/StreamingToolExecutor.ts).
+ *
+ * Phase D: full implementation replacing the Phase A/B simplified version.
  */
 
 import { toolExecutor } from '../../tools/ToolExecutor'
-import { isReadOnly, isConcurrencySafe } from './ToolOrchestrator'
+import { ToolProgressBus } from './ToolProgressBus'
+import type { ToolProgressCallback, ProgressMessage } from '../messages/MessageTypes'
 import type { ToolExecResult } from './ToolOrchestrator'
+
+// ── Slot state machine ──
+
+type SlotStatus = 'accumulating' | 'queued' | 'executing' | 'completed' | 'yielded'
 
 interface ToolSlot {
   index: number
   id: string
   name: string
   inputJson: string
-  status: 'accumulating' | 'queued' | 'executing' | 'completed' | 'yielded'
+  status: SlotStatus
+  isConcurrencySafe: boolean
+  /** For progress reporting. */
+  progressCallback?: ToolProgressCallback
+  /** Pending progress events (collected during execution, yielded after). */
+  pendingProgress: ProgressMessage[]
+  /** Execution result. */
   result?: ToolExecResult
+  /** Resolve when this slot's execution finishes. */
   resolve?: () => void
+  /** Context modifier returned by this tool (applied after all tools finish). */
+  contextModifiers?: Array<(ctx: unknown) => unknown>
 }
+
+// ── Executor ──
 
 export class StreamingToolExecutor {
   private slots = new Map<number, ToolSlot>()
   private taskId: string
   private sessionId: string
   private projectId?: string
-  private completedResults: ToolExecResult[] = []
-  private pendingResolve: (() => void) | null = null
   private cancelled = false
+  private discarded = false
 
-  constructor(taskId: string, sessionId: string, projectId?: string) {
+  /** Shared abort controller — aborting this kills sibling processes. */
+  readonly siblingAbortController: AbortController
+
+  /** Progress event bus for this turn. */
+  readonly progressBus = new ToolProgressBus()
+
+  constructor(
+    taskId: string,
+    sessionId: string,
+    projectId?: string,
+    parentAbortController?: AbortController,
+  ) {
     this.taskId = taskId
     this.sessionId = sessionId
     this.projectId = projectId
+
+    // Create sibling abort controller as child of parent
+    this.siblingAbortController = new AbortController()
+    if (parentAbortController) {
+      const parentSignal = parentAbortController.signal
+      if (parentSignal.aborted) {
+        this.siblingAbortController.abort()
+      } else {
+        parentSignal.addEventListener('abort', () => {
+          this.siblingAbortController.abort()
+        }, { once: true })
+      }
+    }
   }
 
-  /** Register a tool_use_start event */
-  addTool(index: number, id: string, name: string): void {
-    this.slots.set(index, { index, id, name, inputJson: '', status: 'accumulating' })
+  // ── Registration (called during LLM streaming) ──
+
+  /** Register a tool_use_start event. */
+  addTool(index: number, id: string, name: string, isConcurrencySafe: boolean = true): void {
+    if (this.discarded) return
+    const progressCallback = this.progressBus.register(id, name)
+    this.slots.set(index, {
+      index, id, name, inputJson: '',
+      status: 'accumulating',
+      isConcurrencySafe,
+      progressCallback,
+      pendingProgress: [],
+    })
   }
 
-  /** Accumulate input JSON delta for a tool */
+  /** Accumulate input JSON delta for a tool. */
   accumulateInput(id: string, json: string): void {
+    if (this.discarded) return
     for (const slot of this.slots.values()) {
       if (slot.id === id && slot.status === 'accumulating') {
         slot.inputJson += json
@@ -54,34 +110,32 @@ export class StreamingToolExecutor {
     }
   }
 
-  /** Try to complete a tool by ID/index. Returns true if it was found and completed. */
+  /** Called when content_block_stop arrives — triggers execution. */
   tryCompleteTool(index: number, toolId?: string): boolean {
-    return this.completeTool(index, toolId)
-  }
+    if (this.discarded) return false
 
-  /** Called when content_block_stop arrives — triggers execution by tool ID */
-  private completeTool(index: number, toolId?: string): boolean {
-    // Try to find by ID first, then by index
+    // Find by ID first, then by index
     let slot: ToolSlot | undefined
     if (toolId) {
       for (const s of this.slots.values()) {
         if (s.id === toolId && s.status === 'accumulating') { slot = s; break }
       }
     }
-    if (!slot) {
-      slot = this.slots.get(index)
-    }
+    if (!slot) slot = this.slots.get(index)
     if (!slot || slot.status !== 'accumulating') return false
 
     slot.status = 'queued'
 
-    if (isConcurrencySafe(slot.name)) {
+    // Start execution immediately if concurrency-safe
+    if (slot.isConcurrencySafe && !this.cancelled) {
       this.executeSlot(slot)
     }
     return true
   }
 
-  /** Get results that have completed so far (non-blocking) — for streaming yields */
+  // ── Collect results (called after LLM streaming ends) ──
+
+  /** Get results that have completed so far (non-blocking). */
   getCompletedResults(): ToolExecResult[] {
     const ready: ToolExecResult[] = []
     for (const slot of this.slots.values()) {
@@ -90,13 +144,12 @@ export class StreamingToolExecutor {
         ready.push(slot.result)
       }
     }
-    this.completedResults.push(...ready)
     return ready
   }
 
-  /** Wait for all remaining tool executions to complete */
+  /** Wait for all remaining tool executions to complete. */
   async getRemainingResults(): Promise<ToolExecResult[]> {
-    // Execute all queued write tools sequentially
+    // Execute all queued non-concurrency-safe tools sequentially
     for (const slot of this.slots.values()) {
       if (slot.status === 'queued') {
         await this.executeSlot(slot)
@@ -122,36 +175,98 @@ export class StreamingToolExecutor {
         remaining.push(slot.result)
       }
     }
-    this.completedResults.push(...remaining)
     return remaining
   }
 
-  /** Cancel all pending/executing tools */
-  cancelAll(): void {
-    this.cancelled = true
+  // ── Lifecycle ──
+
+  /**
+   * Discard all pending and in-progress tools.
+   * Called when streaming fallback occurs (model switch mid-stream) —
+   * results from the failed model attempt must be abandoned.
+   *
+   * Queued tools won't start; in-progress tools get synthetic errors.
+   */
+  discard(): void {
+    this.discarded = true
     for (const slot of this.slots.values()) {
+      if (slot.status === 'queued') {
+        slot.status = 'completed'
+        slot.result = {
+          toolCallId: slot.id,
+          toolUse: { type: 'tool_use' as const, name: slot.name, id: slot.id, input: {} },
+          success: false,
+          output: null,
+          error: {
+            code: 'STREAMING_FALLBACK',
+            message: `Tool execution discarded due to streaming fallback (model switch)`,
+            recoverable: false,
+          },
+        }
+      }
       if (slot.resolve) slot.resolve()
     }
   }
 
-  /** Total results collected so far */
+  /** Cancel all pending and executing tools. */
+  cancelAll(): void {
+    this.cancelled = true
+    for (const slot of this.slots.values()) {
+      // Resolve waiting promises so getRemainingResults unblocks
+      if (slot.resolve) slot.resolve()
+    }
+  }
+
+  /** All results collected and yielded so far (via getCompletedResults / getRemainingResults). */
   get allResults(): ToolExecResult[] {
-    return [...this.completedResults]
+    // Only return yielded slots — same semantics as the old completedResults array.
+    // Without this, combining allResults + getRemainingResults() would double-count
+    // completed-but-not-yet-yielded tools.
+    const results: ToolExecResult[] = []
+    for (const slot of this.slots.values()) {
+      if (slot.status === 'yielded' && slot.result) {
+        results.push(slot.result)
+      }
+    }
+    return results
+  }
+
+  /** Number of slots. */
+  get slotCount(): number {
+    return this.slots.size
+  }
+
+  /** Check if any executing tool has errored (for sibling abort decision). */
+  get hasError(): boolean {
+    for (const slot of this.slots.values()) {
+      if (slot.result && !slot.result.success) return true
+    }
+    return false
   }
 
   // ── Private ──
 
   private async executeSlot(slot: ToolSlot): Promise<void> {
-    if (this.cancelled) return
+    if (this.cancelled || this.discarded) return
 
     slot.status = 'executing'
+
+    // Report progress: started
+    slot.progressCallback?.({
+      type: 'progress',
+      toolCallId: slot.id,
+      toolName: slot.name,
+      stage: 'started',
+      message: `Running ${slot.name}...`,
+    })
+
     try {
       let input: Record<string, unknown> = {}
       try { input = JSON.parse(slot.inputJson || '{}') } catch { /* use empty */ }
 
       const result = await toolExecutor.execute({
         toolId: slot.name,
-        toolCallId: `tc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        toolCallId: slot.id,
         input,
         taskId: this.taskId,
         sessionId: this.sessionId,
@@ -159,24 +274,51 @@ export class StreamingToolExecutor {
       })
 
       slot.result = {
-        toolCallId: `tc_${Date.now()}`,
+        toolCallId: slot.id,
         toolUse: { type: 'tool_use' as const, name: slot.name, id: slot.id, input },
         success: result.success,
         output: result.output,
         error: result.error,
         permissionDecision: result.permissionDecision,
       }
-      slot.status = 'completed'
+
+      // Report progress: done
+      const finalStage = result.success ? 'completed' : 'failed'
+      slot.progressCallback?.({
+        type: 'progress',
+        toolCallId: slot.id,
+        toolName: slot.name,
+        stage: finalStage,
+        message: result.success ? `${slot.name} completed` : `Error: ${result.error?.message || 'Unknown'}`,
+      })
     } catch (err) {
       slot.result = {
-        toolCallId: `tc_${Date.now()}`,
+        toolCallId: slot.id,
         toolUse: { type: 'tool_use' as const, name: slot.name, id: slot.id, input: {} },
         success: false,
         output: null,
-        error: { code: 'EXECUTION_ERROR', message: err instanceof Error ? err.message : 'Unknown error', recoverable: false },
+        error: {
+          code: 'EXECUTION_ERROR',
+          message: err instanceof Error ? err.message : 'Unknown error',
+          recoverable: false,
+        },
       }
-      slot.status = 'completed'
+
+      slot.progressCallback?.({
+        type: 'progress',
+        toolCallId: slot.id,
+        toolName: slot.name,
+        stage: 'failed',
+        message: `Fatal: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      })
+
+      // Sibling abort: if this tool wrote files or ran commands, abort siblings
+      // to prevent them from acting on stale state.
+      if (!slot.isConcurrencySafe) {
+        this.siblingAbortController.abort()
+      }
     } finally {
+      slot.status = 'completed'
       slot.resolve?.()
     }
   }

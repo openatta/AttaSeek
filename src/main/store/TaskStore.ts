@@ -1,11 +1,14 @@
 /**
- * TaskStore — SQLite-persisted task storage for agent task management tools.
+ * TaskStore — plaintext JSON file storage for agent task management tools.
+ * Each task stored as ~/.atta/seek/tasks/{id}.json. Index kept in _index.json.
  *
- * Replaces the in-memory array in task-mgmt.ts with durable storage
- * that survives restarts and session boundaries.
+ * Replaces the SQLite-backed TaskStore with plaintext files.
  */
 
-import { getDb, dbQuery, dbQueryOne } from './db'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, readdirSync } from 'fs'
+import { join, dirname } from 'path'
+import { dataDir, ensureDataDir } from './paths'
+import { withMutex } from './mutex'
 
 export interface StoredTask {
   id: string
@@ -18,96 +21,102 @@ export interface StoredTask {
   updatedAt: number
 }
 
-/** Ensure the tasks table exists (idempotent) */
-function ensureTable(): void {
-  const db = getDb()
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS agent_tasks (
-      id TEXT PRIMARY KEY,
-      title TEXT NOT NULL DEFAULT '',
-      status TEXT NOT NULL DEFAULT 'pending',
-      session_id TEXT NOT NULL DEFAULT '',
-      goal TEXT NOT NULL DEFAULT '',
-      output TEXT,
-      created_at INTEGER NOT NULL DEFAULT 0,
-      updated_at INTEGER NOT NULL DEFAULT 0
-    )
-  `)
+function tasksDir(): string { return join(dataDir(), 'tasks') }
+function taskPath(id: string): string { return join(tasksDir(), `${id}.json`) }
+function indexPath(): string { return join(tasksDir(), '_index.json') }
+
+function readIndex(): string[] {
+  try { return JSON.parse(readFileSync(indexPath(), 'utf-8')) as string[] }
+  catch { return [] }
 }
 
-function rowToTask(row: Record<string, unknown>): StoredTask {
-  return {
-    id: row.id as string,
-    title: row.title as string,
-    status: row.status as string,
-    sessionId: row.session_id as string,
-    goal: row.goal as string,
-    output: row.output as string | undefined,
-    createdAt: row.created_at as number,
-    updatedAt: row.updated_at as number,
-  }
+function writeIndex(ids: string[]): void {
+  const dir = tasksDir()
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+  writeFileSync(indexPath(), JSON.stringify(ids), 'utf-8')
+}
+
+function readTask(id: string): StoredTask | null {
+  try { return JSON.parse(readFileSync(taskPath(id), 'utf-8')) as StoredTask }
+  catch { return null }
+}
+
+function writeTask(task: StoredTask): void {
+  const fp = taskPath(task.id)
+  const dir = dirname(fp)
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+  writeFileSync(fp, JSON.stringify(task, null, 2), 'utf-8')
 }
 
 export const TaskStore = {
   create(params: { subject?: string; title?: string; description?: string; goal?: string; sessionId?: string }): StoredTask {
-    ensureTable()
+    ensureDataDir()
     const id = `task_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
     const title = params.subject || params.title || ''
     const goal = params.description || params.goal || ''
     const sessionId = params.sessionId || ''
     const now = Date.now()
 
-    const db = getDb()
-    db.prepare(
-      'INSERT INTO agent_tasks (id, title, status, session_id, goal, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    ).run(id, title, 'pending', sessionId, goal, now, now)
+    const task: StoredTask = { id, title, status: 'pending', sessionId, goal, createdAt: now, updatedAt: now }
+    writeTask(task)
 
-    return { id, title, status: 'pending', sessionId, goal, createdAt: now, updatedAt: now }
+    // Update index
+    const ids = readIndex()
+    ids.unshift(id)
+    writeIndex(ids)
+
+    return task
   },
 
   update(taskId: string, patch: { status?: string; title?: string; output?: string }): StoredTask | null {
-    ensureTable()
-    const existing = this.get(taskId)
+    const existing = readTask(taskId)
     if (!existing) return null
 
-    const status = patch.status ?? existing.status
-    const title = patch.title ?? existing.title
-    const output = patch.output ?? existing.output
     const now = Date.now()
+    if (patch.status !== undefined) existing.status = patch.status
+    if (patch.title !== undefined) existing.title = patch.title
+    if (patch.output !== undefined) existing.output = patch.output
+    existing.updatedAt = now
 
-    const db = getDb()
-    db.prepare(
-      'UPDATE agent_tasks SET status = ?, title = ?, output = ?, updated_at = ? WHERE id = ?',
-    ).run(status, title, output, now, taskId)
-
-    return { ...existing, status, title, output, updatedAt: now }
+    writeTask(existing)
+    return existing
   },
 
   get(taskId: string): StoredTask | null {
-    ensureTable()
-    const row = dbQueryOne<Record<string, unknown>>('SELECT * FROM agent_tasks WHERE id = ?', taskId)
-    return row ? rowToTask(row) : null
+    return readTask(taskId)
   },
 
   list(sessionId?: string): StoredTask[] {
-    ensureTable()
-    const rows = sessionId
-      ? dbQuery<Record<string, unknown>>('SELECT * FROM agent_tasks WHERE session_id = ? ORDER BY created_at DESC', sessionId)
-      : dbQuery<Record<string, unknown>>('SELECT * FROM agent_tasks ORDER BY created_at DESC')
-    return rows.map(rowToTask)
+    ensureDataDir()
+    const ids = readIndex()
+    const tasks: StoredTask[] = []
+    for (const id of ids) {
+      const task = readTask(id)
+      if (task) {
+        if (!sessionId || task.sessionId === sessionId) {
+          tasks.push(task)
+        }
+      }
+    }
+    return tasks.sort((a, b) => b.createdAt - a.createdAt)
   },
 
   delete(taskId: string): boolean {
-    ensureTable()
-    const db = getDb()
-    const result = db.prepare('DELETE FROM agent_tasks WHERE id = ?').run(taskId)
-    return result.changes > 0
+    // Remove from index
+    const ids = readIndex().filter(id => id !== taskId)
+    writeIndex(ids)
+
+    // Remove file
+    try { unlinkSync(taskPath(taskId)); return true }
+    catch { return false }
   },
 
-  /** Clear all tasks (e.g., on app quit if needed) */
   clear(): void {
-    ensureTable()
-    const db = getDb()
-    db.prepare('DELETE FROM agent_tasks').run()
+    ensureDataDir()
+    const ids = readIndex()
+    for (const id of ids) {
+      try { unlinkSync(taskPath(id)) } catch { /* ignore */ }
+    }
+    writeIndex([])
   },
 }

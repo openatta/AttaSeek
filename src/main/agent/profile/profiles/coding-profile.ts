@@ -26,12 +26,15 @@ import { usingToolsSection } from '../../prompt/sections/using-tools'
 import { toneAndStyleSection } from '../../prompt/sections/tone-and-style'
 import { outputEfficiencySection } from '../../prompt/sections/output-efficiency'
 import { sessionGuidanceSection } from '../../prompt/sections/session-guidance'
+import { memoryBehaviorSection } from '../../prompt/sections/memory-behavior'
 import { memoryContextSection } from '../../prompt/sections/memory-context'
 import { envInfoSection } from '../../prompt/sections/env-info'
 import { languageSection } from '../../prompt/sections/language'
+import { outputStyleSection } from '../../prompt/sections/output-style'
 import { mcpInstructionsSection } from '../../prompt/sections/mcp-instructions'
 import { scratchpadSection } from '../../prompt/sections/scratchpad'
-import { summarizeResultsSection } from '../../prompt/sections/summarize-results'
+import { tokenBudgetSection } from '../../prompt/sections/token-budget'
+import { frcSection } from '../../prompt/sections/frc'
 
 // ── Profile ──
 
@@ -55,12 +58,15 @@ export const codingProfile: AgentProfile = validateProfile({
 
       // ── Dynamic sections (session/user specific, priority 80-160) ──
       sessionGuidanceSection,  // 80: AskUserQuestion, shell, Agent, Skill guidance
+      memoryBehaviorSection,   // 88: memory system HOW-TO manual (types, format, when to save)
       memoryContextSection,    // 90: CLAUDE.md, memories, session memory, compact summary
       envInfoSection,          // 100: working dir, git, platform, shell, model info
       languageSection,         // 110: language preference (conditional)
+      outputStyleSection,      // 120: output style injection (conditional)
       mcpInstructionsSection,  // 130: MCP server instructions (conditional)
       scratchpadSection,       // 140: scratchpad directory (conditional)
-      summarizeResultsSection, // 160: post-compaction content save reminder
+      tokenBudgetSection,      // 150: token budget guidance (conditional)
+      frcSection,              // 155: function result clearing + save-what-matters
     ],
   },
 

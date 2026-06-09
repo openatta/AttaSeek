@@ -1,9 +1,13 @@
 /**
- * ModelUsageTracker — records and queries LLM token usage via SQL.
+ * ModelUsageTracker — records and queries LLM token usage via plaintext JSONL.
+ * Stored at ~/.atta/seek/token_usage.jsonl.
  */
 
-import { getDb } from '../store/db'
+import { JSONLStore } from '../store/FileStore'
 import { newId } from '../store/id'
+import { dataDir } from '../store/paths'
+
+const store = new JSONLStore(`${dataDir()}/token_usage.jsonl`)
 
 export interface UsageRecord {
   configId: string
@@ -21,52 +25,61 @@ export interface UsageSummary {
   byDay: { date: string; inputTokens: number; outputTokens: number }[]
 }
 
+interface UsageEntry extends UsageRecord {
+  id: string
+  createdAt: number
+}
+
 export class ModelUsageTracker {
   /** Record a single LLM call's token usage */
-  record(params: UsageRecord): void {
-    const db = getDb()
+  async record(params: UsageRecord): Promise<void> {
     const id = `tu_${newId()}`
     const now = Date.now()
-    db.prepare(`INSERT INTO token_usage (id, config_id, session_id, task_id, model, input_tokens, output_tokens, created_at)
-      VALUES (?,?,?,?,?,?,?,?)`).run(
-      id, params.configId, params.sessionId || null, params.taskId || null,
-      params.model, params.inputTokens, params.outputTokens, now,
-    )
+    await store.append({ id, ...params, createdAt: now })
   }
 
-  /** Get usage summary — uses SQL GROUP BY for efficiency */
-  summary(configId?: string, periodDays?: number): UsageSummary {
-    const db = getDb()
+  /** Get usage summary — computes aggregations in memory */
+  async summary(configId?: string, periodDays?: number): Promise<UsageSummary> {
+    let totalInput = 0
+    let totalOutput = 0
+    const byModelMap = new Map<string, { inputTokens: number; outputTokens: number }>()
+    const byDayMap = new Map<string, { inputTokens: number; outputTokens: number }>()
 
-    const conditions: string[] = []
-    const params: any[] = []
-    if (configId) { conditions.push('config_id = ?'); params.push(configId) }
-    if (periodDays) {
-      conditions.push('created_at >= ?')
-      params.push(Date.now() - periodDays * 86400000)
+    const cutoff = periodDays ? Date.now() - periodDays * 86400000 : 0
+
+    for await (const e of store.read()) {
+      const entry = e as UsageEntry
+      if (configId && entry.configId !== configId) continue
+      if (periodDays && entry.createdAt < cutoff) continue
+
+      totalInput += entry.inputTokens
+      totalOutput += entry.outputTokens
+
+      // By model
+      const modelKey = entry.model || 'unknown'
+      const m = byModelMap.get(modelKey) || { inputTokens: 0, outputTokens: 0 }
+      m.inputTokens += entry.inputTokens
+      m.outputTokens += entry.outputTokens
+      byModelMap.set(modelKey, m)
+
+      // By day
+      const date = new Date(entry.createdAt).toISOString().slice(0, 10)
+      const d = byDayMap.get(date) || { inputTokens: 0, outputTokens: 0 }
+      d.inputTokens += entry.inputTokens
+      d.outputTokens += entry.outputTokens
+      byDayMap.set(date, d)
     }
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
-
-    // Total
-    const totals = db.prepare(
-      `SELECT COALESCE(SUM(input_tokens),0) AS total_in, COALESCE(SUM(output_tokens),0) AS total_out FROM token_usage ${where}`
-    ).get(...params) as any
-
-    // By model
-    const byModel = db.prepare(
-      `SELECT model, SUM(input_tokens) AS input_tokens, SUM(output_tokens) AS output_tokens FROM token_usage ${where} GROUP BY model ORDER BY SUM(input_tokens+output_tokens) DESC`
-    ).all(...params) as any[]
-
-    // By day (SQLite: group by date from unix timestamp ms)
-    const byDay = db.prepare(
-      `SELECT DATE(created_at / 1000, 'unixepoch') AS date, SUM(input_tokens) AS input_tokens, SUM(output_tokens) AS output_tokens FROM token_usage ${where} GROUP BY date ORDER BY date DESC LIMIT 30`
-    ).all(...params) as any[]
 
     return {
-      totalInput: totals?.total_in || 0,
-      totalOutput: totals?.total_out || 0,
-      byModel: byModel.map((r: any) => ({ model: r.model, inputTokens: r.input_tokens, outputTokens: r.output_tokens })),
-      byDay: byDay.map((r: any) => ({ date: r.date, inputTokens: r.input_tokens, outputTokens: r.output_tokens })),
+      totalInput,
+      totalOutput,
+      byModel: Array.from(byModelMap.entries())
+        .map(([model, v]) => ({ model, ...v }))
+        .sort((a, b) => (b.inputTokens + b.outputTokens) - (a.inputTokens + a.outputTokens)),
+      byDay: Array.from(byDayMap.entries())
+        .map(([date, v]) => ({ date, ...v }))
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, 30),
     }
   }
 }

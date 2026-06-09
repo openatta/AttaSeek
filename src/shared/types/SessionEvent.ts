@@ -22,6 +22,8 @@ export type SessionEventPayloadMap = {
   SessionTitleGenerated: SessionTitleGeneratedPayload
   CompactBoundary: CompactBoundaryPayload
   UserQuestion: UserQuestionPayload
+  TaskNotification: TaskNotificationPayload
+  SubagentLifecycle: SubagentLifecyclePayload
 }
 
 /** Discriminated union — `event.type` narrows `event.payload` without casts. */
@@ -143,4 +145,44 @@ export interface UserQuestionPayload {
   questionId: string
   question: string
   options?: string[]
+}
+
+/** Worker agent completion notification — mirrors Claude Code's <task-notification> XML. */
+export interface TaskNotificationPayload {
+  /** Worker agent ID (from spawn_agent result) */
+  agentId: string
+  /** Completion status */
+  status: 'completed' | 'failed' | 'killed'
+  /** Human-readable status summary (e.g., "Agent 'Investigate auth bug' completed") */
+  summary: string
+  /** Worker's final text output (optional — may be truncated for large outputs) */
+  result?: string
+  /** Token and timing usage (optional) */
+  usage?: {
+    totalTokens: number
+    toolUses: number
+    durationMs: number
+  }
+  /** Error message when status='failed' */
+  errorMessage?: string
+  /** Whether the calling agent has tools to read the output file */
+  canReadOutputFile?: boolean
+  /** Path to persisted output (for large outputs that exceed result truncation) */
+  outputFile?: string
+}
+
+/** Sub-agent lifecycle event — emitted on SubagentStart/SubagentStop. */
+export interface SubagentLifecyclePayload {
+  /** Lifecycle phase */
+  phase: 'start' | 'stop'
+  /** Sub-agent ID */
+  subagentId: string
+  /** Sub-agent profile/type */
+  subagentProfile: string
+  /** Sub-agent goal */
+  subagentGoal: string
+  /** Completion status (only for 'stop' phase) */
+  subagentStatus?: 'completed' | 'failed' | 'cancelled'
+  /** Result summary (only for 'stop' phase) */
+  subagentResult?: string
 }

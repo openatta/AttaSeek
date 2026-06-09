@@ -1,5 +1,5 @@
 /**
- * Shared utilities for IPC handlers and SQLite services.
+ * Shared utilities for IPC handlers and storage services.
  */
 
 /** Validate that a field on an object is a required non-empty string */
@@ -19,19 +19,4 @@ export function ipcWrap<T extends Record<string, unknown>>(fn: () => T) {
 export async function ipcWrapAsync<T extends Record<string, unknown>>(fn: () => Promise<T>) {
   try { return { success: true as const, ...await fn() } }
   catch (err) { return { success: false as const, error: err instanceof Error ? err.message : 'Internal error' } }
-}
-
-/** Convert snake_case SQL row keys to camelCase. Optional JSON fields are deserialized. */
-export function fromRow<T>(row: Record<string, unknown> | undefined, jsonFields?: string[]): T | undefined {
-  if (!row) return undefined
-  const out: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(row)) {
-    const camel = key.replace(/_([a-z])/g, (_, c) => (c as string).toUpperCase())
-    if (jsonFields?.includes(camel) && typeof value === 'string') {
-      try { out[camel] = JSON.parse(value) } catch { out[camel] = value }
-    } else {
-      out[camel] = value
-    }
-  }
-  return out as T
 }

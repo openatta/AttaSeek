@@ -1,11 +1,14 @@
 /**
- * MemoryService — L1 scratchpad (per-session, in-memory) + L2 persistent (SQLite).
+ * MemoryService — L1 scratchpad (per-session, in-memory) + L2 persistent (JSONL).
+ * Stored at ~/.atta/seek/memories.jsonl.
  */
 
-import { getDb, dbQuery, dbQueryOne } from '../store/db'
+import { JSONLStore } from '../store/FileStore'
 import { newId } from '../store/id'
-import { fromRow } from '../store/util'
+import { dataDir } from '../store/paths'
 import type { MemoryEntry, MemoryQuery } from '../../shared/types/Memory'
+
+const store = new JSONLStore(`${dataDir()}/memories.jsonl`)
 
 export class MemoryService {
   private scratchpads = new Map<string, Map<string, unknown>>()
@@ -18,46 +21,85 @@ export class MemoryService {
   }
   clearScratchpad(sid: string): void { this.scratchpads.delete(sid) }
 
-  // --- L2: Persistent Memory (SQLite) ---
-  store(entry: Omit<MemoryEntry, 'id' | 'layer' | 'createdAt' | 'updatedAt'>): MemoryEntry {
-    const db = getDb()
+  // --- L2: Persistent Memory (JSONL) ---
+
+  async store(entry: Omit<MemoryEntry, 'id' | 'layer' | 'createdAt' | 'updatedAt'>): Promise<MemoryEntry> {
     const id = `mem_${newId().slice(0, 8)}`
     const now = Date.now()
-    db.prepare(`INSERT INTO memory_entries (id, layer, scope, scope_id, type, content, source, session_id, task_id, created_at, updated_at)
-      VALUES (?, 'L2', ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, entry.scope, entry.scopeId, entry.type, entry.content, entry.source, entry.sessionId || null, entry.taskId || null, now, now)
-    return { id, layer: 'L2', ...entry, createdAt: now, updatedAt: now }
+    const mem: MemoryEntry = { id, layer: 'L2', ...entry, createdAt: now, updatedAt: now }
+    await store.append(mem)
+    return mem
   }
 
-  recall(query: MemoryQuery): MemoryEntry[] {
-    const db = getDb()
-    let sql = 'SELECT * FROM memory_entries WHERE 1=1'
-    const params: any[] = []
-    if (query.scope) { sql += ' AND scope = ?'; params.push(query.scope) }
-    if (query.scopeId) { sql += ' AND scope_id = ?'; params.push(query.scopeId) }
-    if (query.type) { sql += ' AND type = ?'; params.push(query.type) }
-    if (query.layer) { sql += ' AND layer = ?'; params.push(query.layer) }
-    if (query.query) { sql += ' AND content LIKE ?'; params.push(`%${query.query}%`) }
-    sql += ' ORDER BY updated_at DESC'
-    if (query.limit) { sql += ' LIMIT ?'; params.push(query.limit) }
-    return dbQuery<Record<string, unknown>>(sql, ...params).map((r) => fromRow<MemoryEntry>(r)!).filter((e): e is MemoryEntry => !!e)
+  async recall(query: MemoryQuery): Promise<MemoryEntry[]> {
+    const results: MemoryEntry[] = []
+    for await (const e of store.read()) {
+      const m = e as MemoryEntry
+      if (query.scope && m.scope !== query.scope) continue
+      if (query.scopeId && m.scopeId !== query.scopeId) continue
+      if (query.type && m.type !== query.type) continue
+      if (query.layer && m.layer !== query.layer) continue
+      if (query.query && !m.content.toLowerCase().includes(query.query.toLowerCase())) continue
+      results.push(m)
+    }
+    results.sort((a, b) => b.updatedAt - a.updatedAt)
+    if (query.limit) return results.slice(0, query.limit)
+    return results
   }
 
-  get(id: string): MemoryEntry | undefined { return fromRow<MemoryEntry>(dbQueryOne<Record<string, unknown>>('SELECT * FROM memory_entries WHERE id = ?', id)) }
-
-  update(id: string, patch: Partial<Pick<MemoryEntry, 'content' | 'scope' | 'scopeId' | 'type'>>): MemoryEntry | null {
-    const ex = dbQueryOne<Record<string, unknown>>('SELECT * FROM memory_entries WHERE id = ?', id)
-    if (!ex) return null
-    const c = patch.content ?? ex.content; const sc = patch.scope ?? ex.scope; const si = patch.scopeId ?? ex.scope_id; const t = patch.type ?? ex.type; const now = Date.now()
-    const db = getDb()
-    db.prepare('UPDATE memory_entries SET content=?, scope=?, scope_id=?, type=?, updated_at=? WHERE id=?').run(c, sc, si, t, now, id)
-    return fromRow<MemoryEntry>({ ...ex, content: c, scope: sc, scope_id: si, type: t, updated_at: now }) || null
+  async get(id: string): Promise<MemoryEntry | undefined> {
+    for await (const e of store.read()) {
+      if ((e as MemoryEntry).id === id) return e as MemoryEntry
+    }
+    return undefined
   }
 
-  delete(id: string): boolean { return getDb().prepare('DELETE FROM memory_entries WHERE id=?').run(id).changes > 0 }
+  async update(id: string, patch: Partial<Pick<MemoryEntry, 'content' | 'scope' | 'scopeId' | 'type'>>): Promise<MemoryEntry | null> {
+    // Read all entries, find and update the target, rewrite
+    const all: MemoryEntry[] = []
+    for await (const e of store.read()) all.push(e as MemoryEntry)
+    const idx = all.findIndex(m => m.id === id)
+    if (idx === -1) return null
+    const now = Date.now()
+    if (patch.content !== undefined) all[idx].content = patch.content
+    if (patch.scope !== undefined) all[idx].scope = patch.scope
+    if (patch.scopeId !== undefined) all[idx].scopeId = patch.scopeId
+    if (patch.type !== undefined) all[idx].type = patch.type
+    all[idx].updatedAt = now
+    // Rewrite file (JSONL doesn't support in-place updates)
+    const { writeFileSync } = await import('fs')
+    const { dataDir: dd } = await import('../store/paths')
+    const { join } = await import('path')
+    writeFileSync(join(dd(), 'memories.jsonl'), all.map(e => JSON.stringify(e)).join('\n') + '\n', 'utf-8')
+    return all[idx]
+  }
 
-  listAll(): MemoryEntry[] { return dbQuery<Record<string, unknown>>('SELECT * FROM memory_entries ORDER BY updated_at DESC LIMIT 200').map((r) => fromRow<MemoryEntry>(r)!).filter((e): e is MemoryEntry => !!e) }
+  async delete(id: string): Promise<boolean> {
+    const all: MemoryEntry[] = []
+    let found = false
+    for await (const e of store.read()) {
+      if ((e as MemoryEntry).id === id) { found = true; continue }
+      all.push(e as MemoryEntry)
+    }
+    if (!found) return false
+    const { writeFileSync } = await import('fs')
+    const { dataDir: dd } = await import('../store/paths')
+    const { join } = await import('path')
+    writeFileSync(join(dd(), 'memories.jsonl'), all.map(e => JSON.stringify(e)).join('\n') + '\n', 'utf-8')
+    return true
+  }
 
-  get count(): number { return dbQueryOne<{ c: number }>('SELECT COUNT(*) as c FROM memory_entries')?.c || 0 }
+  async listAll(): Promise<MemoryEntry[]> {
+    const results: MemoryEntry[] = []
+    for await (const e of store.read()) results.push(e as MemoryEntry)
+    return results.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 200)
+  }
+
+  async count(): Promise<number> {
+    let n = 0
+    for await (const _ of store.read()) n++
+    return n
+  }
 }
 
 export const memoryService = new MemoryService()

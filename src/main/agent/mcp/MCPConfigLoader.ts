@@ -71,7 +71,7 @@ function loadFromFile(filePath: string, source: string): MCPServerConfig[] {
 function parseTransportConfig(raw: Record<string, unknown>): MCPTransportConfig {
   const type = (raw.transport as string) || 'stdio'
   return {
-    type: type as 'stdio' | 'sse',
+    type: type as 'stdio' | 'sse' | 'http' | 'ws',
     command: raw.command as string | undefined,
     args: raw.args as string[] | undefined,
     env: raw.env as Record<string, string> | undefined,

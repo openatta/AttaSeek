@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest'
 import { MockModelProvider } from '../mock/MockModelProvider'
 import { textDelta, toolUseStart, toolUseDelta, blockStop, messageStop, endTurnResult } from '../mock/helpers'
-import { AgentOrchestrator } from '../../../src/main/agent/orchestrator/AgentOrchestrator'
+import { QueryEngine } from '../../../src/main/agent/orchestrator/QueryEngine'
 import { validateProfile } from '../../../src/main/agent/profile/AgentProfile'
 
 const testProfile = validateProfile({
@@ -14,8 +14,20 @@ const testProfile = validateProfile({
   output: { generateArtifact: false, autoTitle: false },
   memory: { autoExtract: false }, context: { autoCompact: false, maxTokens: 10_000 },
 })
-const emptyCtx = { messages: [] as any[], tools: [] as any[] }
 const mkTask = (g: string) => ({ id: 't', sessionId: 's', goal: g, status: 'idle' as const, createdAt: Date.now(), updatedAt: Date.now() })
+
+function createMockCallModel(mock: MockModelProvider) {
+  return async (params: any, onChunk: any) => {
+    return mock.chatStream(params, onChunk)
+  }
+}
+
+function newEngine(mock: MockModelProvider, sessionId = 's') {
+  return new QueryEngine({
+    sessionId,
+    testDeps: { callModel: createMockCallModel(mock) },
+  })
+}
 
 describe('Message history — multi-turn structure', () => {
   it('should append tool_result after each tool execution', async () => {
@@ -28,9 +40,9 @@ describe('Message history — multi-turn structure', () => {
     // Turn 2: end_turn
     mock.pushTurn([textDelta('Result'), messageStop()], endTurnResult('Result'))
 
-    const orchestrator = new AgentOrchestrator()
+    const engine = newEngine(mock)
     const events: any[] = []
-    const gen = orchestrator.submitMessage(mkTask('Read a.txt'), testProfile, mock, emptyCtx)
+    const gen = engine.submitMessage('Read a.txt', mkTask('Read a.txt'), testProfile)
     for await (const e of gen) events.push(e)
 
     // 2 tool events + AgentMessage x2 + final TaskCompleted
@@ -46,26 +58,13 @@ describe('Message history — multi-turn structure', () => {
       stopReason: 'end_turn', usage: { inputTokens: 50, outputTokens: 20 },
     })
 
-    const orchestrator = new AgentOrchestrator()
+    const engine = newEngine(mock)
     const events: any[] = []
-    const gen = orchestrator.submitMessage(mkTask('Hello'), testProfile, mock, { ...emptyCtx, tools: [] })
+    const gen = engine.submitMessage('Hello', mkTask('Hello'), testProfile)
     for await (const e of gen) events.push(e)
 
     expect(events.filter(e => e.type === 'ToolCallStarted').length, 'zero tools').toBe(0)
     expect(events.some(e => e.type === 'TaskCompleted'), 'completes').toBe(true)
-  })
-
-  it('should correctly pass tools when provided in assembledContext', async () => {
-    const mock = new MockModelProvider()
-    mock.pushTurn([textDelta('Used tools from context'), messageStop()], endTurnResult('Used tools'))
-
-    const orchestrator = new AgentOrchestrator()
-    const events: any[] = []
-    const ctx = { messages: [], tools: [{ name: 'read_file', description: 'Read file', input_schema: {} }] }
-    const gen = orchestrator.submitMessage(mkTask('Test'), testProfile, mock, ctx)
-    for await (const e of gen) events.push(e)
-
-    expect(events.some(e => e.type === 'TaskCompleted'), 'completes with provided tools').toBe(true)
   })
 })
 
@@ -77,14 +76,14 @@ describe('AbortController — timing scenarios', () => {
       blockStop(1), messageStop(),
     ], { content: [{ type: 'tool_use', id: 'tu_1', name: 'read_file', input: { path: 'f.txt' } }], stopReason: 'tool_use', usage: { inputTokens: 100, outputTokens: 50 } })
 
-    const orchestrator = new AgentOrchestrator()
+    const engine = newEngine(mock)
     const events: any[] = []
-    const gen = orchestrator.submitMessage(mkTask('Read f'), testProfile, mock, emptyCtx)
+    const gen = engine.submitMessage('Read f', mkTask('Read f'), testProfile)
 
     // Abort after first ToolCallStarted
     for await (const e of gen) {
       events.push(e)
-      if (e.type === 'ToolCallStarted') { orchestrator.interrupt(); break }
+      if (e.type === 'ToolCallStarted') { engine.interrupt(); break }
     }
 
     // The generator should stop yielding after interrupt
@@ -101,11 +100,11 @@ describe('AbortController — timing scenarios', () => {
     const mock = new MockModelProvider()
     mock.pushTurn([textDelta('Slow response'), messageStop()], endTurnResult('Slow'))
 
-    const orchestrator = new AgentOrchestrator()
-    orchestrator.interrupt() // abort before submission
+    const engine = newEngine(mock)
+    engine.interrupt() // abort before submission
 
     const events: any[] = []
-    const gen = orchestrator.submitMessage(mkTask('Test'), testProfile, mock, emptyCtx)
+    const gen = engine.submitMessage('Test', mkTask('Test'), testProfile)
     for await (const e of gen) events.push(e)
 
     // Should still get some events or abort handling
@@ -116,13 +115,13 @@ describe('AbortController — timing scenarios', () => {
     const mock = new MockModelProvider()
     mock.pushTurn([textDelta('Testing'), messageStop()], endTurnResult('Testing'))
 
-    const orchestrator = new AgentOrchestrator()
-    orchestrator.interrupt()
-    orchestrator.interrupt()
-    orchestrator.interrupt() // triple call
+    const engine = newEngine(mock)
+    engine.interrupt()
+    engine.interrupt()
+    engine.interrupt() // triple call
 
     const events: any[] = []
-    const gen = orchestrator.submitMessage(mkTask('Test'), testProfile, mock, emptyCtx)
+    const gen = engine.submitMessage('Test', mkTask('Test'), testProfile)
     for await (const e of gen) events.push(e)
 
     expect(events.length).toBeGreaterThanOrEqual(0) // no crash

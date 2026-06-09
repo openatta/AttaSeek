@@ -1,12 +1,14 @@
 /**
  * AgentRuntime — task lifecycle manager.
  *
- * Delegates execution to AgentOrchestrator (universal agent engine).
- * Creates a new orchestrator per task to ensure isolation.
+ * Phase B: delegates execution to QueryEngine (one-per-session) via
+ * query-loop. QueryEngine accumulates conversation state across turns
+ * within the same session.
  */
 
 import { agentEventBus } from './AgentEventBus'
-import { AgentOrchestrator } from './orchestrator/AgentOrchestrator'
+import { QueryEngine, getQueryEngine, removeQueryEngine } from './orchestrator/QueryEngine'
+import type { QueryEngineConfig } from './orchestrator/QueryEngine'
 import { newId } from '../store/id'
 import { validateProfile } from './profile/AgentProfile'
 import type { AgentTask } from '../../shared/types/AgentTask'
@@ -22,15 +24,20 @@ export interface CreateTaskParams {
   modelConfigId?: string
   modelName?: string
   profile?: AgentProfile
+  /** Override QueryEngine config for this session (used on first task). */
+  engineConfig?: Partial<QueryEngineConfig>
+  /** Execution mode. 'coordinator' activates multi-agent orchestration. */
+  mode?: 'normal' | 'coordinator'
 }
 
 export class AgentRuntime {
   private tasks = new Map<string, AgentTask>()
-  private activeExecutions = new Map<string, AgentOrchestrator>()
+  /** Session-level QueryEngine tracking (one per session for conversation continuity). */
+  private sessionEngines = new Map<string, QueryEngine>()
 
   /** Create and start a new agent task */
   createTask(params: CreateTaskParams): AgentTask {
-    const { sessionId, goal, projectId, modelConfigId, modelName, profile } = params
+    const { sessionId, goal, projectId, modelConfigId, modelName, profile, engineConfig, mode } = params
 
     // Evict oldest completed/failed tasks if at capacity
     if (this.tasks.size >= MAX_TASKS) {
@@ -41,6 +48,7 @@ export class AgentRuntime {
         }
       }
     }
+
     const id = `task_${newId().slice(0, 8)}`
     const task: AgentTask = {
       id,
@@ -58,8 +66,8 @@ export class AgentRuntime {
     // Emit UserMessage event
     this.emit(task, 'UserMessage', { content: goal })
 
-    // Start orchestrator (per-task instance, non-blocking)
-    this.runOrchestrator(task, profile).catch((err) => {
+    // Start execution via QueryEngine
+    this.runTask(task, profile, engineConfig, mode).catch((err) => {
       console.error(`[AgentRuntime] task ${id} failed:`, err)
     })
 
@@ -71,10 +79,10 @@ export class AgentRuntime {
     const task = this.tasks.get(taskId)
     if (!task) return false
 
-    const exec = this.activeExecutions.get(taskId)
-    if (exec) {
-      exec.interrupt()
-      this.activeExecutions.delete(taskId)
+    // Interrupt QueryEngine if active for this session
+    const engine = this.sessionEngines.get(task.sessionId)
+    if (engine) {
+      engine.interrupt()
     }
 
     task.status = 'cancelled'
@@ -93,23 +101,46 @@ export class AgentRuntime {
     return Array.from(this.tasks.values()).filter((t) => t.sessionId === sessionId)
   }
 
+  /** Get (or create) the QueryEngine for a session. */
+  getEngine(sessionId: string): QueryEngine | undefined {
+    return this.sessionEngines.get(sessionId)
+  }
+
+  /** Shut down a session's QueryEngine and clean up. */
+  closeSession(sessionId: string): void {
+    const engine = this.sessionEngines.get(sessionId)
+    if (engine) {
+      engine.interrupt()
+      this.sessionEngines.delete(sessionId)
+    }
+    removeQueryEngine(sessionId)
+  }
+
   // ── Private ──
 
-  private async runOrchestrator(task: AgentTask, profile?: AgentProfile): Promise<void> {
-    const orchestrator = new AgentOrchestrator()
-    this.activeExecutions.set(task.id, orchestrator)
+  private async runTask(
+    task: AgentTask,
+    profile?: AgentProfile,
+    engineConfig?: Partial<QueryEngineConfig>,
+    mode?: 'normal' | 'coordinator',
+  ): Promise<void> {
+    const effectiveProfile = profile || (mode === 'coordinator' ? getCoordinatorProfile() : getDefaultProfile())
+
+    const engine = this.getOrCreateEngine(task.sessionId, task.projectId, engineConfig, mode)
+    this.sessionEngines.set(task.sessionId, engine)
+
+    task.status = 'executing'
+    task.updatedAt = Date.now()
 
     try {
-      const effectiveProfile = profile || getDefaultProfile()
-      for await (const event of orchestrator.submitMessage(task, effectiveProfile)) {
+      for await (const event of engine.submitMessage(task.goal, task, effectiveProfile)) {
         agentEventBus.emit(event)
       }
-      // Only set completed if not already overridden by cancel
-      if (task.status !== 'cancelled') {
+      if ((task.status as string) !== 'cancelled') {
         task.status = 'completed'
       }
     } catch (err) {
-      if (task.status !== 'cancelled') {
+      if ((task.status as string) !== 'cancelled') {
         task.status = 'failed'
         task.updatedAt = Date.now()
         this.emit(task, 'TaskFailed', {
@@ -117,14 +148,34 @@ export class AgentRuntime {
           recoverable: true,
         })
       }
-    } finally {
-      this.activeExecutions.delete(task.id)
     }
+  }
+
+  private getOrCreateEngine(
+    sessionId: string,
+    projectId?: string,
+    configOverride?: Partial<QueryEngineConfig>,
+    mode?: 'normal' | 'coordinator',
+  ): QueryEngine {
+    // Check session-level cache first
+    let engine = this.sessionEngines.get(sessionId)
+    if (engine) return engine
+
+    // Check global registry
+    engine = getQueryEngine(sessionId, {
+      sessionId,
+      projectId,
+      mode,
+      ...configOverride,
+    })
+    return engine
   }
 
   // ── Event helper ──
 
-  emit<K extends keyof SessionEventPayloadMap>(task: AgentTask, type: K, payload: SessionEventPayloadMap[K]): void {
+  emit<K extends keyof SessionEventPayloadMap>(
+    task: AgentTask, type: K, payload: SessionEventPayloadMap[K],
+  ): void {
     agentEventBus.emit({
       id: newId(), sessionId: task.sessionId, taskId: task.id,
       type, payload, createdAt: Date.now(),
@@ -142,12 +193,34 @@ function getDefaultProfile(): AgentProfile {
       id: 'default',
       name: 'AttaSeek Agent',
       description: 'General-purpose AI agent.',
-      systemPrompt: { id: 'default', sections: [{ name: 'identity', priority: 10, content: `You are an AI agent running in AttaSeek. Use tools when needed. Be concise and helpful.` }] },
+      systemPrompt: {
+        id: 'default',
+        sections: [{
+          name: 'identity', priority: 10,
+          content: 'You are an AI agent running in AttaSeek. Use tools when needed. Be concise and helpful.',
+        }],
+      },
       tools: [], skills: [],
-      execution: { maxTurns: 10, maxParallelTools: 1, planning: 'none' as const }, // conservative default for unknown profiles
+      execution: { maxTurns: 10, maxParallelTools: 1, planning: 'none' as const },
     })
   }
   return _defaultProfile
+}
+
+// ── Coordinator profile (module-level, allocated once) ──
+
+let _coordinatorProfile: AgentProfile | null = null
+
+function getCoordinatorProfile(): AgentProfile {
+  if (!_coordinatorProfile) {
+    // The coordinator profile is loaded lazily to avoid circular imports.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { coordinatorProfile } = require('./profile/profiles/coordinator-profile') as {
+      coordinatorProfile: AgentProfile
+    }
+    _coordinatorProfile = coordinatorProfile
+  }
+  return _coordinatorProfile
 }
 
 export const agentRuntime = new AgentRuntime()

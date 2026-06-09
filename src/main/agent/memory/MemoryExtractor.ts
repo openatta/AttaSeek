@@ -152,10 +152,10 @@ async function doExtract(
   // Always record task completion
   const taskContent = `Completed: ${goal}`
   let existingContent = new Set<string>()
-  try { existingContent = new Set(memoryService.listAll().map(e => e.content)) } catch { /* DB may not be available */ }
+  try { existingContent = new Set((await memoryService.listAll()).map(e => e.content)) } catch { /* DB may not be available */ }
   if (!existingContent.has(taskContent)) {
     try {
-      const entry = memoryService.store({
+      const entry = await memoryService.store({
         scope: 'project', scopeId: projectId || sessionId,
         type: 'task_state', content: taskContent,
         source: 'auto_extract',
@@ -220,7 +220,7 @@ async function doExtract(
   for (const fact of extractedFacts) {
     if (!existingContent.has(fact)) {
       try {
-        const entry = memoryService.store({
+        const entry = await memoryService.store({
           scope: 'project', scopeId: projectId || sessionId,
           type: 'user_preference', content: fact,
           source: 'auto_extract',

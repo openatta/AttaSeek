@@ -19,8 +19,12 @@ export interface ToolManifest {
   permissionPolicy: ToolPermissionPolicy
   /** Whether this tool only reads data (safe to run concurrently with other reads) */
   isReadOnly?: boolean
-  /** Whether multiple instances of this tool can run concurrently */
-  isConcurrencySafe?: boolean
+  /** Whether multiple instances of this tool can run concurrently.
+   *  Can be a static boolean or a runtime function that inspects the input. */
+  isConcurrencySafe?: boolean | ((input: unknown) => boolean)
+  /** Whether this tool is deferred (loaded on-demand via ToolSearchTool).
+   *  MCP tools and other dynamic tools should set this to true. */
+  isDeferred?: boolean
 }
 
 export interface ToolPermissionPolicy {

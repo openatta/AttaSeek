@@ -42,10 +42,16 @@ export function readJSON<T>(filePath: string): T | null {
   try {
     if (!fs.existsSync(filePath)) return null
     const raw = fs.readFileSync(filePath, 'utf-8')
-    const stripped = raw
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/\/\/.*$/gm, '')
-    return JSON.parse(stripped) as T
+    // Try raw parse first — standard JSON (most common case, handles URLs safely)
+    try {
+      return JSON.parse(raw) as T
+    } catch {
+      // Fall back to comment-stripped parse for JSONC/JSON5 files
+      const stripped = raw
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/\/\/.*$/gm, '')
+      return JSON.parse(stripped) as T
+    }
   } catch (err) {
     console.warn(`[AttaSettingsLoader] failed to read ${filePath}:`, (err as Error).message)
     return null

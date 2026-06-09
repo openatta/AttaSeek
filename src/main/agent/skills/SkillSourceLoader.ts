@@ -15,6 +15,7 @@ import * as path from 'path'
 import * as os from 'os'
 import type { SkillManifest } from '../../../shared/types/Skill'
 import { loadSkillsFromDir } from './SkillLoader'
+import { getBundledSkills } from './bundled-skills'
 
 export type SkillSource = 'bundled' | 'project' | 'user' | 'managed'
 
@@ -32,8 +33,8 @@ export async function loadSkillsFromAllSources(
 ): Promise<LoadedSkill[]> {
   const sources = new Map<SkillSource, string[]>()
 
-  // Bundled — compiled-in skills (registered via SkillRegistry, not filesystem)
-  sources.set('bundled', [])
+  // Bundled — compiled-in skills (registered via getBundledSkills)
+  sources.set('bundled', ['(bundled)'])
 
   // Project — .claude/skills/ in workspace
   if (workspaceRoot) {
@@ -51,6 +52,12 @@ export async function loadSkillsFromAllSources(
   sources.set('managed', [])
 
   const allSkills: LoadedSkill[] = []
+
+  // Register bundled skills first
+  const bundledSkills = getBundledSkills()
+  for (const m of bundledSkills) {
+    allSkills.push({ manifest: m as SkillManifest, source: 'bundled', sourcePath: '(bundled)' })
+  }
 
   for (const source of ['bundled', 'project', 'user', 'managed'] as SkillSource[]) {
     const dirs = sources.get(source) || []

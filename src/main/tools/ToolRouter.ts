@@ -7,8 +7,8 @@
 
 import type { ToolManifest } from '../../shared/types/Tool'
 
-export interface ToolMatch {
-  tool: ToolManifest
+export interface ToolMatch<T = ToolManifest> {
+  tool: T
   score: number
 }
 
@@ -19,14 +19,14 @@ export class ToolRouter {
     this.topK = topK
   }
 
-  /** Select Top-K tools most relevant to the goal */
-  selectTools(goal: string, tools: ToolManifest[]): ToolManifest[] {
+  /** Select Top-K tools most relevant to the goal. Accepts any object with name + description. */
+  selectTools<T extends { name: string; description: string }>(goal: string, tools: T[]): T[] {
     if (tools.length <= this.topK) return tools
 
     const goalTokens = this.tokenize(goal.toLowerCase())
     if (goalTokens.size === 0) return tools.slice(0, this.topK)
 
-    const scored: ToolMatch[] = tools.map((tool) => {
+    const scored: ToolMatch<T>[] = tools.map((tool) => {
       const toolText = `${tool.name} ${tool.description}`.toLowerCase()
       const toolTokens = this.tokenize(toolText)
       const score = this.jaccardSimilarity(goalTokens, toolTokens)

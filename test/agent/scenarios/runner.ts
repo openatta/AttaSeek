@@ -1,11 +1,11 @@
 /**
  * Scenario runner — loads JSON scenario files and executes them
- * against AgentOrchestrator with MockModelProvider.
+ * against QueryEngine with MockModelProvider injected via testDeps.
  */
 
 import { describe, it } from 'vitest'
 import { MockModelProvider } from '../mock/MockModelProvider'
-import { AgentOrchestrator } from '../../../src/main/agent/orchestrator/AgentOrchestrator'
+import { QueryEngine } from '../../../src/main/agent/orchestrator/QueryEngine'
 import { setupTempDir, loadProfile } from './setup'
 import {
   assertTerminalReason,
@@ -17,6 +17,7 @@ import {
 } from './assertions'
 import type { SessionEvent } from '../../../src/shared/types/SessionEvent'
 import type { LLMChunk } from '../../../src/main/agent/llm/ModelProvider'
+import type { QueryDeps } from '../../../src/main/agent/orchestrator/QueryDeps'
 
 // ── Types matching scenario JSON format ──
 
@@ -43,13 +44,22 @@ interface ScenarioAssert {
   eventsNotContain?: string[]
 }
 
+/** Wrap MockModelProvider as a QueryDeps.callModel adapter. */
+function createMockCallModel(mockProvider: MockModelProvider): QueryDeps['callModel'] {
+  return async (params, onChunk) => {
+    return mockProvider.chatStream(
+      params as Parameters<typeof mockProvider.chatStream>[0],
+      onChunk as Parameters<typeof mockProvider.chatStream>[1],
+    )
+  }
+}
+
 /** Run a single scenario */
 export async function runScenario(scenario: ScenarioFile): Promise<void> {
   const env = setupTempDir(scenario.guestFiles)
   try {
     const profile = loadProfile(scenario.profile)
     const mockProvider = new MockModelProvider()
-    const orchestrator = new AgentOrchestrator()
 
     // For the first turn only (single-user-message scenarios)
     const turn = scenario.turns[0]
@@ -65,8 +75,6 @@ export async function runScenario(scenario: ScenarioFile): Promise<void> {
     // Program mock responses
     for (const responseSet of turn.mockResponses) {
       const chunks = responseSet
-      // Determine result from chunks: if last chunk is a tool_use, return tool_use result
-      const lastChunk = chunks[chunks.length - 1]
       const hasToolUse = chunks.some(c => c.type === 'tool_use_start')
       mockProvider.pushTurn(chunks, {
         content: hasToolUse
@@ -82,9 +90,16 @@ export async function runScenario(scenario: ScenarioFile): Promise<void> {
       })
     }
 
-    // Execute
+    // Execute via QueryEngine with mock deps
+    const engine = new QueryEngine({
+      sessionId: `session_${scenario.name}`,
+      testDeps: {
+        callModel: createMockCallModel(mockProvider),
+      },
+    })
+
     const events: SessionEvent[] = []
-    const gen = orchestrator.submitMessage(task, profile, mockProvider)
+    const gen = engine.submitMessage(turn.userMessage, task, profile)
     for await (const event of gen) {
       events.push(event)
     }

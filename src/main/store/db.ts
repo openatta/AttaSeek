@@ -1,59 +1,48 @@
 /**
- * SQLite database singleton — provides the database handle to all services.
- * Created once at app startup, initialized with schema from schema.ts.
+ * Legacy SQLite database — retained for one-time data migration to plaintext.
  *
- * Runtime data stored at ~/.atta/seek/ (within the Atta monorepo config tree).
+ * After migration, the SQLite file at ~/.atta/seek/attaseek.db is no longer
+ * used for new reads/writes. All storage is now in ~/.atta/seek/ plaintext files.
+ *
+ * To remove the SQLite dependency entirely:
+ *   1. Remove better-sqlite3 from package.json
+ *   2. Delete this file, schema.ts, and util.ts (fromRow)
+ *   3. Run `npm uninstall better-sqlite3`
  */
 
 import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
-import { mkdirSync, existsSync } from 'fs'
-import { SCHEMA } from './schema'
+import { existsSync } from 'fs'
+import { dataDir } from './paths'
 
-let _dataDir: string | null = null
-function dataDir(): string { if (!_dataDir) _dataDir = join(app.getPath('home'), '.atta', 'seek'); return _dataDir }
+let _db: Database.Database | null = null
 
-let db: Database.Database | null = null
-
-export function getDb(): Database.Database {
-  if (db) return db
-  if (!existsSync(dataDir())) mkdirSync(dataDir(), { recursive: true })
+/** Open the legacy SQLite database for one-time migration. Returns null if no DB file exists. */
+export function openLegacyDb(): Database.Database | null {
+  if (_db) return _db
   const dbPath = join(dataDir(), 'attaseek.db')
-  db = new Database(dbPath)
-  db.pragma('journal_mode = WAL')
-  db.pragma('foreign_keys = ON')
-  db.exec(SCHEMA)
-  // Safe migrations: add columns that may not exist in older DBs
-  runMigrations(db)
-  console.log(`[db] opened ${dbPath}`)
-  return db
+  if (!existsSync(dbPath)) return null
+  _db = new Database(dbPath)
+  _db.pragma('journal_mode = WAL')
+  return _db
 }
 
-function runMigrations(db: Database.Database): void {
-  // Add columns that may be missing from older schema versions
-  const migrations: { table: string; col: string; def: string }[] = [
-    // model_configs table removed — LLM config now in ~/.atta/settings.json
-  ]
-  for (const m of migrations) {
-    const cols = dbQuery<{ name: string }>(`PRAGMA table_info(${m.table})`)
-    if (!cols.some((c) => c.name === m.col)) {
-      db.exec(`ALTER TABLE ${m.table} ADD COLUMN ${m.col} ${m.def}`)
-      console.log(`[db] migration: added ${m.table}.${m.col}`)
-    }
-  }
+/** Close and release the legacy database handle. */
+export function closeLegacyDb(): void {
+  if (_db) { _db.close(); _db = null }
 }
 
-/** Typed query helper — eliminates `as any[]` boilerplate at call sites. */
+/**
+ * Typed query helper for legacy migration reads.
+ * Only used during the one-time export step.
+ */
 export function dbQuery<T>(sql: string, ...params: unknown[]): T[] {
-  return getDb().prepare(sql).all(...params) as T[]
+  if (!_db) return []
+  return _db.prepare(sql).all(...params) as T[]
 }
 
-/** Typed single-row query helper. */
 export function dbQueryOne<T>(sql: string, ...params: unknown[]): T | undefined {
-  return getDb().prepare(sql).get(...params) as T | undefined
-}
-
-export function closeDb(): void {
-  if (db) { db.close(); db = null; console.log('[db] closed') }
+  if (!_db) return undefined
+  return _db.prepare(sql).get(...params) as T | undefined
 }

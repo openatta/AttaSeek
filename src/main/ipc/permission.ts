@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import { permissionService } from '../permission/PermissionService'
 import { permissionBridge } from '../permission/PermissionBridge'
-import { ipcWrap } from '../store/util'
+import { ipcWrapAsync } from '../store/util'
 import type { PermissionDecision } from '../../shared/types/Permission'
 
 const VALID_POLICY_DECISIONS: readonly PermissionDecision[] = ['allow', 'ask', 'deny'] as const
@@ -21,11 +21,11 @@ export function registerPermissionHandlers(): void {
     const decision = parseRequestDecision(p.decision)
     const serviceResult = permissionService.resolveRequest(p.requestId, decision)
     permissionBridge.resolve(p.requestId, decision)
-    return ipcWrap(() => ({ success: !!serviceResult }))
+    return { success: !!serviceResult }
   })
   ipcMain.handle('permission:list-policies', async () =>
-    ipcWrap(() => ({ policies: permissionService.listPolicies() })))
+    ipcWrapAsync(async () => ({ policies: await permissionService.listPolicies() })))
   ipcMain.handle('permission:update-policy', async (_e, p: { id: string; decision: string }) =>
-    ipcWrap(() => ({ success: !!permissionService.updatePolicy(p.id, parsePolicyDecision(p.decision)) })))
+    ipcWrapAsync(async () => ({ success: !!(await permissionService.updatePolicy(p.id, parsePolicyDecision(p.decision))) })))
   console.log('[IPC:permission] handlers registered')
 }

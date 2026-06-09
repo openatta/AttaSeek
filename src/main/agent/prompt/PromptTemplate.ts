@@ -101,6 +101,12 @@ export interface PromptContext {
   scratchpadDir?: string
   /** Token budget target description (if set) */
   tokenBudget?: string
+  /** Whether fork-mode subagents are enabled */
+  forkSubagentEnabled?: boolean
+  /** Whether the CWD is a git worktree (detached HEAD, .git is a file) */
+  isWorktree?: boolean
+  /** Worktree isolation message */
+  worktreeMessage?: string
 }
 
 export interface PromptSection {
@@ -124,6 +130,8 @@ export interface PromptTemplate {
 // ── Render engine ──
 
 export function renderPrompt(template: PromptTemplate, ctx: PromptContext): string {
+  // Safety sort — sections are defined in priority order by convention
+  // but this ensures correctness if a profile has misordered sections.
   const sorted = [...template.sections].sort((a, b) => a.priority - b.priority)
   const parts: string[] = []
 

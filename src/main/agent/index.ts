@@ -188,7 +188,7 @@ export { SwarmManager, swarmManager } from './coordinator/SwarmManager'
 export type { Teammate, TeamConfig, SendMessageResult } from './coordinator/SwarmManager'
 
 // Phase C: Task notification queue (background worker results)
-export { TaskNotificationQueue, taskNotificationQueue } from './coordinator/TaskNotificationQueue'
+export { TaskNotificationQueue, taskNotificationQueue } from './TaskNotificationQueue'
 
 // Phase C: Tool implementations — Cron, Monitor, Workflow, ToolSearch
 export { cronCreateManifest, cronDeleteManifest, cronListManifest, cronCreateImpl, cronDeleteImpl, cronListImpl } from './tools/implementations/cron-tools'

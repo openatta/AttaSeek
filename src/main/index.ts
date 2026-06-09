@@ -2,6 +2,8 @@ import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { platform } from 'os'
+import { appendFileSync, mkdirSync, existsSync } from 'fs'
+import { dirname } from 'path'
 import { registerThemeHandlers } from './ipc/theme'
 import { registerAgentHandlers, setAgentWindow } from './ipc/agent'
 import { registerArtifactHandlers } from './ipc/artifact'
@@ -14,23 +16,71 @@ import { registerModelHandlers } from './ipc/model'
 import { registerAppHandlers } from './ipc/app'
 import { registerQuestionHandlers } from './ipc/question'
 import { boot } from './boot'
-import { getDb, closeDb } from './store/db'
 import { agentEventBus } from './agent/AgentEventBus'
 import { permissionBridge } from './permission/PermissionBridge'
 import { questionBridge } from './tools/QuestionBridge'
 import { subAgentManager } from './agent/subagent/SubAgentManager'
 import { cleanupTaskStore } from './agent/tools/implementations/task-mgmt'
 import { startTimer } from './perf'
+import { ensureDataDir, dataDir } from './store/paths'
+import { newId } from './store/id'
 
 const isMac = platform() === 'darwin'
+
+// ── Crash reporting ──
+// Global uncaught exception / unhandled rejection handlers.
+// Writes a fatal error event to the telemetry JSONL store before quitting.
+// This is the last-resort safety net — structured error handling should
+// happen in the query loop and IPC handlers. These handlers exist so that
+// crashes never go completely unrecorded.
+
+function writeCrashEvent(kind: string, err: unknown): void {
+  const message = err instanceof Error ? err.message : String(err)
+  const stack = err instanceof Error ? err.stack : undefined
+
+  console.error(`[crash] ${kind}:`, message)
+  if (stack) console.error(stack)
+
+  // Best-effort sync write to telemetry JSONL — must be synchronous in crash handlers
+  try {
+    const dir = `${dataDir()}`
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+    const filePath = `${dir}/telemetry.jsonl`
+    appendFileSync(filePath, JSON.stringify({
+      id: newId(),
+      type: 'agent_fatal_error',
+      queryChainId: 'crash',
+      queryDepth: 0,
+      timestamp: Date.now(),
+      payload: {
+        kind,
+        message: message.slice(0, 500),
+        stack: stack ? stack.split('\n').slice(0, 10).join('\n') : undefined,
+        sessionId: 'crash',
+        taskId: 'crash',
+      },
+    }) + '\n', 'utf-8')
+  } catch {
+    // If even writing the crash event fails, there's nothing more we can do
+  }
+}
+
+process.on('uncaughtException', (err) => {
+  writeCrashEvent('uncaughtException', err)
+  // Flush buffered events if possible
+  try { agentEventBus.flushAsync() } catch { /* ignore */ }
+  app.quit()
+})
+
+process.on('unhandledRejection', (reason) => {
+  writeCrashEvent('unhandledRejection', reason)
+})
 
 const bootTimer = startTimer('boot')
 boot().catch((err) => { console.error('[boot] failed:', err) }).finally(() => bootTimer())
 
-// Initialize database
-const dbTimer = startTimer('db_init')
-getDb()
-dbTimer()
+// Initialize data directory for plaintext storage
+ensureDataDir()
 
 // Register IPC handlers before creating windows
 registerThemeHandlers()
@@ -127,28 +177,7 @@ app.on('before-quit', () => {
 })
 
 app.on('will-quit', () => {
-  // Persist session events for all active sessions
-  try {
-    const db = getDb()
-    // Get distinct session IDs from events
-    const allEvents = agentEventBus.getHistory('*')
-    const sessionIds = new Set(allEvents.map((e) => e.sessionId))
-    const insert = db.prepare(
-      'INSERT OR REPLACE INTO session_events (id, session_id, task_id, type, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    )
-    const tx = db.transaction(() => {
-      for (const event of allEvents) {
-        insert.run(
-          event.id, event.sessionId, event.taskId, event.type,
-          JSON.stringify(event.payload), event.createdAt,
-        )
-      }
-    })
-    tx()
-    console.log(`[session] persisted ${allEvents.length} events across ${sessionIds.size} sessions`)
-  } catch (err) {
-    console.error('[session] failed to persist events:', err)
-  }
-
-  closeDb()
+  // Session events are persisted progressively by SessionStore (plaintext JSONL).
+  // No bulk flush needed — each event is appended as it occurs.
+  subAgentManager.cancelAll()
 })

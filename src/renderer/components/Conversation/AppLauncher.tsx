@@ -43,7 +43,6 @@ export default function AppLauncher() {
               <button
                 key={item.id}
                 onClick={() => {
-                  console.log('launch:', item.id)
                   setOpen(false)
                 }}
                 className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors"

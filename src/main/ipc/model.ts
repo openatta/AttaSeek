@@ -76,7 +76,7 @@ export function registerModelHandlers(): void {
     }))
 
   ipcMain.handle('model:usage', async (_e, p: { configId?: string; periodDays?: number }) =>
-    ipcWrap((): { stats: UsageStats } => ({ stats: modelUsageTracker.summary(p.configId, p.periodDays) })))
+    ipcWrapAsync(async (): Promise<{ stats: UsageStats }> => ({ stats: await modelUsageTracker.summary(p.configId, p.periodDays) })))
 
   ipcMain.handle('model:has-config', async () =>
     ipcWrap(() => ({ configured: modelConfigService.hasConfigured() })))

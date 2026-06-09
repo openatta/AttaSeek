@@ -48,6 +48,9 @@ export const MAX_PARALLEL_TOOLS = 16
 /** Max subagent lifetime before cleanup (ms) */
 export const SUBAGENT_IDLE_CLEANUP_MS = 300_000
 
+/** Directory for sub-agent output files (persisted for task_output tool). */
+export const SUBAGENT_OUTPUT_DIR = '~/.atta/seek/tasks'
+
 // ── Timeouts ──
 
 /** Default shell command timeout (ms) */
@@ -103,6 +106,53 @@ export const MICROCOMPACT_MAX_TOOL_RESULT_CHARS = 10_000
 
 /** Aggressive truncation for reactive compact */
 export const REACTIVE_COMPACT_MIN_CHARS = 5_000
+
+// ── Time-based microcompact ──
+
+/**
+ * Trigger time-based microcompact when (now − last assistant timestamp)
+ * exceeds this many minutes. 60 min equals the server-side prompt cache TTL,
+ * so we clear old tool results before the cache expires to avoid rewriting
+ * stale data on cache miss.
+ */
+export const TIME_MICROCOMPACT_GAP_MINUTES = 60
+
+/** Keep this many most-recent compactable tool results when time-based MC fires. */
+export const TIME_MICROCOMPACT_KEEP_RECENT = 5
+
+/** Minimum message count before time-based microcompact activates. */
+export const TIME_MICROCOMPACT_MIN_MESSAGES = 10
+
+// ── Snip compaction defaults ──
+
+/** Default: keep first N messages as head. */
+export const SNIP_DEFAULT_KEEP_HEAD = 2
+
+/** Default: keep last N turn-pairs as tail. */
+export const SNIP_DEFAULT_KEEP_TAIL_TURNS = 5
+
+/** Minimum total messages before snip activates. */
+export const SNIP_DEFAULT_MIN_MESSAGES = 20
+
+// ── Compaction warning ──
+
+/**
+ * When token usage reaches this ratio of the budget, emit a warning
+ * before compaction is triggered. Allows the user to see a heads-up
+ * before the conversation is summarised.
+ */
+export const COMPACT_WARNING_TRIGGER_RATIO = 0.75
+
+/** Suppress repeated compact warnings within this many milliseconds. */
+export const COMPACT_WARNING_SUPPRESS_MS = 60_000
+
+// ── File state cache ──
+
+/** Maximum entries in the file state cache LRU. */
+export const FILE_CACHE_MAX_ENTRIES = 1000
+
+/** File state cache TTL in milliseconds (30 seconds). */
+export const FILE_CACHE_TTL_MS = 30_000
 
 // ── Orchestrator ──
 

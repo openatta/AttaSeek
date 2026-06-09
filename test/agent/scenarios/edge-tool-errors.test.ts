@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest'
 import { MockModelProvider } from '../mock/MockModelProvider'
 import { textDelta, toolUseStart, toolUseDelta, blockStop, messageStop, endTurnResult } from '../mock/helpers'
-import { AgentOrchestrator } from '../../../src/main/agent/orchestrator/AgentOrchestrator'
+import { QueryEngine } from '../../../src/main/agent/orchestrator/QueryEngine'
 import { validateProfile } from '../../../src/main/agent/profile/AgentProfile'
 
 const testProfile = validateProfile({
@@ -14,8 +14,20 @@ const testProfile = validateProfile({
   output: { generateArtifact: false, autoTitle: false },
   memory: { autoExtract: false }, context: { autoCompact: false, maxTokens: 10_000 },
 })
-const emptyCtx = { messages: [] as any[], tools: [] as any[] }
 const mkTask = (g: string) => ({ id: 't', sessionId: 's', goal: g, status: 'idle' as const, createdAt: Date.now(), updatedAt: Date.now() })
+
+function createMockCallModel(mock: MockModelProvider) {
+  return async (params: any, onChunk: any) => {
+    return mock.chatStream(params, onChunk)
+  }
+}
+
+function newEngine(mock: MockModelProvider, sessionId = 's') {
+  return new QueryEngine({
+    sessionId,
+    testDeps: { callModel: createMockCallModel(mock) },
+  })
+}
 
 describe('Tool Error — unknown tool', () => {
   it('should return error for non-existent tool but continue', async () => {
@@ -26,9 +38,9 @@ describe('Tool Error — unknown tool', () => {
     ], { content: [{ type: 'tool_use', id: 'tu_1', name: 'non_existent_tool', input: {} }], stopReason: 'tool_use', usage: { inputTokens: 100, outputTokens: 50 } })
     mock.pushTurn([textDelta('Tried unknown tool'), messageStop()], endTurnResult('Tried unknown tool'))
 
-    const orchestrator = new AgentOrchestrator()
+    const engine = newEngine(mock)
     const events: any[] = []
-    const gen = orchestrator.submitMessage(mkTask('Use bad tool'), testProfile, mock, emptyCtx)
+    const gen = engine.submitMessage('Use bad tool', mkTask('Use bad tool'), testProfile)
     for await (const e of gen) events.push(e)
 
     const finished = events.filter(e => e.type === 'ToolCallFinished')
@@ -41,16 +53,15 @@ describe('Tool Error — unknown tool', () => {
 describe('Tool Error — execution exception', () => {
   it('should catch tool execution errors and continue with error status', async () => {
     const mock = new MockModelProvider()
-    // Tool with invalid input that causes execution error
     mock.pushTurn([
       toolUseStart('tu_1', 'read_file'), toolUseDelta('tu_1', '{"path":""}'),
       blockStop(1), messageStop(),
     ], { content: [{ type: 'tool_use', id: 'tu_1', name: 'read_file', input: { path: '' } }], stopReason: 'tool_use', usage: { inputTokens: 100, outputTokens: 50 } })
     mock.pushTurn([textDelta('Error handled'), messageStop()], endTurnResult('Error handled'))
 
-    const orchestrator = new AgentOrchestrator()
+    const engine = newEngine(mock)
     const events: any[] = []
-    const gen = orchestrator.submitMessage(mkTask('Read empty path'), testProfile, mock, emptyCtx)
+    const gen = engine.submitMessage('Read empty path', mkTask('Read empty path'), testProfile)
     for await (const e of gen) events.push(e)
 
     expect(events.filter(e => e.type === 'ToolCallStarted').length, 'tool started').toBeGreaterThanOrEqual(1)
@@ -68,14 +79,13 @@ describe('Tool Error — recoverable vs non-recoverable', () => {
     ], { content: [{ type: 'tool_use', id: 'tu_1', name: 'read_file', input: { path: '/dev/null' } }], stopReason: 'tool_use', usage: { inputTokens: 100, outputTokens: 50 } })
     mock.pushTurn([textDelta('Done'), messageStop()], endTurnResult('Done'))
 
-    const orchestrator = new AgentOrchestrator()
+    const engine = newEngine(mock)
     const events: any[] = []
-    const gen = orchestrator.submitMessage(mkTask('Read /dev/null'), testProfile, mock, emptyCtx)
+    const gen = engine.submitMessage('Read /dev/null', mkTask('Read /dev/null'), testProfile)
     for await (const e of gen) events.push(e)
 
     const finished = events.filter(e => e.type === 'ToolCallFinished')
     expect(finished.length).toBeGreaterThanOrEqual(1)
-    // Each ToolCallFinished has status and optional error with recoverable flag
     expect(finished.every(f => 'status' in (f.payload as any))).toBe(true)
   })
 })

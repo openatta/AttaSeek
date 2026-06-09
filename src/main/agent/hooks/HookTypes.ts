@@ -19,11 +19,15 @@ export type HookEventType =
   | 'PreCompact'
   | 'PostCompact'
   | 'Notification'
-  | 'PostSampling'  // legacy / compat
+  | 'PostSampling'         // legacy / compat
+  | 'PermissionRequest'    // tool permission request (can override decision)
+  | 'SubagentStart'        // sub-agent execution begins
+  | 'SubagentStop'         // sub-agent execution completes
+  | 'Elicitation'          // user question / clarification request
 
 // ── Hook types ──
 
-export type HookType = 'callback' | 'command' | 'prompt'
+export type HookType = 'callback' | 'command' | 'prompt' | 'http'
 
 // ── Hook matcher ──
 
@@ -43,6 +47,8 @@ export interface HookConfig {
   matcher?: HookMatcher
   command?: string
   prompt?: string
+  /** URL for HTTP hook type. Must be HTTPS unless ATTA_ALLOW_HTTP_HOOKS=1. */
+  url?: string
   priority: number
   enabled: boolean
   timeoutMs?: number
@@ -63,6 +69,20 @@ export interface HookContext {
   toolOutput?: unknown
   userMessage?: string
   notificationMessage?: string
+  // PermissionRequest event context
+  permissionToolId?: string
+  permissionToolInput?: unknown
+  permissionRiskLevel?: string
+  // SubagentStart/Stop event context
+  subagentId?: string
+  subagentProfile?: string
+  subagentGoal?: string
+  subagentResult?: string
+  subagentStatus?: string
+  // Elicitation event context
+  elicitationQuestion?: string
+  elicitationOptions?: string[]
+  elicitationResponse?: string
 }
 
 // ── Hook execution result ──
@@ -80,6 +100,8 @@ export interface HookResult {
   updatedInput?: unknown
   /** Hook-specific decision */
   decision?: 'approve' | 'block'
+  /** PermissionRequest hooks can override the permission decision */
+  permissionDecision?: 'allow' | 'deny' | 'ask'
 }
 
 // ── Re-export existing PostSamplingHook for backward compat ──

@@ -1,5 +1,6 @@
-/** Task management tools — task_create, task_update, task_list, task_output */
+/** Task management tools — task_create, task_update, task_list, task_output, task_stop */
 import { TaskStore } from '../../../store/TaskStore'
+import { taskNotificationQueue } from '../../TaskNotificationQueue'
 
 export function cleanupTaskStore(): void { TaskStore.clear() }
 
@@ -46,5 +47,38 @@ export const taskOutputImpl = {
     const taskId = String(input.taskId || '')
     const t = TaskStore.get(taskId)
     return t?.output || t ? `Task ${t.id}: status=${t.status}, no output yet` : `Task ${taskId} not found`
+  },
+}
+
+export const taskStopImpl = {
+  toolId: 'task_stop',
+  execute: async (input: Record<string, unknown>) => {
+    const taskId = String(input.task_id || '').trim()
+    if (!taskId) throw new Error('task_id is required')
+
+    // Try stopping a TaskStore task first
+    const storedTask = TaskStore.get(taskId)
+    if (storedTask) {
+      if (storedTask.status === 'completed' || storedTask.status === 'failed') {
+        return `Task ${taskId} is already ${storedTask.status} — nothing to stop`
+      }
+      TaskStore.update(taskId, { status: 'cancelled' })
+      // Cancel any pending notification for this worker
+      taskNotificationQueue.cancel(taskId)
+      return `Stopped task ${taskId}. It can be continued with send_message.`
+    }
+
+    // Try stopping a SubAgentManager sub-agent
+    try {
+      const { subAgentManager } = await import('../../subagent/SubAgentManager')
+      const agentInfo = subAgentManager.get(taskId)
+      if (agentInfo && agentInfo.status === 'running') {
+        subAgentManager.cancel(taskId)
+        taskNotificationQueue.cancel(taskId)
+        return `Stopped worker agent "${taskId}" (${agentInfo.agentType}). It can be continued with send_message.`
+      }
+    } catch { /* SubAgentManager not available in this context */ }
+
+    throw new Error(`Task or worker "${taskId}" not found. Check the ID and try again.`)
   },
 }

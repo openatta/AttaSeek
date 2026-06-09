@@ -2,7 +2,7 @@
  * MockModelProvider — FIFO queue mock implementing the ModelProvider interface.
  *
  * Pre-program responses with pushTurn() / pushFullTurn() / pushError(),
- * then inject into AgentOrchestrator. Each chatStream() call consumes
+ * then inject into QueryEngine via testDeps. Each chatStream() call consumes
  * the next queued turn. Records all requests for assertion.
  */
 

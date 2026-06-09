@@ -1,5 +1,5 @@
 /**
- * LLM Integration Tests — Real API calls driving AgentOrchestrator.
+ * LLM Integration Tests — Real API calls driving QueryEngine.
  *
  * Requires: ATTASEEK_API_KEY environment variable.
  * Run: npm run test:agent:live
@@ -11,9 +11,8 @@ import { describe, it, expect } from 'vitest'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
-import { AgentOrchestrator } from '../../../src/main/agent/orchestrator/AgentOrchestrator'
+import { QueryEngine } from '../../../src/main/agent/orchestrator/QueryEngine'
 import { codingProfile } from '../../../src/main/agent/profile/profiles/coding-profile'
-import { AnthropicProvider } from '../../../src/main/agent/llm/AnthropicProvider'
 import type { SessionEvent } from '../../../src/shared/types/SessionEvent'
 
 const API_KEY = process.env.ATTASEEK_API_KEY
@@ -32,12 +31,15 @@ function setupProject(files: Record<string, string>): { dir: string; cleanup: ()
 }
 
 async function runAgent(prompt: string, projectDir: string): Promise<SessionEvent[]> {
-  const provider = new AnthropicProvider(API_KEY!)
-  const orchestrator = new AgentOrchestrator()
+  const engine = new QueryEngine({
+    sessionId: 'session_live',
+    projectId: projectDir,
+    cwd: projectDir,
+  })
 
   const task = {
     id: `live_${Date.now()}`,
-    sessionId: `session_live`,
+    sessionId: 'session_live',
     goal: prompt,
     status: 'idle' as const,
     projectId: projectDir,
@@ -46,7 +48,7 @@ async function runAgent(prompt: string, projectDir: string): Promise<SessionEven
   }
 
   const events: SessionEvent[] = []
-  for await (const event of orchestrator.submitMessage(task, codingProfile, provider)) {
+  for await (const event of engine.submitMessage(prompt, task, codingProfile)) {
     events.push(event)
   }
   return events

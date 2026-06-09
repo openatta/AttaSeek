@@ -10,6 +10,7 @@
 
 import type { MemoryEntry } from '../../../shared/types/Memory'
 import type { AgentProfile } from '../profile/AgentProfile'
+import type { LLMMessage } from '../llm/ModelProvider'
 
 export interface FileNode {
   name: string
@@ -33,6 +34,20 @@ export interface SubAgentContext {
 
   /** Isolation mode */
   isolation: 'inline' | 'worktree'
+
+  /**
+   * Parent conversation messages to inherit (forkWithContext).
+   * Truncated to last N turns — provides the sub-agent with the parent's
+   * reasoning chain without making context too large.
+   */
+  parentMessages?: LLMMessage[]
+
+  /**
+   * Parent's rendered system prompt to inherit (forkWithContext).
+   * When provided, replaces the sub-agent's default system prompt with
+   * a merged version.
+   */
+  parentSystemPrompt?: string
 }
 
 export function createSubAgentContext(
@@ -45,5 +60,25 @@ export function createSubAgentContext(
     sharedMemories: sharedMemories.filter(m => m.scope === 'project' || m.scope === 'global'),
     parentSummary,
     isolation,
+  }
+}
+
+/**
+ * Create a minimal parent task context from tool execution context.
+ * Used by tool implementations (spawn_agent, send_message) that need
+ * a parent task reference for SubAgentManager.fork().
+ */
+export function createParentTask(ctx?: { taskId?: string; sessionId?: string; projectId?: string }): {
+  id: string; sessionId: string; projectId?: string; goal: string;
+  status: 'idle'; createdAt: number; updatedAt: number;
+} {
+  return {
+    id: ctx?.taskId || 'unknown',
+    sessionId: ctx?.sessionId || 'default',
+    projectId: ctx?.projectId,
+    goal: 'parent task',
+    status: 'idle',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
   }
 }

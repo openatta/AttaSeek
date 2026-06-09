@@ -22,13 +22,30 @@ import { FILE_OPS_TOOLS } from './agent/tools/implementations/file-ops-tools'
 import { WRITING_TOOLS } from './agent/tools/implementations/writing-tools'
 import { TASK_MGMT_TOOLS } from './agent/tools/implementations/task-mgmt-tools'
 import { AGENT_TOOLS } from './agent/tools/implementations/agent-tools'
+import { SEND_MESSAGE_TOOLS } from './agent/tools/implementations/send-message-tools'
 import { SKILL_TOOLS } from './agent/tools/implementations/skill-tools'
 import { QUESTION_TOOLS } from './agent/tools/implementations/question-tools'
 import { PLAN_TOOLS } from './agent/tools/implementations/plan-tools'
 import { TODO_TOOLS } from './agent/tools/implementations/todo-tools'
+import { cronCreateManifest, cronDeleteManifest, cronListManifest } from './agent/tools/implementations/cron-tools'
+import { monitorManifest } from './agent/tools/implementations/monitor-tools'
+import { workflowManifest } from './agent/tools/implementations/workflow-tools'
+import { toolSearchManifest } from './agent/tools/implementations/tool-search'
 import { EnterpriseDocPlugin } from './plugins/packs/enterprise-doc-plugin'
 
 export async function boot(): Promise<void> {
+  // 0. Migrate legacy SQLite data to plaintext (one-time)
+  try {
+    const { migrateFromLegacyDb } = await import('./store/migrate-legacy')
+    const result = migrateFromLegacyDb()
+    if (result.migrated.length > 0) {
+      console.log(`[boot] legacy migration: ${result.migrated.join(', ')}`)
+    }
+    if (result.errors.length > 0) {
+      console.warn(`[boot] legacy migration errors: ${result.errors.join(', ')}`)
+    }
+  } catch (err) { console.warn('[boot] legacy migration skipped:', err instanceof Error ? err.message : 'unknown') }
+
   // 1. Register built-in skills + file-system skills
   skillRegistry.registerAll(DEMO_SKILLS)
   const fileSkills = await loadSkillsFromDir(process.cwd())
@@ -36,7 +53,7 @@ export async function boot(): Promise<void> {
   console.log(`[boot] registered ${skillRegistry.count} skills`)
 
   // 2. Register built-in tools (core + research + lsp + notification)
-  toolRegistry.registerAll([...DEMO_TOOLS, ...RESEARCH_TOOLS, ...LSP_TOOLS, ...NOTIFICATION_TOOLS, ...BASH_TOOLS, ...FILE_OPS_TOOLS, ...WRITING_TOOLS, ...TASK_MGMT_TOOLS, ...AGENT_TOOLS, ...SKILL_TOOLS, ...QUESTION_TOOLS, ...PLAN_TOOLS, ...TODO_TOOLS])
+  toolRegistry.registerAll([...DEMO_TOOLS, ...RESEARCH_TOOLS, ...LSP_TOOLS, ...NOTIFICATION_TOOLS, ...BASH_TOOLS, ...FILE_OPS_TOOLS, ...WRITING_TOOLS, ...TASK_MGMT_TOOLS, ...AGENT_TOOLS, ...SEND_MESSAGE_TOOLS, ...SKILL_TOOLS, ...QUESTION_TOOLS, ...PLAN_TOOLS, ...TODO_TOOLS, cronCreateManifest, cronDeleteManifest, cronListManifest, monitorManifest, workflowManifest, toolSearchManifest])
   console.log(`[boot] registered ${toolRegistry.count} tools`)
 
   // 3. Register built-in hooks

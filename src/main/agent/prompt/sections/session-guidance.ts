@@ -36,18 +36,24 @@ export const sessionGuidanceSection: PromptSection = {
 
     // Agent tool guidance
     if (hasAgentTool) {
-      items.push(`Use the spawn_agent tool with specialized agents when the task at hand matches the agent's description. Subagents are valuable for parallelizing independent queries or for protecting the main context window from excessive results, but they should not be used excessively when not needed. Importantly, avoid duplicating work that subagents are already doing - if you delegate research to a subagent, do not also perform the same searches yourself.`)
+      if (ctx.forkSubagentEnabled) {
+        items.push(`Calling spawn_agent without a subagent_type creates a fork, which runs in the background and keeps its tool output out of your context — so you can keep chatting with the user while it works. Reach for it when research or multi-step implementation work would otherwise fill your context with raw output you won't need again. **If you ARE the fork** — execute directly; do not re-delegate.`)
+      } else {
+        items.push(`Use the spawn_agent tool with specialized agents when the task at hand matches the agent's description. Subagents are valuable for parallelizing independent queries or for protecting the main context window from excessive results, but they should not be used excessively when not needed. Importantly, avoid duplicating work that subagents are already doing - if you delegate research to a subagent, do not also perform the same searches yourself.`)
+      }
 
-      // Explore agent guidance
-      const searchTools = (hasGlob || hasGrep)
-        ? `the ${[hasGlob && 'glob', hasGrep && 'grep'].filter(Boolean).join(' or ')} tool`
-        : hasBash ? `\`find\` or \`grep\` via the bash tool` : 'search tools'
-      items.push(`For simple, directed codebase searches (e.g. for a specific file/class/function) use ${searchTools} directly. For broader codebase exploration and deep research, use the spawn_agent tool with agent_type="Explore". This is slower than using search tools directly, so use this only when a simple, directed search proves to be insufficient or when your task will clearly require more extensive exploration.`)
+      // Explore agent guidance (only in regular mode — fork mode doesn't use agent types)
+      if (!ctx.forkSubagentEnabled) {
+        const searchTools = (hasGlob || hasGrep)
+          ? `the ${[hasGlob && 'glob', hasGrep && 'grep'].filter(Boolean).join(' or ')} tool`
+          : hasBash ? `\`find\` or \`grep\` via the bash tool` : 'search tools'
+        items.push(`For simple, directed codebase searches (e.g. for a specific file/class/function) use ${searchTools} directly. For broader codebase exploration and deep research, use the spawn_agent tool with agent_type="Explore". This is slower than using search tools directly, so use this only when a simple, directed search proves to be insufficient or when your task will clearly require more extensive exploration.`)
+      }
     }
 
     // Skill guidance
     if (hasSkillTool && ctx.skills.length > 0) {
-      const userSkills = ctx.skills.filter(s => (s as any).userInvocable !== false)
+      const userSkills = ctx.skills.filter(s => s.userInvocable !== false)
       if (userSkills.length > 0) {
         const skillNames = userSkills.map(s => s.name).join(', ')
         items.push(`/<skill-name> (e.g., /${userSkills[0]?.name || 'help'}) is shorthand for users to invoke a user-invocable skill. When executed, the skill gets expanded to a full prompt. Use the Skill tool to execute them. IMPORTANT: Only use Skill for skills listed in its user-invocable skills section [${skillNames}] - do not guess or use built-in CLI commands.`)

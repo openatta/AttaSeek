@@ -1,17 +1,15 @@
 /**
- * Agent Mock Tests — MockModelProvider + AgentOrchestrator unit/integration tests.
+ * Agent Mock Tests — MockModelProvider + QueryEngine unit/integration tests.
  *
  * Run: npm run test:agent:mock
  *
- * Full scenario-driven tests (like AttaCode 89 scenarios) require Electron runtime
- * for ContextBuilder → MemoryService → SQLite. Those live in E2E tests.
- * These tests validate the mock infrastructure and orchestrator structure.
+ * These tests validate the mock infrastructure and engine structure.
  */
 
 import { describe, it, expect } from 'vitest'
 import { MockModelProvider } from '../mock/MockModelProvider'
 import { textDelta, toolUseStart, toolUseDelta, blockStop, messageStop, endTurnResult, textTurn, toolTurn } from '../mock/helpers'
-import { AgentOrchestrator } from '../../../src/main/agent/orchestrator/AgentOrchestrator'
+import { QueryEngine } from '../../../src/main/agent/orchestrator/QueryEngine'
 import { validateProfile } from '../../../src/main/agent/profile/AgentProfile'
 
 const testProfile = validateProfile({
@@ -23,6 +21,19 @@ const testProfile = validateProfile({
   memory: { autoExtract: false },
   context: { autoCompact: false },
 })
+
+function createMockCallModel(mock: MockModelProvider) {
+  return async (params: any, onChunk: any) => {
+    return mock.chatStream(params, onChunk)
+  }
+}
+
+function newEngine(mock?: MockModelProvider) {
+  return new QueryEngine({
+    sessionId: 's',
+    testDeps: mock ? { callModel: createMockCallModel(mock) } : undefined,
+  })
+}
 
 describe('MockModelProvider (unit)', () => {
   it('should enqueue and dequeue turns in FIFO order', async () => {
@@ -63,36 +74,34 @@ describe('MockModelProvider (unit)', () => {
   })
 })
 
-describe('MockModelProvider + Orchestrator (integration-light)', () => {
+describe('MockModelProvider + QueryEngine (integration-light)', () => {
   it('should return no_provider when provider registry is empty and no override given', async () => {
-    const orchestrator = new AgentOrchestrator()
+    const engine = newEngine()
     const task = { id: 't1', sessionId: 's1', goal: 'hi', status: 'idle' as const, createdAt: Date.now(), updatedAt: Date.now() }
 
     const events: any[] = []
-    for await (const event of orchestrator.submitMessage(task, testProfile)) {
+    for await (const event of engine.submitMessage('hi', task, testProfile)) {
       events.push(event)
     }
 
-    expect(events[0]?.type).toBe('TaskFailed')
-    expect(events[0]?.payload?.recoverable).toBe(false)
+    // QueryEngine emits UserMessage first, then TaskFailed when no provider available
+    const failed = events.find(e => e.type === 'TaskFailed')
+    expect(failed, 'has TaskFailed event').toBeDefined()
+    expect(failed!.payload?.recoverable).toBe(false)
   })
 
-  it('should accept MockModelProvider override (provider injection verified)', async () => {
+  it('should accept MockModelProvider via testDeps (provider injection verified)', async () => {
     const mock = new MockModelProvider()
     mock.pushTurn([textDelta('Hello from mock'), messageStop()], endTurnResult('Hello from mock'))
 
-    const orchestrator = new AgentOrchestrator()
+    const engine = newEngine(mock)
     const task = { id: 't2', sessionId: 's2', goal: 'say hello', status: 'idle' as const, createdAt: Date.now(), updatedAt: Date.now() }
 
-    // Full orchestration requires Electron runtime (ContextBuilder → MemoryService → SQLite).
-    // The provider injection path is verified by the fact that the orchestrator accepts
-    // the override parameter and the `no_provider` test above validates the lookup logic.
-    // Full scenario tests with mock LLM require Electron E2E environment.
-    const gen = orchestrator.submitMessage(task, testProfile, mock)
-    expect(gen).toBeDefined()
-    expect(gen[Symbol.asyncIterator]).toBeDefined()
-    // Clean up
-    await gen.return()
+    const events: any[] = []
+    const gen = engine.submitMessage('say hello', task, testProfile)
+    for await (const e of gen) events.push(e)
+
+    expect(events.some(e => e.type === 'TaskCompleted'), 'completes with mock').toBe(true)
   })
 })
 

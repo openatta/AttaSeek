@@ -54,6 +54,9 @@ export class HookPipeline {
           case 'prompt':
             hookResult = await executePromptHook(hook, ctx)
             break
+          case 'http':
+            hookResult = await executeHttpHook(hook, ctx)
+            break
         }
 
         if (hookResult) {
@@ -106,6 +109,11 @@ async function executeCommandHook(hook: HookConfig, ctx: HookContext): Promise<H
 async function executePromptHook(hook: HookConfig, ctx: HookContext): Promise<HookResult> {
   const { execPromptHook } = await import('./execPromptHook')
   return execPromptHook(hook, ctx)
+}
+
+async function executeHttpHook(hook: HookConfig, ctx: HookContext): Promise<HookResult> {
+  const { execHttpHook } = await import('./execHttpHook')
+  return execHttpHook(hook, ctx)
 }
 
 export const hookPipeline = new HookPipeline()

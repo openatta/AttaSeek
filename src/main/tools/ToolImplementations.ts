@@ -21,17 +21,25 @@ import { pushNotificationImpl } from '../agent/tools/implementations/notificatio
 import { bashImpl } from '../agent/tools/implementations/bash'
 import { writeFileImpl, editFileImpl, globImpl, grepImpl } from '../agent/tools/implementations/file-ops'
 import { reviewDocumentImpl, formatDocumentImpl, outlineDocumentImpl } from '../agent/tools/implementations/document-tools'
-import { taskCreateImpl, taskUpdateImpl, taskListImpl, taskOutputImpl } from '../agent/tools/implementations/task-mgmt'
+import { taskCreateImpl, taskUpdateImpl, taskListImpl, taskOutputImpl, taskStopImpl } from '../agent/tools/implementations/task-mgmt'
 import { spawnAgentImpl } from '../agent/tools/implementations/agent-tool-impl'
+import { sendMessageImpl } from '../agent/tools/implementations/send-message-impl'
 import { invokeSkillImpl } from '../agent/tools/implementations/skill-tool-impl'
 import { askUserQuestionImpl } from '../agent/tools/implementations/question-impl'
 import { enterPlanModeImpl, exitPlanModeImpl } from '../agent/tools/implementations/plan-impl'
 import { todoWriteImpl } from '../agent/tools/implementations/todo-impl'
+import { cronCreateImpl, cronDeleteImpl, cronListImpl } from '../agent/tools/implementations/cron-tools'
+import { monitorImpl } from '../agent/tools/implementations/monitor-tools'
+import { workflowImpl } from '../agent/tools/implementations/workflow-tools'
+
+import type { LLMMessage } from '../agent/llm/ModelProvider'
 
 export interface ToolExecContext {
   taskId: string
   sessionId: string
   projectId?: string
+  /** Parent conversation messages for context inheritance (coordinator forkWithContext). */
+  parentMessages?: LLMMessage[]
 }
 
 export type ToolImplFn = (input: Record<string, unknown>, ctx?: ToolExecContext) => Promise<unknown>
@@ -202,9 +210,11 @@ export const TOOL_IMPLS: Record<string, ToolImpl> = {
   task_update: taskUpdateImpl,
   task_list: taskListImpl,
   task_output: taskOutputImpl,
+  task_stop: taskStopImpl,
 
   // ── Sub-agent ──
   spawn_agent: spawnAgentImpl,
+  send_message: sendMessageImpl,
 
   // ── Skill ──
   invoke_skill: invokeSkillImpl,
@@ -218,4 +228,15 @@ export const TOOL_IMPLS: Record<string, ToolImpl> = {
 
   // ── Todo ──
   todo_write: todoWriteImpl,
+
+  // ── Cron scheduling ──
+  cron_create: cronCreateImpl,
+  cron_delete: cronDeleteImpl,
+  cron_list: cronListImpl,
+
+  // ── Monitor ──
+  monitor: monitorImpl,
+
+  // ── Workflow ──
+  workflow: workflowImpl,
 }

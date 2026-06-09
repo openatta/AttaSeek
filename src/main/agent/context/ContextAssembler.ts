@@ -25,9 +25,12 @@ import { agentEventBus } from '../AgentEventBus'
 import { estimateTokens } from '../compact/token-counter'
 import { collectGitContext, formatGitContext } from './GitContext'
 import { loadFileMemories, toMemoryEntries } from '../memory/FileMemory'
-import { renderPrompt, type PromptTemplate, type PromptContext } from '../prompt/PromptTemplate'
+import { renderPrompt, type PromptContext } from '../prompt/PromptTemplate'
+import type { AgentProfile } from '../profile/AgentProfile'
 import type { LLMMessage, LLMToolDef } from '../llm/ModelProvider'
 import type { SessionEvent } from '../../../shared/types/SessionEvent'
+import * as fs from 'fs'
+import * as path from 'path'
 
 // ── Types ──
 
@@ -44,12 +47,20 @@ export interface ContextAssemblerConfig {
   includeFileMemories: boolean
 }
 
+/** Lightweight tool descriptor used in DI deps (subset of ToolManifest). */
+export interface ToolSummary {
+  id: string
+  name: string
+  description: string
+  inputSchema: Record<string, unknown>
+}
+
 /**
  * Injectable service dependencies for ContextAssembler.
  */
 export interface ContextAssemblerDeps {
-  listTools?: () => Array<{ id: string; description: string; inputSchema: Record<string, unknown> }>
-  selectTools?: (goal: string, tools: Array<{ id: string; description: string }>) => Array<{ id: string }>
+  listTools?: () => ToolSummary[]
+  selectTools?: (goal: string, tools: ToolSummary[]) => Array<{ id: string }>
   recallMemories?: (params: { scopeId: string; limit: number; query?: string }) => Promise<Array<{ type: string; content: string }>>
   listSkills?: () => Array<{ name: string; description: string; defaultPlan?: string }>
   getSessionEvents?: (sessionId: string) => Array<{ type: string; payload: unknown }>
@@ -60,6 +71,20 @@ export interface ContextParams {
   sessionId: string
   projectId?: string
   attachments?: string[]
+  /** The active agent profile — used for system prompt rendering. */
+  profile: AgentProfile
+  /** Additional working directories (e.g., from skill contexts, worktrees). */
+  additionalWorkingDirs?: string[]
+  /** Current model identifier (e.g. "claude-sonnet-4-6") for env-info. */
+  modelId?: string
+  /** Human-readable model provider name for env-info. */
+  modelProvider?: string
+  /** Model knowledge cutoff date (e.g. "August 2025"). */
+  knowledgeCutoff?: string
+  /** Model family IDs hint (e.g. "Model IDs — Opus: 'xxx', Sonnet: 'yyy'"). */
+  modelFamilyIds?: string
+  /** Whether fork-mode subagents are enabled. */
+  forkSubagentEnabled?: boolean
 }
 
 export interface AssembledContext {
@@ -130,13 +155,15 @@ export class ContextAssembler {
    * System prompt assembly is delegated to renderPrompt(template, ctx)
    * where the template comes from the active AgentProfile.
    */
-  async assemble(params: ContextParams, template: PromptTemplate): Promise<AssembledContext> {
-    const { goal, sessionId, projectId, attachments } = params
+  async assemble(params: ContextParams): Promise<AssembledContext> {
+    const { goal, sessionId, projectId, attachments, profile } = params
 
     // ── System context (git, OS, date) ──
     const systemContext: Record<string, string> = {}
+    let isGit = false
     if (this.config.includeGitContext) {
       const gitState = collectGitContext(this.config.cwd)
+      isGit = gitState.isGit
       if (gitState.isGit) {
         systemContext.git = formatGitContext(gitState)
       }
@@ -155,17 +182,18 @@ export class ContextAssembler {
     // ── Tools ──
     const toolDefs = this.buildToolDefs(goal)
 
-    // ── Build PromptContext for renderPrompt ──
+    // ── Build PromptContext from the real profile ──
     const promptCtx = this.buildPromptContext({
       params,
-      template,
+      profile,
       systemContext,
       userContext,
       tools: toolDefs,
+      isGit,
     })
 
     // ── System prompt (delegated to PromptTemplate) ──
-    const systemPrompt = renderPrompt(template, promptCtx)
+    const systemPrompt = renderPrompt(profile.systemPrompt, promptCtx)
 
     // ── Messages ──
     const recentEvents = this.getRecentMessages(sessionId)
@@ -210,48 +238,20 @@ export class ContextAssembler {
   }
 
   /**
-   * Build a PromptContext for renderPrompt() from collected data.
+   * Build a PromptContext for renderPrompt() from the real profile and collected data.
    */
   private buildPromptContext(input: {
     params: ContextParams
-    template: PromptTemplate
+    profile: AgentProfile
     systemContext: Record<string, string>
     userContext: Record<string, string>
     tools: LLMToolDef[]
+    isGit: boolean
   }): PromptContext {
-    const { params, tools } = input
+    const { params, profile, tools, isGit } = input
 
     return {
-      profile: {
-        id: params.sessionId, // minimal — actual profile is loaded by caller
-        name: 'AttaSeek Code Agent',
-        description: 'Expert programming agent.',
-        systemPrompt: input.template,
-        tools: tools.map(t => t.name),
-        toolSelection: 'topk',
-        skills: [],
-        memory: {
-          scopes: ['project', 'user'],
-          recallLimit: 10,
-          autoExtract: true,
-          loadFileMemory: true,
-        },
-        context: {
-          maxTokens: BUDGET.total,
-          budgets: {
-            system: BUDGET.systemPrompt,
-            tools: BUDGET.tools,
-            memory: BUDGET.memoryContext,
-            messages: BUDGET.messages,
-            reserve: BUDGET.reserve,
-          },
-          autoCompact: true,
-          compactTriggerRatio: 0.85,
-          keepRecentTurns: 5,
-        },
-        execution: { maxTurns: 20, maxParallelTools: 16, planning: 'inline' },
-        output: { generateArtifact: true, autoTitle: true },
-      },
+      profile,
       tools: tools.map(t => ({
         id: t.name,
         pluginId: 'builtin',
@@ -270,9 +270,26 @@ export class ContextAssembler {
       goal: params.goal,
       memories: [],
       cwd: this.config.cwd || process.cwd(),
+      isGit,
       platform: process.platform,
       shell: process.env.SHELL?.split('/').pop() || 'unknown',
       osVersion: `${process.platform} ${process.getSystemVersion?.() ?? ''}`,
+      additionalWorkingDirs: params.additionalWorkingDirs,
+      modelDescription: params.modelId
+        ? `You are powered by the model ${params.modelId}${params.modelProvider ? ` (${params.modelProvider})` : ''}.`
+        : undefined,
+      knowledgeCutoff: params.knowledgeCutoff,
+      modelFamilyIds: params.modelFamilyIds,
+      forkSubagentEnabled: params.forkSubagentEnabled,
+      // Worktree detection: in a git worktree, .git is a file (not a directory)
+      isWorktree: (() => {
+        try {
+          const cwd = this.config.cwd || process.cwd()
+          const gitPath = path.join(cwd, '.git')
+          return fs.existsSync(gitPath) && fs.statSync(gitPath).isFile()
+        } catch { return false }
+      })(),
+      worktreeMessage: 'This is a git worktree — an isolated copy of the repository. Run all commands from this directory. Do NOT cd to the original repository root.',
     }
   }
 
@@ -345,15 +362,12 @@ export class ContextAssembler {
 
     const listTools = this.deps.listTools ?? (() => toolRegistry.list().map(t => ({
       id: t.id,
+      name: t.name,
       description: t.description,
       inputSchema: t.inputSchema,
     })))
     const selectTools = this.deps.selectTools ?? ((g, tools) => {
-      return toolRouter.selectTools(g, tools.map(t => ({
-        id: t.id,
-        description: t.description,
-        inputSchema: {} as Record<string, unknown>,
-      } as any))).map((t: any) => ({ id: t.id }))
+      return toolRouter.selectTools(g, tools).map(t => ({ id: t.id }))
     })
 
     const allTools = listTools()

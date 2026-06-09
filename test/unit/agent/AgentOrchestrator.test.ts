@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { AgentOrchestrator } from '../../../src/main/agent/orchestrator/AgentOrchestrator'
+import { QueryEngine } from '../../../src/main/agent/orchestrator/QueryEngine'
 import { validateProfile } from '../../../src/main/agent/profile/AgentProfile'
 
 // Minimal valid profile for testing
@@ -21,15 +21,16 @@ const testTask = {
   updatedAt: Date.now(),
 }
 
-describe('AgentOrchestrator', () => {
-  let orchestrator: AgentOrchestrator
+describe('QueryEngine', () => {
+  let engine: QueryEngine
 
   beforeEach(() => {
-    orchestrator = new AgentOrchestrator()
+    engine = new QueryEngine({ sessionId: 'session_test' })
   })
 
   it('should return no_provider if no LLM provider is configured', async () => {
-    const gen = orchestrator.submitMessage(
+    const gen = engine.submitMessage(
+      'test goal',
       { ...testTask },
       { ...testProfile, execution: { ...testProfile.execution, maxTurns: 1 } },
     )
@@ -40,16 +41,18 @@ describe('AgentOrchestrator', () => {
     }
 
     expect(events.length).toBeGreaterThan(0)
-    expect(events[0]).toMatchObject({
-      type: 'TaskFailed',
+    // QueryEngine emits UserMessage first, then TaskFailed when provider is missing
+    const failed = events.find(e => e.type === 'TaskFailed')
+    expect(failed).toBeDefined()
+    expect(failed).toMatchObject({
       payload: expect.objectContaining({ recoverable: false }),
     })
   })
 
   it('should create per-instance AbortController', () => {
-    orchestrator.interrupt()
+    engine.interrupt()
     // After interrupt, a new submitMessage should get a fresh controller
-    const gen = orchestrator.submitMessage({ ...testTask }, testProfile)
+    const gen = engine.submitMessage('test goal', { ...testTask }, testProfile)
     expect(gen).toBeDefined()
     // Clean up
     gen.return()

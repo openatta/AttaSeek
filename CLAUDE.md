@@ -60,17 +60,32 @@ AttaSeek/
 │   │   ├── boot.ts                   # 启动序列（插件、服务）
 │   │   ├── perf.ts                   # 性能埋点与监控
 │   │   ├── ipc/                      # IPC handler（agent/artifact/model/session/…）
-│   │   ├── agent/                    # Agent 运行时（AgentRuntime, AgentLoop, LLMProvider, ContextBuilder）
-│   │   ├── model/                    # 模型配置与 Provider（ModelConfigService, ProviderFactory, OpenAICompatibleProvider）
-│   │   ├── tools/                    # 工具执行基础设施（ToolExecutor, ToolImplementations, ToolRegistry）
+│   │   ├── config/                   # 配置管理（ConfigManager, defaults）
+│   │   ├── agent/                    # Agent 引擎（QueryEngine, query-loop, AgentProfile, PromptTemplate）
+│   │   │   ├── orchestrator/         #   查询循环（QueryEngine, query-loop, AgentState, transitions）
+│   │   │   ├── tools/                #   工具执行（ToolOrchestrator, StreamingToolExecutor, ToolProgressBus）
+│   │   │   │   └── implementations/  #   工具实现（~25 文件）
+│   │   │   ├── compact/              #   5 级压缩管线（Snip→Microcompact→Collapse→Auto→Reactive）
+│   │   │   ├── context/              #   上下文组装（ContextAssembler, GitContext, MemoryPrefetcher）
+│   │   │   ├── llm/                  #   LLM Provider（Anthropic, OpenAI Compat, retry, cache, fallback）
+│   │   │   ├── hooks/                #   钩子系统（HookManager, HookPipeline）
+│   │   │   ├── profile/              #   AgentProfile + 3 内置 profile（coding/research/writing）
+│   │   │   ├── prompt/               #   PromptTemplate + 4 sections（identity/tools/memory/session）
+│   │   │   ├── features/             #   特性开关（FeatureFlags）
+│   │   │   ├── messages/             #   扩展消息类型（Tombstone, ToolUseSummary, Progress）
+│   │   │   ├── subagent/             #   子代理（SubAgentManager, worktree）
+│   │   │   ├── mcp/                  #   MCP 集成
+│   │   │   ├── memory/               #   记忆系统（FileMemory, MemoryExtractor）
+│   │   │   ├── skills/               #   技能加载
+│   │   │   ├── coordinator/          #   多 Agent 协调
+│   │   │   └── cache/                #   Prompt 缓存
+│   │   ├── model/                    # 模型配置服务（ModelConfigService, ProviderFactory）
+│   │   ├── tools/                    # 工具基础设施（ToolRegistry, ToolRouter, ToolExecutor）
 │   │   │   ├── ToolRegistry.ts       #   工具清单注册表（单例）
 │   │   │   ├── ToolRouter.ts         #   基于 Jaccard 相似度的 Top-K 工具选择
 │   │   │   ├── ToolExecutor.ts       #   完整执行流水线：权限→执行→审计
-│   │   │   ├── ToolImplementations.ts #   TOOL_IMPLS 查找表（映射 toolId→实现函数）
-│   │   │   └── QuestionBridge.ts     #   AskUserQuestion 的 Promise 桥接
-│   │   ├── agent/tools/              # 工具编排+清单+实现（实现细节在 implementations/ 子目录）
-│   │   │   ├── ToolOrchestrator.ts   #   批量并行/串行工具分派
-│   │   │   └── implementations/     #   所有工具清单（*-tools.ts）和实现（*.ts）
+│   │   │   ├── ToolImplementations.ts #   TOOL_IMPLS 查找表
+│   │   │   └── QuestionBridge.ts     #   AskUserQuestion Promise 桥接
 │   │   ├── permission/              # 权限服务（PermissionService, PermissionBridge）
 │   │   ├── memory/ / audit/ / artifacts/ / plugins/ / skills/
 │   │   └── store/                    # SQLite 持久化、ID 生成、密钥存储、工具函数
@@ -83,15 +98,16 @@ AttaSeek/
 │       ├── atoms/                    # Jotai 状态原子（session/composer/settings/theme/…）
 │       ├── registries/               # Registry<T> 泛型基类 + 4 注册表
 │       ├── hooks/                    # useDragResize
-│       ├── core/types/               # 渲染端类型 re-export（→ src/shared/types/）
 │       ├── components/
 │       │   ├── ActivityBar/ / Sidebar/ / Artifact/ / Settings/
 │       │   └── Conversation/         # Agent 对话面板
 │       │       ├── Composer / MessageFlow / SessionHeader / ModelSelector
 │       │       ├── MarkdownRenderer / InlineArtifactPreview / NoModelPrompt
-│       │       └── events/           # 事件渲染组件（9 种事件类型）
+│       │       └── events/           # 事件渲染组件（10 种事件类型）
 │       ├── renderers/                # 产物渲染器（code/diff/html/markdown/svg/table）
-│       └── workspaces/               # 工作区组件（Dashboard/Chat/Projects/…）
+│       ├── workspaces/               # 工作区组件（Dashboard/Chat/Projects/…）
+│       ├── assets/                   # 静态资源（CSS）
+│       └── i18n/                     # 国际化
 ├── resources/                        # 图标、字体等静态资源
 └── test/                             # Vitest 单元测试
 ```

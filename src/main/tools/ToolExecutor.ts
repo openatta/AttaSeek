@@ -12,12 +12,15 @@ import { permissionService } from '../permission/PermissionService'
 import { auditService } from '../audit/AuditService'
 import { permissionBridge } from '../permission/PermissionBridge'
 import { agentEventBus } from '../agent/AgentEventBus'
+import { hookPipeline } from '../agent/hooks/HookPipeline'
 import { newId } from '../store/id'
 import { TOOL_IMPLS, type ToolImpl, type ToolExecContext } from './ToolImplementations'
 import type { ToolRiskLevel } from '../../shared/types/Tool'
 import { TRUNCATE_SHORT, TRUNCATE_MEDIUM, TRUNCATE_STANDARD } from '../../shared/constants'
 
 // ── Types ──
+
+import type { LLMMessage } from '../agent/llm/ModelProvider'
 
 export interface ToolExecParams {
   toolId: string
@@ -26,6 +29,8 @@ export interface ToolExecParams {
   taskId: string
   sessionId: string
   projectId?: string
+  /** Parent conversation messages for coordinator context inheritance. */
+  parentMessages?: LLMMessage[]
 }
 
 export interface ToolExecResult {
@@ -59,18 +64,38 @@ export class ToolExecutor {
       }
     }
 
-    // 2. Permission check
-    const decision = permissionService.check({
+    // 2. Run PermissionRequest hooks — may override the decision
+    let hookPermissionDecision: 'allow' | 'deny' | 'ask' | undefined
+    try {
+      const hookResult = await hookPipeline.execute('PermissionRequest', {
+        task: { id: taskId, sessionId, projectId, goal: '', status: 'idle', createdAt: 0, updatedAt: 0 },
+        turnCount: 0,
+        messages: [],
+        lastAssistantContent: '',
+        profileId: 'default',
+        toolCallId,
+        toolName: manifest.name,
+        permissionToolId: toolId,
+        permissionToolInput: input,
+        permissionRiskLevel: manifest.riskLevel,
+      })
+      if (hookResult.permissionDecision) {
+        hookPermissionDecision = hookResult.permissionDecision
+      }
+    } catch { /* hook failure is non-blocking */ }
+
+    // 3. Permission check (hook decision takes precedence over default policy)
+    const decision = hookPermissionDecision ?? (await permissionService.check({
       toolId,
       pluginId: manifest.pluginId,
       projectId,
       sessionId,
       riskLevel: manifest.riskLevel,
       action: `Execute ${manifest.name} with ${JSON.stringify(input).slice(0, TRUNCATE_SHORT)}`,
-    })
+    }))
 
     if (decision === 'deny') {
-      auditService.log({
+      await auditService.log({
         taskId, sessionId, projectId,
         eventType: 'permission_denied',
         toolId, riskLevel: manifest.riskLevel,
@@ -108,7 +133,7 @@ export class ToolExecutor {
 
       const userDecision = await permissionBridge.awaitPermission(permReq.id)
       if (userDecision === 'deny') {
-        auditService.log({
+        await auditService.log({
           taskId, sessionId, projectId,
           eventType: 'permission_denied',
           toolId, riskLevel: manifest.riskLevel,
@@ -119,19 +144,19 @@ export class ToolExecutor {
       }
     }
 
-    // 3. Log tool call started
-    auditService.log({
+    // 4. Log tool call started
+    await auditService.log({
       taskId, sessionId, projectId,
       eventType: 'tool_call_started',
       toolId, riskLevel: manifest.riskLevel,
       inputSummary: JSON.stringify(input).slice(0, TRUNCATE_MEDIUM),
     })
 
-    // 4. Execute tool implementation
+    // 5. Execute tool implementation
     const impl: ToolImpl | undefined = TOOL_IMPLS[toolId]
     if (!impl) {
       const duration = Date.now() - startTime
-      auditService.log({
+      await auditService.log({
         taskId, sessionId, projectId,
         eventType: 'tool_call_completed',
         toolId, riskLevel: manifest.riskLevel,
@@ -145,13 +170,13 @@ export class ToolExecutor {
     }
 
     try {
-      const ctx: ToolExecContext = { taskId, sessionId, projectId }
+      const ctx: ToolExecContext = { taskId, sessionId, projectId, parentMessages: params.parentMessages }
       const fn = typeof impl === 'function' ? impl : impl.execute
       const output = await fn(input, ctx)
       const duration = Date.now() - startTime
 
-      // 5. Log success
-      auditService.log({
+      // 6. Log success
+      await auditService.log({
         taskId, sessionId, projectId,
         eventType: 'tool_call_completed',
         toolId, riskLevel: manifest.riskLevel,
@@ -166,7 +191,7 @@ export class ToolExecutor {
       const duration = Date.now() - startTime
       const message = err instanceof Error ? err.message : 'Unknown error'
 
-      auditService.log({
+      await auditService.log({
         taskId, sessionId, projectId,
         eventType: 'tool_call_completed',
         toolId, riskLevel: manifest.riskLevel,

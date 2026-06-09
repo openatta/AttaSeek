@@ -14,13 +14,20 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov', 'html'],
       reportsDirectory: './coverage',
-      include: ['src/renderer/**/*.{ts,tsx}'],
+      include: ['src/main/**/*.ts', 'src/renderer/**/*.{ts,tsx}', 'src/shared/**/*.ts'],
       exclude: [
         'src/renderer/main.tsx',
         'src/renderer/**/*.d.ts',
-        'src/main/**',
-        'src/preload/**'
-      ]
+        'src/main/**/*.d.ts',
+        'src/preload/**',
+        'src/shared/**/*.d.ts'
+      ],
+      thresholds: {
+        lines: 30,
+        functions: 25,
+        branches: 20,
+        statements: 30
+      }
     }
   },
   resolve: {

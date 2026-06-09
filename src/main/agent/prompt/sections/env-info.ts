@@ -25,6 +25,11 @@ export const envInfoSection: PromptSection = {
       items.push(`Primary working directory: ${ctx.cwd}`)
     }
 
+    // Worktree isolation
+    if (ctx.isWorktree && ctx.worktreeMessage) {
+      items.push(ctx.worktreeMessage)
+    }
+
     // Git status
     if (ctx.isGit !== undefined) {
       items.push(`Is directory a git repo: ${ctx.isGit ? 'Yes' : 'No'}`)

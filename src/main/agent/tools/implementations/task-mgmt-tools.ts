@@ -75,4 +75,25 @@ export const TASK_MGMT_TOOLS: ToolManifest[] = [
     category: 'automation',
     permissionPolicy,
   },
+  {
+    id: 'task_stop',
+    pluginId: 'builtin',
+    name: 'Task Stop',
+    description:
+      'Stop a running background task or worker agent. ' +
+      'Use this to cancel a worker that is going in the wrong direction, ' +
+      'or when the user changes requirements after you launched the worker. ' +
+      'Stopped workers can be continued with send_message.',
+    riskLevel: 'write',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        task_id: { type: 'string', description: 'The ID of the background task or worker agent to stop' },
+      },
+      required: ['task_id'],
+    },
+    outputSchema,
+    category: 'automation',
+    permissionPolicy: { default: 'ask' as const, requirePreview: true, allowAlways: false },
+  },
 ]

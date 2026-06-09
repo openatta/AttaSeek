@@ -19,6 +19,8 @@ export interface SkillManifest {
   defaultPlan: string
   verificationRules: string[]
   pluginId: string
+  /** Whether this skill appears in user-invocable skill lists. Default true. */
+  userInvocable?: boolean
 }
 
 export interface SkillPack {
