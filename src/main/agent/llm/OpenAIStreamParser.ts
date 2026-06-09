@@ -77,10 +77,15 @@ export function processSSELine(
 
   const delta = choice.delta
 
-  // Text delta — open text block on first text, close on tool call switch
+  // Text delta — accumulate into content blocks for persistence
   if (delta?.content) {
     if (!state.textBlockOpen) {
       state.textBlockOpen = true
+      state.contentBlocks.push({ type: 'text', text: '' })
+    }
+    const textBlock = state.contentBlocks[state.contentBlocks.length - 1]
+    if (textBlock && textBlock.type === 'text') {
+      (textBlock as { type: 'text'; text: string }).text += delta.content
     }
     onChunk({ type: 'text_delta', text: delta.content })
   }

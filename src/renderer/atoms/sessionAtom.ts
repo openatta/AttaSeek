@@ -5,60 +5,66 @@
 
 import { atom } from 'jotai'
 import { activeActivityAtom } from './activityAtom'
+import { createTempSessionId } from '../../shared/constants'
 import type { SessionEvent } from '../../shared/types/SessionEvent'
 import type { AgentTask } from '../../shared/types/AgentTask'
 import type { Artifact } from '../../shared/types/Artifact'
 
-// Per-activity session IDs — each activity has its own conversation state
-const activitySessionMap: Record<string, string> = {}
+/**
+ * Per-activity auto-created session ID cache.
+ * Module-level state (not Jotai) because it's lazily initialized inside a
+ * derived atom's read function, where `set()` on other atoms is not available.
+ * Each activity gets a temp ID on first access; overwritten by sidebar selection.
+ */
+const _activitySessionMap: Record<string, string> = {}
 
 function ensureSession(activity: string): string {
-  if (!activitySessionMap[activity]) {
-    activitySessionMap[activity] = `session_${activity}_${Date.now()}`
+  if (!_activitySessionMap[activity]) {
+    _activitySessionMap[activity] = createTempSessionId(activity)
   }
-  return activitySessionMap[activity]
+  return _activitySessionMap[activity]
 }
 
-/** Per-session titles — updated by SessionTitleGenerated event. Proper writable atom. */
-export const _sessionTitleAtom = atom<Record<string, string>>({})
+/** Per-session titles — updated by SessionTitleGenerated event. */
+export const sessionTitleStoreAtom = atom<Record<string, string>>({})
 export const sessionTitleAtom = atom(
   (get) => {
     const sid = get(currentSessionIdAtom)
-    const map = get(_sessionTitleAtom)
+    const map = get(sessionTitleStoreAtom)
     return map[sid] || 'New Session'
   },
   (get, set, title: string) => {
     const sid = get(currentSessionIdAtom)
-    set(_sessionTitleAtom, (prev) => ({ ...prev, [sid]: title }))
+    set(sessionTitleStoreAtom, (prev) => ({ ...prev, [sid]: title }))
   },
 )
 
-/** Safe findLastIndex — compatible with older JS runtimes lacking ES2023 Array.findLastIndex */
-function findLastIndex<T>(arr: T[], pred: (item: T) => boolean): number {
-  for (let i = arr.length - 1; i >= 0; i--) {
-    if (pred(arr[i])) return i
-  }
-  return -1
-}
+/** Internal: per-activity session ID override, set by sidebar selection. */
+const _sessionIdOverrideAtom = atom<Record<string, string>>({})
 
 /** Current session ID — derived from active activity, overridable via write (for sidebar selection). */
 export const currentSessionIdAtom = atom(
   (get) => {
     const activity = get(activeActivityAtom)
-    if (_sessionOverride[activity]) return _sessionOverride[activity]
+    const override = get(_sessionIdOverrideAtom)
+    if (override[activity]) return override[activity]
     return ensureSession(activity)
   },
   (get, set, id: string) => {
     const activity = get(activeActivityAtom)
-    _sessionOverride[activity] = id
+    set(_sessionIdOverrideAtom, (prev) => ({ ...prev, [activity]: id }))
   },
 )
 
-// Internal override map (not exported — write through currentSessionIdAtom)
-const _sessionOverride: Record<string, string> = {}
-
 /** All session events for the current session (latest first) */
 export const sessionEventsAtom = atom<SessionEvent[]>([])
+
+/** Events filtered to the current session — derived, avoids per-render O(n) filter. */
+export const currentSessionEventsAtom = atom((get) => {
+  const events = get(sessionEventsAtom)
+  const sessionId = get(currentSessionIdAtom)
+  return events.filter((e) => e.sessionId === sessionId)
+})
 
 /** Current active agent tasks for the session */
 export const agentTasksAtom = atom<AgentTask[]>([])
@@ -71,6 +77,10 @@ export const activeArtifactAtom = atom<string | null>(null)
 
 /** Selected project ID in Projects activity — input disabled when null */
 export const selectedProjectIdAtom = atom<string | null>(null)
+
+/** Debug log entries — captured from renderer console. Clearable. */
+export interface DebugLogEntry { time: string; level: string; msg: string }
+export const debugLogsAtom = atom<DebugLogEntry[]>([])
 
 /** Streaming message buffers — keyed by messageId, accumulates chunk deltas */
 export const streamingBuffersAtom = atom<Record<string, string>>({})
@@ -88,11 +98,15 @@ export function handleAgentEvent(
     setStreamingBuffers?: (update: (prev: Record<string, string>) => Record<string, string>) => void
     messageBufRef?: { current: Map<string, string> }
     setSessionTitle?: (sid: string, title: string) => void
-    /** Persist session title to DB — provided by App.tsx hook layer, not the atom */
-    persistTitle?: (sessionId: string, title: string) => void
+    addDebugLog?: (entry: DebugLogEntry) => void
   },
 ): void {
-  const { setSessionEvents, setAgentTasks, setStreamingBuffers, messageBufRef, setSessionTitle, persistTitle } = setters
+  const { setSessionEvents, setAgentTasks, setStreamingBuffers, messageBufRef, setSessionTitle, addDebugLog } = setters
+
+  if (addDebugLog) {
+    const now = new Date().toISOString().slice(11, 19)
+    addDebugLog({ time: now, level: 'info', msg: `event: ${event.type} sid=${event.sessionId?.slice(0,12)} taskId=${event.taskId?.slice(0,8)}` })
+  }
   // Handle streaming chunks — accumulate in buffer and ref, don't add to event list yet
   if (event.type === 'AgentMessageChunk') {
     const payload = event.payload
@@ -121,7 +135,7 @@ export function handleAgentEvent(
       }
       // Find the last AgentMessage for this session (the placeholder) and update its content
       setSessionEvents((prev) => {
-        const idx = findLastIndex(prev, (e) => e.type === 'AgentMessage' && e.sessionId === event.sessionId)
+        const idx = prev.findLastIndex( (e) => e.type === 'AgentMessage' && e.sessionId === event.sessionId)
         if (idx >= 0) {
           const updated = [...prev]
           updated[idx] = { ...updated[idx], payload: { content: fullText } } as SessionEvent
@@ -136,18 +150,19 @@ export function handleAgentEvent(
 
   // Normal events — append to sessionEventsAtom (with global cap)
   setSessionEvents((prev) => {
-    // LLM-generated title: persist to DB + update header atom
+    // LLM-generated title: update header atom (DB persistence handled in App.tsx)
+    // SessionTitleGenerated: only sets if title is empty (first-message gate)
     if (event.type === 'SessionTitleGenerated') {
       if (event.payload.title) {
-        // Update atom (triggers SessionHeader re-render)
         if (setSessionTitle) setSessionTitle(event.sessionId, event.payload.title)
-        // Persist to DB via hook-provided callback (side effect isolated from atom)
-        persistTitle?.(event.sessionId, event.payload.title)
       }
     }
     const MAX_EVENTS = 2000
-    const next = [...prev, event]
-    return next.length > MAX_EVENTS ? next.slice(-MAX_EVENTS) : next
+    if (prev.length >= MAX_EVENTS) {
+      // Drop oldest (N - 1) items proactively, avoiding the double-copy of spread + slice
+      return [...prev.slice(-MAX_EVENTS + 1), event]
+    }
+    return [...prev, event]
   })
 
   // Update task status on completion/failure

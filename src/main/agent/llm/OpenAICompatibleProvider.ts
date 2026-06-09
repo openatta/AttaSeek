@@ -151,8 +151,9 @@ export class OpenAICompatibleProvider implements ModelProvider {
 
     messages.push(...params.messages.map((m) => toOpenAIMessage(m)))
 
+    const modelName = params.model || this.defaultModel
     const body: Record<string, unknown> = {
-      model: params.model || this.defaultModel,
+      model: modelName,
       messages,
       max_tokens: cfg.maxTokens || 4096,
       stream,

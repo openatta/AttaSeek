@@ -10,7 +10,7 @@
  */
 
 import { modelProviderRegistry } from '../agent/llm/ModelProviderRegistry'
-import { createProvider } from '../agent/llm/ProviderFactory'
+import { createProvider, createAllProviders } from '../agent/llm/ProviderFactory'
 import {
   loadLLMConfig,
   listProviders,
@@ -48,6 +48,26 @@ function primaryInterface(def: ProviderDef): { interfaceType: 'openai_compatible
   return { interfaceType: norm.apiTypes[0], endpointUrl: norm.interfaces[norm.apiTypes[0]] }
 }
 
+/** Convert stored interfaces (Record<string, string> URLs) to ModelConfig
+ *  ProviderInterface objects, excluding the primary interface. */
+function convertSecondaryInterfaces(def: ProviderDef): Record<string, import('../../shared/types/model').ProviderInterface> | undefined {
+  if (!def.interfaces || Object.keys(def.interfaces).length <= 1) return undefined
+  const primaryKey = primaryInterface(def).interfaceType
+  const result: Record<string, import('../../shared/types/model').ProviderInterface> = {}
+  for (const [key, url] of Object.entries(def.interfaces)) {
+    if (key === primaryKey) continue  // skip primary — already in top-level fields
+    const ifaceType = key as 'openai_compatible' | 'anthropic'
+    result[key] = {
+      interfaceType: ifaceType,
+      endpointUrl: typeof url === 'string' ? url : undefined,
+      extraParams: ifaceType === 'openai_compatible'
+        ? { search: true } as Record<string, unknown>
+        : undefined,
+    }
+  }
+  return Object.keys(result).length > 0 ? result : undefined
+}
+
 function providerToModelConfig(def: ProviderDef, isDefault: boolean): ModelConfig {
   const primary = primaryInterface(def)
   return {
@@ -68,7 +88,7 @@ function providerToModelConfig(def: ProviderDef, isDefault: boolean): ModelConfi
       def.compact_model,
     ].filter((m): m is string => !!m),
     defaultModel: def.model,
-    extraParams: undefined,
+    interfaces: convertSecondaryInterfaces(def),
     isDefault,
     createdAt: def.created_at ?? 0,
     updatedAt: def.updated_at ?? 0,
@@ -148,20 +168,18 @@ export class ModelConfigService {
       const isDefault = def.id === selectedId
       configs.push(providerToModelConfig(def, isDefault))
 
-      // Instantiate and register provider
-      const provider = createProvider(
-        providerToModelConfig(def, isDefault),
-        def.auth_token,
-      )
-      if (provider) {
-        modelProviderRegistry.registerById(def.id, provider, {
-          name: def.name,
-          interfaceType: primaryInterface(def).interfaceType,
-          models: provider.models,
+      // Instantiate and register all providers (primary + secondary interfaces)
+      const config = providerToModelConfig(def, isDefault)
+      const entries = createAllProviders(config, def.auth_token)
+      for (const entry of entries) {
+        modelProviderRegistry.registerById(entry.id, entry.provider, {
+          name: entry.id === def.id ? def.name : `${def.name} (${entry.interfaceType})`,
+          interfaceType: entry.interfaceType,
+          models: entry.provider.models,
         })
-        if (isDefault) {
-          modelProviderRegistry.setDefault(def.id)
-        }
+      }
+      if (isDefault && entries.length > 0) {
+        modelProviderRegistry.setDefault(def.id)
       }
     }
 

@@ -14,6 +14,7 @@ import { useCallback, useRef } from 'react'
 export function useDragResize(
   setter: (fn: (prev: number) => number) => void,
   clamp?: { min: number; max: number },
+  opts?: { invert?: boolean },
 ) {
   const draggingRef = useRef(false)
 
@@ -22,7 +23,8 @@ export function useDragResize(
     const onMove = (e: MouseEvent) => {
       if (!draggingRef.current) return
       setter((w) => {
-        const next = w + e.movementX
+        const delta = opts?.invert ? -e.movementX : e.movementX
+        const next = w + delta
         if (clamp) return Math.min(clamp.max, Math.max(clamp.min, next))
         return next
       })

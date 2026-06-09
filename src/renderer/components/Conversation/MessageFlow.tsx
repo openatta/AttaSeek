@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useMemo, useCallback, memo } from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
-import { sessionEventsAtom, currentSessionIdAtom, agentTasksAtom, streamingBuffersAtom } from '../../atoms/sessionAtom'
+import { currentSessionEventsAtom, streamingBuffersAtom } from '../../atoms/sessionAtom'
 import { editTextAtom } from '../../atoms/composerAtom'
 
 import type { SessionEvent } from '../../../shared/types/SessionEvent'
@@ -9,7 +9,6 @@ import AgentMessageEvent from './events/AgentMessageEvent'
 import PlanCreatedEvent from './events/PlanCreatedEvent'
 import ToolCallStartedEvent from './events/ToolCallStartedEvent'
 import ToolCallFinishedEvent from './events/ToolCallFinishedEvent'
-import ArtifactCreatedEvent from './events/ArtifactCreatedEvent'
 import TaskCompletedEvent from './events/TaskCompletedEvent'
 import TaskFailedEvent from './events/TaskFailedEvent'
 import PermissionRequestedEvent from './events/PermissionRequestedEvent'
@@ -23,22 +22,21 @@ const SCROLL_THRESHOLD_PX = 150
 export default function MessageFlow() {
   const containerRef = useRef<HTMLDivElement>(null)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
-  const events = useAtomValue(sessionEventsAtom)
-  const sessionId = useAtomValue(currentSessionIdAtom)
+  const filteredEvents = useAtomValue(currentSessionEventsAtom)
   const streamingBuffers = useAtomValue(streamingBuffersAtom)
   const setEditText = useSetAtom(editTextAtom)
+  const wasStreaming = useRef(false)
 
-  const { sessionEvents, streamingMessageId, lastAgentIdx, streamTotalLen } = useMemo(() => {
-    const filtered = events.filter((e) => e.sessionId === sessionId)
+  const { streamingMessageId, lastAgentDistance, streamTotalLen } = useMemo(() => {
     const keys = Object.keys(streamingBuffers).filter((k) => streamingBuffers[k])
     const msgId = keys.length > 0 ? keys[keys.length - 1] : undefined
-    let agentIdx = -1
-    for (let i = filtered.length - 1; i >= 0; i--) {
-      if (filtered[i].type === 'AgentMessage') { agentIdx = filtered.length - 1 - i; break }
+    let agentDist = -1
+    for (let i = filteredEvents.length - 1; i >= 0; i--) {
+      if (filteredEvents[i].type === 'AgentMessage') { agentDist = filteredEvents.length - 1 - i; break }
     }
     const totalLen = keys.reduce((sum, k) => sum + (streamingBuffers[k]?.length || 0), 0)
-    return { sessionEvents: filtered, streamingMessageId: msgId, lastAgentIdx: agentIdx, streamTotalLen: totalLen }
-  }, [events, sessionId, streamingBuffers])
+    return { streamingMessageId: msgId, lastAgentDistance: agentDist, streamTotalLen: totalLen }
+  }, [filteredEvents, streamingBuffers])
 
   const handleScroll = useCallback(() => {
     const el = containerRef.current
@@ -51,15 +49,34 @@ export default function MessageFlow() {
     containerRef.current?.scrollTo({ top: containerRef.current.scrollHeight, behavior: 'smooth' })
   }
 
-  // Auto-scroll when new events arrive OR streaming buffer changes
+  // Auto-scroll: during streaming keep at bottom; when streaming ends snap.
+  // Uses requestAnimationFrame during streaming so the viewport tracks output
+  // continuously — every frame the content grows, we stay anchored at bottom.
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
-    const dist = el.scrollHeight - el.scrollTop - el.clientHeight
-    if (dist < SCROLL_THRESHOLD_PX) el.scrollTop = el.scrollHeight
-  }, [sessionEvents.length, streamTotalLen])
 
-  if (sessionEvents.length === 0 && streamTotalLen === 0) {
+    if (streamTotalLen > 0) {
+      // Streaming in progress — stay glued to bottom via rAF
+      wasStreaming.current = true
+      const keepAtBottom = () => {
+        if (!containerRef.current) return
+        containerRef.current.scrollTop = containerRef.current.scrollHeight
+        if (wasStreaming.current) requestAnimationFrame(keepAtBottom)
+      }
+      requestAnimationFrame(keepAtBottom)
+    } else if (wasStreaming.current) {
+      // Streaming just ended — final smooth snap
+      wasStreaming.current = false
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    } else {
+      // New events arrived (e.g. user sent a message) — scroll if near bottom
+      const dist = el.scrollHeight - el.scrollTop - el.clientHeight
+      if (dist < SCROLL_THRESHOLD_PX) el.scrollTop = el.scrollHeight
+    }
+  }, [filteredEvents.length, streamTotalLen])
+
+  if (filteredEvents.length === 0 && streamTotalLen === 0) {
     return (
       <div className="flex-1 overflow-y-auto min-h-0">
         <div className="flex flex-col items-center justify-center h-full px-6 pb-20 text-center">
@@ -79,8 +96,8 @@ export default function MessageFlow() {
   return (
     <div className="flex-1 overflow-y-auto min-h-0 relative" ref={containerRef} onScroll={handleScroll}>
       <div className="px-6 py-2 max-w-[48rem] mx-auto">
-        {sessionEvents.map((event, idx) => {
-          const isLastAgent = event.type === 'AgentMessage' && lastAgentIdx >= 0 && idx === sessionEvents.length - 1 - lastAgentIdx
+        {filteredEvents.map((event, idx) => {
+          const isLastAgent = event.type === 'AgentMessage' && lastAgentDistance >= 0 && idx === filteredEvents.length - 1 - lastAgentDistance
           return <EventCard key={event.id} event={event} streamingMessageId={isLastAgent ? streamingMessageId : undefined} />
         })}
       </div>
@@ -113,11 +130,13 @@ const EventCard = memo(function EventCard({ event, streamingMessageId }: { event
     case 'ToolCallFinished':
       return <ToolCallFinishedEvent payload={event.payload} />
     case 'ArtifactCreated':
-      return <ArtifactCreatedEvent payload={event.payload} />
+      // Rendered in ArtifactPane, not inline
+      return null
     case 'TaskCompleted':
       return <TaskCompletedEvent payload={event.payload} />
     case 'SystemNotification':
       if (event.payload.kind === 'no_model') return <NoModelPrompt />
+      // Other notification kinds rendered elsewhere (e.g., info/warning toasts)
       return null
     case 'TaskFailed':
       return <TaskFailedEvent payload={event.payload} taskId={event.taskId} sessionId={event.sessionId} />
@@ -125,7 +144,12 @@ const EventCard = memo(function EventCard({ event, streamingMessageId }: { event
       return <PermissionRequestedEvent payload={event.payload} />
     case 'UserQuestion':
       return <UserQuestionEvent payload={event.payload} />
-    default:
+    default: {
+      // Catch unhandled event types added in the future — non-breaking fallback
+      if (import.meta.env.DEV) {
+        console.debug('[MessageFlow] unrendered event type:', (event as SessionEvent).type)
+      }
       return null
+    }
   }
 })

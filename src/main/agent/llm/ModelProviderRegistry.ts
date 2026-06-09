@@ -87,6 +87,28 @@ export class ModelProviderRegistry {
   get hasProviders(): boolean {
     return this.providers.size > 0
   }
+
+  /**
+   * Find the provider that handles a specific model name.
+   * Searches primary providers first, then secondary (interfaces) providers.
+   */
+  findProviderForModel(modelName: string): ModelProvider | undefined {
+    // Search all providers for one whose models list includes this model
+    for (const [id, provider] of this.providers) {
+      if (provider.models.includes(modelName)) {
+        return provider
+      }
+    }
+    // Fallback: return default provider
+    return this.getDefault()
+  }
+
+  /**
+   * Find the provider by its registered ID.
+   */
+  findProviderById(id: string): ModelProvider | undefined {
+    return this.providers.get(id)
+  }
 }
 
 /** Singleton */

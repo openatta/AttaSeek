@@ -8,6 +8,7 @@ import { agentRuntime } from '../agent/AgentRuntime'
 import { agentEventBus } from '../agent/AgentEventBus'
 import { perf } from '../perf'
 import { validateRequiredString } from '../store/util'
+import { createSession, appendEvent, readEvents } from '../store/SessionStore'
 
 let mainWindow: BrowserWindow | null = null
 let unsubscribeAgentEvents: (() => void) | null = null
@@ -21,8 +22,28 @@ export function setAgentWindow(win: BrowserWindow): void {
 
   mainWindow = win
 
-  // Forward all agent events to the renderer
+  // Forward all agent events to the renderer + persist final events to SessionStore
   unsubscribeAgentEvents = agentEventBus.subscribe('*', (event) => {
+    // Persist terminal events, skip streaming chunks + empty AgentMessage placeholders
+    if (event.type !== 'AgentMessageChunk' &&
+        !(event.type === 'AgentMessage' && !(event.payload as { content: string }).content)) {
+      appendEvent(event.sessionId, event).catch(() => { /* best-effort */ })
+    }
+
+    // Create session on first content (SessionTitleGenerated = first stream chunk).
+    // Delaying from create-task to here means the sidebar entry only appears once
+    // streaming content has arrived — not on empty user input.
+    if (event.type === 'SessionTitleGenerated' && event.payload.title) {
+      const title = event.payload.title as string
+      createSession(event.sessionId, title, 'chat').then((s) => {
+        // Use s.title (the actual stored title) — createSession preserves
+        // the original title for existing sessions, preventing sidebar drift.
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('session:updated', { id: event.sessionId, title: s.title })
+        }
+      }).catch(() => { /* best-effort */ })
+    }
+
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('agent:event', event)
     }
@@ -30,11 +51,14 @@ export function setAgentWindow(win: BrowserWindow): void {
 }
 
 export function registerAgentHandlers(): void {
-  ipcMain.handle('agent:create-task', async (_event, params: { sessionId: string; goal: string; projectId?: string; modelConfigId?: string; modelName?: string }) => {
+  ipcMain.handle('agent:create-task', async (_event, params: { sessionId: string; goal: string; projectId?: string; modelConfigId?: string; modelName?: string; language?: string }) => {
     const t0 = performance.now()
     try {
       validateRequiredString(params, 'sessionId', 'sessionId')
       validateRequiredString(params, 'goal', 'goal')
+      // Session creation is deferred to the first SessionTitleGenerated event
+      // (arrives with the first stream chunk) — sidebar entry only appears once
+      // streaming output has started, not on empty user input.
       const task = agentRuntime.createTask(params)
       perf.mark('ipc', 'agent:create-task', performance.now() - t0)
       return { success: true, task }
@@ -65,8 +89,10 @@ export function registerAgentHandlers(): void {
   ipcMain.handle('agent:list-events', async (_event, params: { sessionId: string }) => {
     try {
       validateRequiredString(params, 'sessionId', 'sessionId')
-      const events = agentEventBus.getHistory(params.sessionId)
-      return { events }
+      // Return disk-persisted events only — in-memory events arrive via
+      // real-time agent:event push and are already in the renderer atom.
+      const events = await readEvents(params.sessionId)
+      return { events: events as Array<{ id?: string }> }
     } catch (err) { return { events: [], error: err instanceof Error ? err.message : 'Internal error' } }
   })
 

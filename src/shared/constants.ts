@@ -28,6 +28,17 @@ export const ID_PREFIX_LENGTH = 8
 /** Medium ID prefix (log entries) */
 export const ID_LOG_LENGTH = 12
 
+// ── Session temp ID ──
+
+/**
+ * Generate a temporary session ID before the session is persisted.
+ * The session is persisted asynchronously on the first message send
+ * (agent:create-task handler in main process).
+ */
+export function createTempSessionId(activity: string = 'chat'): string {
+  return `session_${activity}_${Date.now()}`
+}
+
 // ── List limits ──
 
 /** Default max session list size */

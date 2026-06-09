@@ -11,8 +11,8 @@ export default function AgentMessageEvent({ payload, streamingMessageId, onRegen
   const streamingBuffers = useAtomValue(streamingBuffersAtom)
   const streamingContent = streamingMessageId ? streamingBuffers[streamingMessageId] : undefined
   const displayContent = streamingContent || payload.content
-  const isStreaming = !!streamingMessageId && !!streamingContent && !payload.content
-  const hasContent = !!displayContent
+  const hasContent = !!payload.content
+  const isStreaming = !hasContent // show animation immediately, before first chunk arrives
   const [copied, copy] = useCopyToClipboard()
 
   const handleCopy = () => copy(displayContent || '')
@@ -22,7 +22,9 @@ export default function AgentMessageEvent({ payload, streamingMessageId, onRegen
       {hasContent ? (
         <MarkdownRenderer content={displayContent} />
       ) : isStreaming ? (
-        <span className="text-[var(--app-text-dim)]">Thinking…</span>
+        <span className="inline-flex items-center gap-1 text-[var(--app-text-secondary)] animate-pulse">
+          Thinking<span className="inline-flex gap-0.5 mx-0.5">···</span>
+        </span>
       ) : null}
 
       {/* Action buttons — always visible when content exists and streaming is done */}

@@ -13,6 +13,8 @@ export interface ModelConfig {
   isDefault: boolean
   createdAt: number
   updatedAt: number
+  // ── Additional interfaces (for providers supporting both Anthropic and OpenAI protocols) ──
+  interfaces?: Record<string, ProviderInterface>
   // ── Slot fields (per LLM_CONFIG.md) ──
   opusModel?: string
   sonnetModel?: string
@@ -23,9 +25,17 @@ export interface ModelConfig {
   fallbackModel?: string
   classifierModel?: string
   compactModel?: string
+  searchModel?: string
   effortLevel?: string
   maxTokens?: number
   compactThreshold?: number
+}
+
+/** Additional interface definition — maps to an alternative API endpoint/format. */
+export interface ProviderInterface {
+  interfaceType: 'openai_compatible' | 'anthropic'
+  endpointUrl?: string
+  extraParams?: Record<string, unknown>
 }
 
 export interface CreateModelConfig {
@@ -37,7 +47,7 @@ export interface CreateModelConfig {
   defaultModel: string
   extraParams?: Record<string, unknown>
   /** Additional interfaces (for providers supporting both Anthropic and OpenAI protocols) */
-  interfaces?: Record<string, string>
+  interfaces?: Record<string, ProviderInterface>
   opusModel?: string
   sonnetModel?: string
   haikuModel?: string
@@ -47,6 +57,7 @@ export interface CreateModelConfig {
   fallbackModel?: string
   classifierModel?: string
   compactModel?: string
+  searchModel?: string
   effortLevel?: string
   maxTokens?: number
   compactThreshold?: number

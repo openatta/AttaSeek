@@ -32,6 +32,11 @@ export type AgentTaskStatus =
   | 'cancelled'
   | 'denied'
 
+/** Statuses where the task has definitively stopped — no further progress possible. */
+export const TERMINAL_TASK_STATUSES: readonly AgentTaskStatus[] = [
+  'completed', 'failed', 'cancelled', 'denied',
+] as const
+
 export interface AgentTask {
   id: string
   sessionId: string

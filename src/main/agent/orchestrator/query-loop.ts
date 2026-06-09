@@ -36,6 +36,7 @@ import { applyToolResultBudget } from '../compact/ToolResultBudget'
 import { hookManager } from '../hooks/HookManager'
 import { hookPipeline } from '../hooks/HookPipeline'
 import { modelProviderRegistry } from '../llm/ModelProviderRegistry'
+import type { ModelProvider } from '../llm/ModelProvider'
 import { costTracker } from '../llm/cost-tracker'
 import { ModelResolver } from '../llm/ModelResolver'
 import { loadLLMConfig } from '../llm/AttaSettingsLoader'
@@ -45,6 +46,7 @@ import { queryCheckpoint, logQueryProfileReport } from '../telemetry/QueryProfil
 import { createInitialState, withTransition } from './AgentState'
 import { routeError, createRecoveryState, escalateMaxOutputTokens, MAX_OUTPUT_RECOVERY_ATTEMPTS } from './recovery-router'
 import { TokenBudgetTracker } from './token-budget'
+import { appendEvent, getSession } from '../../store/SessionStore'
 import { generateToolUseSummary, generateLLMToolUseSummary, buildToolUseSummaryMessage } from './tool-summary'
 import type { AgentState } from './AgentState'
 import type { AgentTask } from '../../../shared/types/AgentTask'
@@ -219,7 +221,11 @@ async function defaultCallModel(
   params: CallModelParams,
   onChunk: CallModelChunkCallback,
 ): Promise<CallModelResult> {
-  const provider = modelProviderRegistry.getDefault()
+  // Pick provider by model name: if the requested model belongs to a secondary
+  // interface, use that provider; otherwise fall back to the default.
+  const provider = (params.model
+    ? modelProviderRegistry.findProviderForModel(params.model)
+    : null) ?? modelProviderRegistry.getDefault()
   if (!provider) throw new Error('No LLM provider configured')
   return provider.chatStream(
     {
@@ -257,6 +263,106 @@ async function defaultMicrocompact(
 }
 
 /** Default autocompact — delegates to existing compactConversation. */
+/**
+ * Extract a title from the LLM's response text.
+ * Takes the first meaningful sentence (stripping markdown), truncated to maxLen.
+ */
+function extractTitle(text: string, maxLen: number = 60): string {
+  // Strip markdown formatting: bold, italic, code, links, headings
+  let cleaned = text
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/__(.+?)__/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/_(.+?)_/g, '$1')
+    .replace(/`{1,3}[^`]*`{1,3}/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/^\s*[-*+]\s+/gm, '')
+    .replace(/\n{2,}/g, '. ')
+    .replace(/\n/g, ' ')
+    .trim()
+
+  // Try to get first sentence (up to . ! ? or Chinese punctuation)
+  const sentenceMatch = cleaned.match(/^(.+?)[.!?。！？\n](?:\s|$)/)
+  let title = sentenceMatch ? sentenceMatch[1].trim() : cleaned
+
+  // If first sentence too short, take more
+  if (title.length < 10) {
+    title = cleaned.slice(0, maxLen).trim()
+  }
+
+  // Truncate
+  if (title.length > maxLen) {
+    title = title.slice(0, maxLen - 3).trim() + '...'
+  }
+
+  return title || 'New Session'
+}
+
+/**
+ * Generate a concise session title using a separate LLM call (cheap model).
+ * Follows ChatGPT/Claude Code pattern: after the first exchange completes,
+ * a fast model summarizes the conversation into a ≤10-word title.
+ *
+ * Falls back to extractTitle() if the LLM call fails or times out.
+ */
+async function generateLLMTitle(
+  provider: ModelProvider,
+  userQuestion: string,
+  responseText: string,
+): Promise<string> {
+  // Detect language from user question: if predominantly Chinese characters, use
+  // Chinese prompt so the title matches the app's language context.
+  const chineseChars = (userQuestion + responseText).match(/[一-鿿]/g)
+  const isChinese = chineseChars && chineseChars.length > 5
+
+  const systemPrompt = isChinese
+    ? '你是一个标题生成器。只输出标题，不要任何其他内容。'
+    : 'You are a title generator. Output ONLY the title, nothing else.'
+
+  const prompt = isChinese
+    ? [
+        '用10个字以内（30个字符以内）总结这段对话的主题。',
+        '只输出标题文本——不要引号、不要前缀、不要解释。',
+        '',
+        `用户问题: ${userQuestion.slice(0, 300)}`,
+        `助手回复: ${responseText.slice(0, 500)}`,
+        '',
+        '标题:',
+      ].join('\n')
+    : [
+        'Generate a concise title (under 10 words, under 60 characters) that summarizes this conversation topic.',
+        'Return ONLY the title text — no quotes, no prefixes, no explanation.',
+        '',
+        `User question: ${userQuestion.slice(0, 300)}`,
+        `Assistant response: ${responseText.slice(0, 500)}`,
+        '',
+        'Title:',
+      ].join('\n')
+
+  try {
+    const result = await provider.chat({
+      systemPrompt,
+      messages: [{ role: 'user', content: prompt }],
+      tools: [],
+      signal: AbortSignal.timeout(15_000),
+    })
+    const title = result.content
+      .filter((b: any) => b.type === 'text')
+      .map((b: any) => b.text)
+      .join('')
+      .trim()
+      .replace(/^["'「『《]|["'」』》]$/g, '')
+      .replace(/^Title:\s*/i, '')
+      .trim()
+    if (title && title.length >= 2 && title.length <= 100) return title
+  } catch (e) {
+    console.warn('[title-gen] LLM title call failed, using fallback:', (e as Error)?.message)
+  }
+  // Fallback
+  return extractTitle(responseText, 60)
+}
+
 async function defaultAutocompact(
   messages: LLMMessage[],
   profile: AgentProfile,
@@ -554,18 +660,21 @@ export async function* queryLoop(
 
     // ── LLM Call with fallback inner loop ──
     const messageId = `msg_${deps.uuid().slice(0, ID_PREFIX_LENGTH)}`
-    yield createSessionEvent(task, 'AgentMessage', { content: '' })
 
     // Streaming tool executor
     queryCheckpoint('api_streaming_start')
     const streamExec = createStreamExec(task.id, task.sessionId, task.projectId)
     let nextStreamIndex = 0
     const streamToolIdByIndex = new Map<number, string>()
+    let titleGenerated = false
 
     // Resolve model for this call
     const resolveModel = (): string | undefined => {
-      if (state.maxOutputTokensOverride) return undefined // keep same model, just change max_tokens
-      return task.modelName || (params.modelSlot === 'subagent' ? slotResolver?.subagent() : slotResolver?.main())
+      if (state.maxOutputTokensOverride) return undefined
+      const raw = task.modelName || (params.modelSlot === 'subagent' ? slotResolver?.subagent() : slotResolver?.main())
+      // Defensive strip: remove ANSI escape suffix (e.g., "[1m") that may leak
+      // from stale session data or malformed config imports
+      return raw?.replace(/\[\d+m\]?$/g, '')
     }
 
     let fallbackAttempted = false
@@ -810,12 +919,38 @@ export async function* queryLoop(
     // Reset recovery on success (but keep circuit breaker state for tracking)
     recovery.globalAttempts = 0
 
-    // Final chunk
+    // Final chunk (updates in-memory AgentMessage placeholder)
     emitEvent(createSessionEvent(task, 'AgentMessageChunk', {
       content: '',
       isFinal: true,
       messageId,
     }))
+
+    // Persist complete AgentMessage now that streaming is done
+    const fullText = result.content
+      .filter(b => b.type === 'text')
+      .map(b => (b as { type: 'text'; text: string }).text)
+      .join('')
+    if (fullText) {
+      appendEvent(task.sessionId, createSessionEvent(task, 'AgentMessage', { content: fullText })).catch(() => {})
+
+      // Generate session title once (ChatGPT/Claude Code pattern).
+      // Check the persistent session store — event bus is in-memory and lost
+      // on app restart, so a historical session would incorrectly re-trigger.
+      const existing = await getSession(task.sessionId)
+      if (!titleGenerated && !existing) {
+        titleGenerated = true
+        let title = extractTitle(fullText, 60)
+        const provider = modelProviderRegistry.getDefault()
+        if (provider) {
+          try {
+            const llmTitle = await generateLLMTitle(provider, task.goal, fullText)
+            if (llmTitle && llmTitle.length >= 2) title = llmTitle
+          } catch { /* fallback to extractTitle */ }
+        }
+        agentEventBus.emitAsync(createSessionEvent(task, 'SessionTitleGenerated', { title }))
+      }
+    }
 
     // Record token usage
     state.totalInputTokens += result.usage.inputTokens

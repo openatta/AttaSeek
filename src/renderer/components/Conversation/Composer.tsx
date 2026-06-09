@@ -12,8 +12,9 @@ import {
 } from '../../atoms/settingsAtom'
 import { currentSessionIdAtom, agentTasksAtom, sessionEventsAtom, selectedProjectIdAtom } from '../../atoms/sessionAtom'
 import { activeActivityAtom } from '../../atoms/activityAtom'
+import { languageAtom } from '../../atoms/settingsAtom'
 import { activeModelIdAtom, activeModelNameAtom, hasModelConfiguredAtom } from '../../atoms/modelConfigAtom'
-import type { AgentTask } from '../../../shared/types/AgentTask'
+import { TERMINAL_TASK_STATUSES, type AgentTask } from '../../../shared/types/AgentTask'
 import type { SessionEvent } from '../../../shared/types/SessionEvent'
 import ContextChip from './ContextChip'
 import ModelSelector from './ModelSelector'
@@ -43,6 +44,7 @@ export default function Composer() {
   const setSessionEvents = useSetAtom(sessionEventsAtom)
   const activeModelId = useAtomValue(activeModelIdAtom)
   const activeModelName = useAtomValue(activeModelNameAtom)
+  const language = useAtomValue(languageAtom)
   const hasModelConfigured = useAtomValue(hasModelConfiguredAtom)
   const selectedProjectId = useAtomValue(selectedProjectIdAtom)
   const activeActivity = useAtomValue(activeActivityAtom)
@@ -53,7 +55,7 @@ export default function Composer() {
   // Auto-update isRunning: detect when all tasks complete/fail/cancel
   useEffect(() => {
     const sessionTasks = tasks.filter((t) => t.sessionId === sessionId)
-    const hasActive = sessionTasks.some((t) => !['completed', 'failed', 'cancelled', 'denied'].includes(t.status))
+    const hasActive = sessionTasks.some((t) => !TERMINAL_TASK_STATUSES.includes(t.status))
     if (!hasActive && currentTaskId) {
       setIsRunning(false)
       setCurrentTaskId(null)
@@ -99,7 +101,7 @@ export default function Composer() {
 
     try {
       if (window.api?.agent?.createTask) {
-        const result = await window.api.agent.createTask(trimmed, sessionId, selectedProjectId || undefined, activeModelId || undefined, activeModelName || undefined)
+        const result = await window.api.agent.createTask(trimmed, sessionId, selectedProjectId || undefined, activeModelId || undefined, activeModelName || undefined, language || undefined)
         if (result.success && result.task) {
           const task = result.task as AgentTask
           setCurrentTaskId(task.id)

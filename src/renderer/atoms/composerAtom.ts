@@ -1,5 +1,7 @@
 import { atom } from 'jotai'
 import { activeActivityAtom } from './activityAtom'
+import { agentTasksAtom } from './sessionAtom'
+import { TERMINAL_TASK_STATUSES } from '../../shared/types/AgentTask'
 
 export interface ContextChip {
   id: string
@@ -30,6 +32,10 @@ export const composerValueAtom = atom(
 
 export const isAgentRunningAtom = atom(
   (get) => {
+    // Global lock: any executing task across any session blocks all input
+    const tasks = get(agentTasksAtom)
+    if (tasks.some((t) => !TERMINAL_TASK_STATUSES.includes(t.status))) return true
+    // Fallback: activity-level optimistic flag (before task hits the atom)
     const map = get(_isRunningMap)
     const activity = get(activeActivityAtom)
     return map[activity] || false

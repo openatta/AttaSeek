@@ -54,13 +54,28 @@ export async function createSession(id: string, title: string, activity: string)
   await ensureDir()
   const now = Date.now()
   const s: SessionInfo = { id, title, activity, createdAt: now, updatedAt: now }
-  await writeFile(metaPath(id), JSON.stringify(s))
-  await withIndexLock(async () => {
+
+  // Check for existing session — dedup (multi-turn conversations call createSession
+  // for the same temp session ID on every message; we must not duplicate in the index).
+  const existing = await withIndexLock(async () => {
     const idx = await loadIndex()
-    idx.unshift(s)
-    await saveIndex(idx)
+    const found = idx.find(x => x.id === id)
+    if (found) {
+      // Session exists — only bump timestamp, never overwrite title.
+      // Title is set once by the first SessionTitleGenerated; follow-up
+      // messages must not clobber it.
+      found.updatedAt = now
+      await saveIndex(idx)
+    } else {
+      idx.unshift(s)
+      await saveIndex(idx)
+    }
+    return found
   })
-  return s
+
+  // Write (or overwrite) meta file with latest data
+  await writeFile(metaPath(id), JSON.stringify(existing || s))
+  return existing || s
 }
 
 export async function getSession(id: string): Promise<SessionInfo | null> {

@@ -6,7 +6,7 @@ import ErrorBoundary from './components/ErrorBoundary'
 import Shell from './layouts/Shell'
 import {
   sessionEventsAtom, agentTasksAtom, streamingBuffersAtom,
-  _sessionTitleAtom, handleAgentEvent,
+  sessionTitleStoreAtom, handleAgentEvent, debugLogsAtom,
 } from './atoms/sessionAtom'
 import { modelConfigsAtom } from './atoms/modelConfigAtom'
 import { languageAtom } from './atoms/settingsAtom'
@@ -34,12 +34,18 @@ function useAgentEventBridge() {
   const setAgentTasks = useSetAtom(agentTasksAtom)
   const setStreamingBuffers = useSetAtom(streamingBuffersAtom)
   const setModelConfigs = useSetAtom(modelConfigsAtom)
-  const setTitleStore = useSetAtom(_sessionTitleAtom)
+  const setDebugLogs = useSetAtom(debugLogsAtom)
+  const setTitleStore = useSetAtom(sessionTitleStoreAtom)
   const subscribedRef = useRef(false)
   const messageBufRef = useRef<Map<string, string>>(new Map())
 
   const handleSessionTitle = (sid: string, title: string) => {
-    setTitleStore((prev) => ({ ...prev, [sid]: title }))
+    // Only set title once — prevent follow-up messages from overwriting
+    // the original session title.
+    setTitleStore((prev) => {
+      if (prev[sid] && prev[sid] !== 'New Session') return prev
+      return { ...prev, [sid]: title }
+    })
   }
 
   useEffect(() => {
@@ -50,10 +56,14 @@ function useAgentEventBridge() {
     let unsubEvent: (() => void) | undefined
     if (window.api?.agent?.onEvent) {
       unsubEvent = window.api.agent.onEvent((event) => {
+        // SessionTitleGenerated: persist title to DB (side effect stays in hook layer)
+        if (event.type === 'SessionTitleGenerated' && event.payload.title) {
+          persistSessionTitle(event.sessionId, event.payload.title)
+        }
         handleAgentEvent(event, {
           setSessionEvents, setAgentTasks, setStreamingBuffers, messageBufRef,
           setSessionTitle: handleSessionTitle,
-          persistTitle: persistSessionTitle,
+          addDebugLog: (entry) => setDebugLogs(prev => [...prev.slice(-500), entry]),
         })
       })
     }

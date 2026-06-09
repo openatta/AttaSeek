@@ -44,8 +44,8 @@ const api = {
 
   // Agent API
   agent: {
-    createTask: (goal: string, sessionId: string, projectId?: string, modelConfigId?: string, modelName?: string): Promise<{ success: boolean; task?: AgentTask; error?: string }> =>
-      ipcRenderer.invoke('agent:create-task', { goal, sessionId, projectId, modelConfigId, modelName }),
+    createTask: (goal: string, sessionId: string, projectId?: string, modelConfigId?: string, modelName?: string, language?: string): Promise<{ success: boolean; task?: AgentTask; error?: string }> =>
+      ipcRenderer.invoke('agent:create-task', { goal, sessionId, projectId, modelConfigId, modelName, language }),
     cancelTask: (taskId: string): Promise<{ success: boolean }> =>
       ipcRenderer.invoke('agent:cancel-task', { taskId }),
     getTask: (taskId: string): Promise<{ task: AgentTask | null }> =>
@@ -133,8 +133,8 @@ const api = {
   session: {
     create: (title?: string, activity?: string, id?: string): Promise<{ session: SessionInfo }> =>
       ipcRenderer.invoke('session:create', { title, activity, id }),
-    list: (): Promise<{ sessions: SessionInfo[] }> =>
-      ipcRenderer.invoke('session:list'),
+    list: (activity?: string): Promise<{ sessions: SessionInfo[] }> =>
+      ipcRenderer.invoke('session:list', { activity }),
     get: (id: string): Promise<{ session: SessionInfo | null }> =>
       ipcRenderer.invoke('session:get', { id }),
     update: (id: string, patch: { title?: string }): Promise<{ session: SessionInfo | null }> =>

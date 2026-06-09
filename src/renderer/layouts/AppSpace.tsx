@@ -12,7 +12,7 @@ interface AppSpaceProps {
 export default function AppSpace({ agentPane, artifactPane, fullscreen }: AppSpaceProps) {
   const [artifactWidth, setArtifactWidth] = useAtom(artifactWidthAtom)
 
-  const onArtifactResize = useDragResize(setArtifactWidth, { min: 240, max: 800 })
+  const onArtifactResize = useDragResize(setArtifactWidth, { min: 240, max: 800 }, { invert: true })
 
   const hasArtifact = artifactPane !== null
 

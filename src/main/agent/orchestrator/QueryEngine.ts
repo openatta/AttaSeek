@@ -56,19 +56,26 @@ function resolveModelInfo(modelOverride?: string): ModelInfo {
     const modelId = modelOverride ?? resolver.main()
     const providerName = config.provider.def.name
 
-    // Build model family IDs from slot models
-    const slotModels: string[] = []
-    if (config.provider.opus) slotModels.push(`Opus: '${config.provider.opus}'`)
-    if (config.provider.sonnet) slotModels.push(`Sonnet: '${config.provider.sonnet}'`)
-    if (config.provider.haiku) slotModels.push(`Haiku: '${config.provider.haiku}'`)
-    const modelFamilyIds = slotModels.length > 0
-      ? `Model IDs — ${slotModels.join(', ')}. When building AI applications, default to the latest and most capable Claude models.`
-      : undefined
+    // Model family IDs + knowledge cutoff only for Claude-family providers
+    const isClaudeProvider = providerName.toLowerCase().includes('claude') ||
+      providerName.toLowerCase().includes('anthropic')
+    const knowledgeCutoff = isClaudeProvider ? getKnowledgeCutoff(modelId) : undefined
+
+    let modelFamilyIds: string | undefined
+    if (isClaudeProvider) {
+      const slotModels: string[] = []
+      if (config.provider.opus) slotModels.push(`Opus: '${config.provider.opus}'`)
+      if (config.provider.sonnet) slotModels.push(`Sonnet: '${config.provider.sonnet}'`)
+      if (config.provider.haiku) slotModels.push(`Haiku: '${config.provider.haiku}'`)
+      modelFamilyIds = slotModels.length > 0
+        ? `The most recent Claude model family is Claude 4.X. Model IDs — ${slotModels.join(', ')}. When building AI applications, default to the latest and most capable Claude models.`
+        : undefined
+    }
 
     return {
       modelId,
       modelProvider: providerName !== 'Unknown' ? providerName : undefined,
-      knowledgeCutoff: getKnowledgeCutoff(modelId),
+      knowledgeCutoff,
       modelFamilyIds,
     }
   } catch {
@@ -106,6 +113,8 @@ export interface QueryEngineConfig {
   userSpecifiedModel?: string
   /** Fallback model for error recovery */
   fallbackModel?: string
+  /** Language preference (en, zh, ja, etc.) */
+  language?: string
   /** Maximum turns per submitMessage call */
   maxTurns?: number
   /** Override deps (for testing) */
@@ -207,8 +216,9 @@ export class QueryEngine {
         }
       }
 
-      // 2. Emit user message event
+      // 2. Emit user message + loading placeholder (before slow context assembly)
       yield createSessionEvent(task, 'UserMessage', { content: userContent })
+      yield createSessionEvent(task, 'AgentMessage', { content: '' })
 
       // 3. Context assembly — messages, tools, git/OS/date context via ContextAssembler
       const effectiveProfile = profile || getDefaultProfile()
@@ -226,6 +236,7 @@ export class QueryEngine {
         knowledgeCutoff: modelInfo.knowledgeCutoff,
         modelFamilyIds: modelInfo.modelFamilyIds,
         forkSubagentEnabled: false,
+        languagePreference: this.config.language,
       })
 
       // Merge with existing conversation history (from previous turns)
@@ -358,6 +369,9 @@ export class QueryEngine {
   ): AsyncGenerator<SessionEvent, void, void> {
     task.status = 'completed'
     task.updatedAt = Date.now()
+
+    // Emit completion event so UI can unlock input
+    yield createSessionEvent(task, 'TaskCompleted', {})
 
     // Artifact from last agent message
     if (profile.output.generateArtifact) {

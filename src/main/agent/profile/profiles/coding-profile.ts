@@ -113,7 +113,7 @@ export const codingProfile: AgentProfile = validateProfile({
   },
 
   output: {
-    generateArtifact: true,
+    generateArtifact: false,
     autoTitle: true,
   },
 })

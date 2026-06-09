@@ -23,6 +23,7 @@ export interface CreateTaskParams {
   projectId?: string
   modelConfigId?: string
   modelName?: string
+  language?: string
   profile?: AgentProfile
   /** Override QueryEngine config for this session (used on first task). */
   engineConfig?: Partial<QueryEngineConfig>
@@ -37,7 +38,7 @@ export class AgentRuntime {
 
   /** Create and start a new agent task */
   createTask(params: CreateTaskParams): AgentTask {
-    const { sessionId, goal, projectId, modelConfigId, modelName, profile, engineConfig, mode } = params
+    const { sessionId, goal, projectId, modelConfigId, modelName, language, profile, engineConfig, mode } = params
 
     // Evict oldest completed/failed tasks if at capacity
     if (this.tasks.size >= MAX_TASKS) {
@@ -63,11 +64,10 @@ export class AgentRuntime {
     }
     this.tasks.set(id, task)
 
-    // Emit UserMessage event
-    this.emit(task, 'UserMessage', { content: goal })
+    // UserMessage is emitted by QueryEngine.submitMessage() — don't duplicate here
 
     // Start execution via QueryEngine
-    this.runTask(task, profile, engineConfig, mode).catch((err) => {
+    this.runTask(task, profile, { ...engineConfig, language }, mode).catch((err) => {
       console.error(`[AgentRuntime] task ${id} failed:`, err)
     })
 

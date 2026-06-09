@@ -32,6 +32,8 @@ import type { SessionEvent } from '../../../shared/types/SessionEvent'
 import * as fs from 'fs'
 import * as path from 'path'
 
+const LANG_MAP: Record<string, string> = { zh: 'Chinese', en: 'English', ja: 'Japanese', ko: 'Korean', fr: 'French', de: 'German', es: 'Spanish' }
+
 // ── Types ──
 
 export interface ContextAssemblerConfig {
@@ -85,6 +87,8 @@ export interface ContextParams {
   modelFamilyIds?: string
   /** Whether fork-mode subagents are enabled. */
   forkSubagentEnabled?: boolean
+  /** Language preference code (en, zh, ja, etc.) */
+  languagePreference?: string
 }
 
 export interface AssembledContext {
@@ -290,6 +294,9 @@ export class ContextAssembler {
         } catch { return false }
       })(),
       worktreeMessage: 'This is a git worktree — an isolated copy of the repository. Run all commands from this directory. Do NOT cd to the original repository root.',
+      languagePreference: params.languagePreference
+        ? LANG_MAP[params.languagePreference] || params.languagePreference
+        : undefined,
     }
   }
 
