@@ -1,56 +1,83 @@
 /**
- * coding-profile — Programming agent profile.
+ * coding-profile — Programming agent profile anchored to Claude Code.
  *
- * Aligns with Claude Code's programming capabilities:
- * - Code reading, writing, editing
- * - Code search and navigation
- * - Git operations
- * - Project structure awareness
- * - Test-driven development
+ * The system prompt sections mirror Claude Code's coding behavior
+ * (src/constants/prompts.ts). Section structure and content are kept
+ * strictly aligned with Claude Code's getSystemPrompt() output.
+ *
+ * Architecture: the profile system (AgentProfile) is an AttaSeek
+ * differentiator. Each profile is a self-contained .ts file defining:
+ *   - systemPrompt: PromptTemplate with ordered sections
+ *   - tools: allowed tool IDs
+ *   - memory: memory configuration
+ *   - context: token budgets + compaction parameters
+ *   - execution: maxTurns, parallel tools, planning mode
+ *   - output: artifact generation settings
+ *
+ * See _TEMPLATE.ts for creating new profiles.
  */
 
 import { validateProfile, type AgentProfile } from '../AgentProfile'
-import { identitySection } from '../../prompt/sections/identity'
-import { toolsUsageSection } from '../../prompt/sections/tools-usage'
+import { introSection } from '../../prompt/sections/intro'
+import { systemSection } from '../../prompt/sections/system'
+import { doingTasksSection } from '../../prompt/sections/doing-tasks'
+import { actionsSection } from '../../prompt/sections/actions'
+import { usingToolsSection } from '../../prompt/sections/using-tools'
+import { toneAndStyleSection } from '../../prompt/sections/tone-and-style'
+import { outputEfficiencySection } from '../../prompt/sections/output-efficiency'
+import { sessionGuidanceSection } from '../../prompt/sections/session-guidance'
 import { memoryContextSection } from '../../prompt/sections/memory-context'
-import { sessionInfoSection } from '../../prompt/sections/session-info'
+import { envInfoSection } from '../../prompt/sections/env-info'
+import { languageSection } from '../../prompt/sections/language'
+import { mcpInstructionsSection } from '../../prompt/sections/mcp-instructions'
+import { scratchpadSection } from '../../prompt/sections/scratchpad'
+import { summarizeResultsSection } from '../../prompt/sections/summarize-results'
+
+// ── Profile ──
 
 export const codingProfile: AgentProfile = validateProfile({
   id: 'coding',
   name: 'AttaSeek Code Agent',
-  description: 'Expert programming agent. Specializes in reading, writing, and refactoring code across multiple languages. Follows best practices: SOLID, DRY, KISS. Prefers TDD workflow (write failing test → minimal fix → refactor).',
+  description:
+    'Expert programming agent. Reads, writes, and refactors code across all languages. Follows existing patterns, uses TDD, and verifies changes.',
 
   systemPrompt: {
     id: 'coding',
     sections: [
-      {
-        ...identitySection,
-        content: (ctx) => `You are ${ctx.profile.name} — an expert software engineer working in AttaSeek.
+      // ── Static sections (cacheable, priority 10-70) ──
+      introSection,           // 10: identity + security boundary + URL rules
+      systemSection,           // 20: harness description
+      doingTasksSection,       // 30: task execution philosophy
+      actionsSection,          // 40: action risk assessment
+      usingToolsSection,       // 50: tool usage guidance
+      toneAndStyleSection,     // 60: formatting conventions
+      outputEfficiencySection, // 70: output conciseness
 
-${ctx.profile.description}
-
-Today: ${ctx.date}
-Session: ${ctx.sessionId}
-Project: ${ctx.projectId || 'unknown'}
-
-## Core Principles
-1. **Read before write** — always understand existing code before modifying it.
-2. **Minimal changes** — write the simplest code that solves the problem. No over-engineering.
-3. **TDD when possible** — write a failing test first, then the minimal fix, then refactor.
-4. **Follow existing patterns** — match the codebase's style, naming, and structure.
-5. **Explain your reasoning** — briefly explain why you chose an approach.
-6. **Admit uncertainty** — if you're not sure about something, say so rather than guessing.`,
-      },
-      toolsUsageSection,
-      memoryContextSection,
-      sessionInfoSection,
+      // ── Dynamic sections (session/user specific, priority 80-160) ──
+      sessionGuidanceSection,  // 80: AskUserQuestion, shell, Agent, Skill guidance
+      memoryContextSection,    // 90: CLAUDE.md, memories, session memory, compact summary
+      envInfoSection,          // 100: working dir, git, platform, shell, model info
+      languageSection,         // 110: language preference (conditional)
+      mcpInstructionsSection,  // 130: MCP server instructions (conditional)
+      scratchpadSection,       // 140: scratchpad directory (conditional)
+      summarizeResultsSection, // 160: post-compaction content save reminder
     ],
   },
 
-  tools: ['read_file', 'search_code', 'create_document', 'git_commit'],
+  tools: [
+    'read_file', 'write_file', 'edit_file',
+    'search_code', 'glob', 'grep',
+    'bash', 'git_commit', 'git_diff', 'git_log',
+    'lsp_diagnostic', 'lsp_definition', 'lsp_references',
+    'task_create', 'task_update', 'task_list',
+    'spawn_agent', 'send_message',
+    'skill',
+    'ask_user_question',
+    'web_search', 'web_fetch',
+  ],
   toolSelection: 'topk',
 
-  skills: ['code-review', 'test-driven-development'],
+  skills: ['code-review'],
 
   memory: {
     scopes: ['project', 'user'],
@@ -61,7 +88,13 @@ Project: ${ctx.projectId || 'unknown'}
 
   context: {
     maxTokens: 100_000,
-    budgets: { system: 8_000, tools: 12_000, memory: 4_000, messages: 60_000, reserve: 16_000 },
+    budgets: {
+      system: 8_000,
+      tools: 12_000,
+      memory: 4_000,
+      messages: 60_000,
+      reserve: 16_000,
+    },
     autoCompact: true,
     compactTriggerRatio: 0.85,
     keepRecentTurns: 5,

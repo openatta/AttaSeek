@@ -31,6 +31,7 @@ export class MCPClient {
   private transport: MCPTransport
   private connected = false
   private serverName: string
+  private _instructions: string | null = null
 
   constructor(serverName: string, transport: MCPTransport) {
     this.serverName = serverName
@@ -45,7 +46,12 @@ export class MCPClient {
       capabilities: { tools: {}, resources: {}, prompts: {} },
       clientInfo: { name: 'AttaSeek', version: '0.5.0' },
     })
-    if (initResult) {
+    // Collect server instructions if provided
+    if (initResult && typeof initResult === 'object') {
+      const ir = initResult as Record<string, unknown>
+      if (ir.instructions && typeof ir.instructions === 'string') {
+        this._instructions = ir.instructions
+      }
       await this.sendNotification('notifications/initialized', {})
     }
     this.connected = true
@@ -58,6 +64,11 @@ export class MCPClient {
   }
 
   get isConnected(): boolean { return this.connected }
+
+  /** Get MCP server instructions from initialize response, if provided. */
+  getInstructions(): string | null {
+    return this._instructions
+  }
 
   /** List tools exposed by the MCP server */
   async listTools(): Promise<MCPToolDef[]> {

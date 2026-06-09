@@ -13,12 +13,16 @@
  * is the lower-level API transport.
  */
 
-// ── Public types (shared with ContextBuilder, AgentOrchestrator, ToolExecutor) ──
+// ── Public types (shared with ContextAssembler, QueryEngine, ToolExecutor) ──
 
 export interface LLMToolDef {
   name: string
   description: string
   input_schema: Record<string, unknown>
+  /** Whether this tool is safe to run concurrently with other tools. */
+  isConcurrencySafe?: boolean
+  /** Max characters in tool result content before truncation. */
+  maxResultSizeChars?: number
 }
 
 export interface LLMTextBlock {
@@ -44,6 +48,8 @@ export type LLMContentBlock = LLMTextBlock | LLMToolUseBlock | LLMToolResultBloc
 export interface LLMMessage {
   role: 'user' | 'assistant'
   content: string | LLMContentBlock[]
+  /** Optional timestamp (ms) for time-based microcompact gap detection. */
+  timestamp?: number
 }
 
 export interface LLMProviderConfig {
@@ -109,4 +115,30 @@ export interface ModelProvider {
   chatStream(params: LLMChatParams, onChunk: LLMChunkCallback): Promise<LLMChatResult>
   /** Validate an API key by making a minimal request */
   validateKey(apiKey: string): Promise<boolean>
+  /** Attempt to refresh credentials (OAuth token, AWS session, GCP token).
+   *  Returns true if credentials were successfully refreshed. Called before
+   *  retrying on 401/403 auth errors. Providers that use static API keys
+   *  can leave this unimplemented (defaults to no-op). */
+  refreshCredentials?(): Promise<boolean>
+  /**
+   * Get a human-readable description of a specific model for system prompt injection.
+   * Used by the env-info section to tell the model what it is.
+   * @returns e.g. "You are powered by the model named Claude Sonnet 4.6. The exact model ID is claude-sonnet-4-6."
+   */
+  getModelDescription?(modelId: string): string | null
+  /**
+   * Get the knowledge cutoff date for a specific model, if known.
+   * @returns e.g. "August 2025"
+   */
+  getKnowledgeCutoff?(modelId: string): string | null
+}
+
+/** Check if an error indicates expired/revoked credentials that could be refreshed. */
+export function isCredentialExpiredError(err: unknown): boolean {
+  const code = (err as any)?.code
+  const status = (err as any)?.status ?? (err as any)?.statusCode
+  // 401 = expired, 403 = revoked (OAuth), AWS/GCP auth errors
+  if (status === 401 || status === 403) return true
+  if (code === 'CredentialsProviderError' || code === 'invalid_grant') return true
+  return false
 }

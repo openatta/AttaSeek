@@ -78,6 +78,11 @@ export class ModelProviderRegistry {
     return Array.from(this.infos.values())
   }
 
+  /** List all registered provider IDs */
+  listIds(): string[] {
+    return Array.from(this.providers.keys())
+  }
+
   /** Check if any provider is configured */
   get hasProviders(): boolean {
     return this.providers.size > 0
