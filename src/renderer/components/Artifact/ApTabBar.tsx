@@ -78,10 +78,10 @@ export default function ApTabBar() {
 
   return (
     <div
-      className="flex items-center h-[40px] px-2 border-b border-[var(--app-border)] flex-shrink-0 gap-1 overflow-hidden"
-      style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      className="flex items-center h-[40px] pl-2 border-b border-[var(--app-border)] flex-shrink-0 gap-1 relative"
+      style={{ WebkitAppRegion: 'drag', paddingRight: '84px' } as React.CSSProperties}
     >
-      {/* ── Left group: tab area (flex-1, shrinks first, scrolls when overflowed) ── */}
+      {/* ── Tab area (scrollable, takes remaining space) ── */}
       <div className="flex items-center gap-0.5 flex-1 min-w-0 overflow-hidden">
         {showLeftScroll && (
           <button
@@ -132,12 +132,13 @@ export default function ApTabBar() {
         )}
       </div>
 
-      {/* ── Right group: [+] + controls (never shrink, always visible) ── */}
+      {/* ── Right controls: absolutely positioned at the right edge.
+           Always visible regardless of panel width or fullscreen state. ── */}
       <div
-        className="flex items-center gap-1 flex-shrink-0"
+        className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
-        {/* [+] Add button */}
+        {/* [+] Add button — opens upward to avoid webview z-index occlusion */}
         <div className="relative">
           <button
             onClick={() => setAddMenuOpen(!addMenuOpen)}
@@ -149,7 +150,7 @@ export default function ApTabBar() {
           {addMenuOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setAddMenuOpen(false)} />
-              <div className="absolute top-full right-0 mt-1 w-40 bg-[var(--app-bg-elevated)] border border-[var(--app-border)] rounded-lg shadow-lg z-50 py-1">
+              <div className="absolute bottom-full right-0 mb-1 w-40 bg-[var(--app-bg-elevated)] border border-[var(--app-border)] rounded-lg shadow-lg z-50 py-1">
                 {availablePanes.length === 0 ? (
                   <div className="px-3 py-2 text-xs text-[var(--app-text-tertiary)]">No available panes</div>
                 ) : (
