@@ -111,15 +111,16 @@ export default function ApTabBar() {
                   : 'text-[var(--app-text-tertiary)] hover:text-[var(--app-text-secondary)] hover:bg-[var(--app-bg-hover)]'
               }`}
             >
-              <span className="text-xs">{getPaneIcon(tab.paneType)}</span>
-              <span>{tab.label}</span>
-              <button
+              {/* Icon: pane type by default, ✕ on hover (saves space vs separate close button) */}
+              <span
                 onClick={(e) => closeTab(tab.id, e)}
-                className="flex-shrink-0 rounded-sm opacity-0 group-hover:opacity-100 hover:bg-[var(--app-bg-hover)] transition-opacity"
+                className="relative w-4 h-4 flex items-center justify-center flex-shrink-0 hover:bg-[var(--app-bg-hover)] rounded-sm cursor-pointer"
                 title="Close tab"
               >
-                <span className="text-[10px] leading-none px-0.5">✕</span>
-              </button>
+                <span className="text-xs group-hover:opacity-0 transition-opacity">{getPaneIcon(tab.paneType)}</span>
+                <span className="absolute inset-0 flex items-center justify-center text-[10px] leading-none opacity-0 group-hover:opacity-80 transition-opacity">✕</span>
+              </span>
+              <span>{tab.label}</span>
             </div>
           ))}
         </div>
