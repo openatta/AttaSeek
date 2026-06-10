@@ -102,6 +102,8 @@
     currentScenarios = [];
     scenarioIndex = 0;
     _idCounter = 0;
+    window.__mockProjects__ = [];
+    window.__mockTerminalListeners__ = [];
   };
 
   window.__mockEmitEvent__ = function(evt) {
@@ -284,19 +286,22 @@
     },
 
     session: {
-      create: function(title, activity, id) {
+      create: function(title, activity, id, projectId) {
         var s = {
           id: id || newId(),
           title: title || 'New Session',
           activity: activity || 'chat',
+          projectId: projectId || null,
           createdAt: Date.now(),
           updatedAt: Date.now(),
         };
         sessions.unshift(s);
         return Promise.resolve({ session: s });
       },
-      list: function(activity) {
-        var filtered = activity ? sessions.filter(function(s) { return s.activity === activity; }) : sessions;
+      list: function(activity, projectId) {
+        var filtered = sessions;
+        if (activity) filtered = filtered.filter(function(s) { return s.activity === activity; });
+        if (projectId !== undefined) filtered = filtered.filter(function(s) { return s.projectId === projectId; });
         return Promise.resolve({ sessions: filtered });
       },
       get: function(id) {
@@ -466,6 +471,36 @@
         return function() {
           window.__mockTerminalListeners__ = (window.__mockTerminalListeners__ || []).filter(function(l) { return l !== cb; });
         };
+      }
+    },
+
+    // ── Project API ──
+    project: {
+      create: function(name, rootPath) {
+        var projects = window.__mockProjects__ || [];
+        if (projects.some(function(p) { return p.rootPath === rootPath; })) {
+          return Promise.resolve({ success: false, error: 'Duplicate root path' });
+        }
+        var project = {
+          id: 'proj_' + Date.now().toString(36),
+          name: name,
+          rootPath: rootPath,
+          createdAt: Date.now(),
+        };
+        projects.push(project);
+        window.__mockProjects__ = projects;
+        return Promise.resolve({ success: true, project: project });
+      },
+      list: function() {
+        return Promise.resolve({ success: true, projects: window.__mockProjects__ || [] });
+      },
+      remove: function(projectId) {
+        var projects = (window.__mockProjects__ || []).filter(function(p) { return p.id !== projectId; });
+        window.__mockProjects__ = projects;
+        return Promise.resolve({ success: true, deletedSessions: 0 });
+      },
+      validate: function(_rootPath) {
+        return Promise.resolve({ success: true, valid: true, exists: true, writable: true });
       }
     }
   };
