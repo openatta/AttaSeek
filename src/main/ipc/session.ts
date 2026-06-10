@@ -14,16 +14,16 @@ let mainWindow: BrowserWindow | null = null
 export function setSessionWindow(win: BrowserWindow): void { mainWindow = win }
 
 export function registerSessionHandlers(): void {
-  ipcMain.handle('session:create', async (_e, p: { title?: string; activity?: string; id?: string }) => {
+  ipcMain.handle('session:create', async (_e, p: { title?: string; activity?: string; id?: string; projectId?: string | null }) => {
     return ipcWrapAsync(async () => {
-      const s = await createSession(p.id || newId().slice(0, 12), p.title || 'New Session', p.activity || 'chat')
+      const s = await createSession(p.id || newId().slice(0, 12), p.title || 'New Session', p.activity || 'chat', p.projectId ?? null)
       return { session: s }
     })
   })
 
-  ipcMain.handle('session:list', async (_e, p?: { activity?: string; limit?: number }) => {
+  ipcMain.handle('session:list', async (_e, p?: { activity?: string; projectId?: string | null; limit?: number }) => {
     return ipcWrapAsync(async () => {
-      const sessions = await listSessions(p?.activity)
+      const sessions = await listSessions(p?.activity, p?.projectId)
       return { sessions: sessions.slice(0, p?.limit ?? 200) }
     })
   })

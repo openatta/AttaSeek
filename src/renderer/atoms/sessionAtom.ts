@@ -75,6 +75,10 @@ export const artifactsAtom = atom<Artifact[]>([])
 /** Active (selected) artifact ID */
 export const activeArtifactAtom = atom<string | null>(null)
 
+/** All projects (loaded from global projects.json) */
+import type { ProjectInfo } from '../../shared/types/ipc'
+export const projectsAtom = atom<ProjectInfo[]>([])
+
 /** Selected project ID in Projects activity — input disabled when null */
 export const selectedProjectIdAtom = atom<string | null>(null)
 

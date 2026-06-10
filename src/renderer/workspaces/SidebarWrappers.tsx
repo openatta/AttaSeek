@@ -5,13 +5,12 @@
  * managed by workspace components. Each wrapper is self-contained via useState.
  */
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useSetAtom } from 'jotai'
-import { selectedProjectIdAtom } from '../atoms/sessionAtom'
+import { selectedProjectIdAtom, sessionTitleStoreAtom } from '../atoms/sessionAtom'
 import AutomationSidebar from './AutomationSidebar'
 import PluginSidebarComponent from './PluginSidebar'
 import ProjectsSidebarComponent from './ProjectsSidebar'
-import type { ProjectItem } from './mock/projects'
 import type { PluginItem } from './mock/plugins'
 
 export function AutomationSidebarConnected() {
@@ -30,26 +29,20 @@ export function PluginSidebarConnected() {
 }
 
 export function ProjectsSidebarConnected() {
-  const [selectedProject, setSelectedProject] = useState<ProjectItem | null>(null)
   const [sessionId, setSessionId] = useState<string | null>(null)
-  const setSelectedProjectId = useSetAtom(selectedProjectIdAtom)
+  const setSessionTitle = useSetAtom(sessionTitleStoreAtom)
 
-  useEffect(() => { setSelectedProjectId(selectedProject?.id || null) }, [selectedProject])
+  const handleSelectSession = (projectId: string, sid: string) => {
+    setSessionId(sid)
+    // Set a friendly initial title — the SessionTitleGenerated event will
+    // overwrite this once the first stream chunk arrives.
+    setSessionTitle((prev) => ({ ...prev, [sid]: `Session ${sid.slice(0, 6)}` }))
+  }
 
   return (
     <ProjectsSidebarComponent
-      selectedProject={selectedProject}
       selectedSessionId={sessionId}
-      onSelectProject={(project: ProjectItem) => {
-        setSelectedProject(project)
-        setSessionId(null)
-        setSelectedProjectId(project.id)
-      }}
-      onSelectSession={(_pid: string, sid: string) => setSessionId(sid)}
-      onBackToProjects={() => {
-        setSelectedProject(null)
-        setSessionId(null)
-      }}
+      onSelectSession={handleSelectSession}
     />
   )
 }

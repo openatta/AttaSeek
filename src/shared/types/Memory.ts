@@ -26,6 +26,7 @@ export interface MemoryEntry {
 export interface MemoryQuery {
   scope?: MemoryScope
   scopeId?: string
+  projectId?: string       // convenience: maps to scope='project' + scopeId=projectId
   type?: MemoryType
   layer?: MemoryLayer
   query?: string

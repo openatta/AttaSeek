@@ -18,6 +18,7 @@ import { registerQuestionHandlers } from './ipc/question'
 import { registerFilesystemHandlers } from './ipc/filesystem'
 import { registerGitHandlers } from './ipc/git'
 import { registerTerminalHandlers, setTerminalWindow } from './ipc/terminal'
+import { registerProjectHandlers } from './ipc/project'
 import { boot } from './boot'
 import { agentEventBus } from './agent/AgentEventBus'
 import { permissionBridge } from './permission/PermissionBridge'
@@ -102,6 +103,7 @@ registerQuestionHandlers()
 registerFilesystemHandlers()
 registerGitHandlers()
 registerTerminalHandlers()
+registerProjectHandlers()
 
 // ── Window management ──
 

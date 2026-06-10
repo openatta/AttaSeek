@@ -50,10 +50,10 @@ async function saveIndex(sessions: SessionInfo[]): Promise<void> {
 
 // ── CRUD ──
 
-export async function createSession(id: string, title: string, activity: string): Promise<SessionInfo> {
+export async function createSession(id: string, title: string, activity: string, projectId: string | null = null): Promise<SessionInfo> {
   await ensureDir()
   const now = Date.now()
-  const s: SessionInfo = { id, title, activity, createdAt: now, updatedAt: now }
+  const s: SessionInfo = { id, title, activity, projectId, createdAt: now, updatedAt: now }
 
   // Check for existing session — dedup (multi-turn conversations call createSession
   // for the same temp session ID on every message; we must not duplicate in the index).
@@ -83,9 +83,12 @@ export async function getSession(id: string): Promise<SessionInfo | null> {
   catch (e) { console.warn('[SessionStore] failed to read session meta:', e instanceof Error ? e.message : String(e)); return null }
 }
 
-export async function listSessions(activity?: string): Promise<SessionInfo[]> {
+export async function listSessions(activity?: string, projectId?: string | null): Promise<SessionInfo[]> {
   const idx = await loadIndex()
-  return activity ? idx.filter(s => s.activity === activity) : idx
+  let result = idx
+  if (activity) result = result.filter(s => s.activity === activity)
+  if (projectId !== undefined) result = result.filter(s => s.projectId === projectId)
+  return result
 }
 
 export async function updateSession(id: string, patch: { title?: string }): Promise<SessionInfo | null> {

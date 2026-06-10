@@ -16,7 +16,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { AgentTask, SessionInfo } from '../shared/types/AgentTask'
 import type { SessionEvent } from '../shared/types/SessionEvent'
 import type { Artifact, ArtifactSummary } from '../shared/types/Artifact'
-import type { DirEntry, GitFileStatus, GitDiffFile, GitCommit } from '../shared/types/ipc'
+import type { DirEntry, GitFileStatus, GitDiffFile, GitCommit, ProjectInfo } from '../shared/types/ipc'
 import type { MemoryEntry, MemoryQuery } from '../shared/types/Memory'
 import type { AuditLog, AuditFilters } from '../shared/types/Audit'
 import type { PermissionPolicy } from '../shared/types/Permission'
@@ -132,10 +132,10 @@ const api = {
 
   // Session API
   session: {
-    create: (title?: string, activity?: string, id?: string): Promise<{ session: SessionInfo }> =>
-      ipcRenderer.invoke('session:create', { title, activity, id }),
-    list: (activity?: string): Promise<{ sessions: SessionInfo[] }> =>
-      ipcRenderer.invoke('session:list', { activity }),
+    create: (title?: string, activity?: string, id?: string, projectId?: string | null): Promise<{ session: SessionInfo }> =>
+      ipcRenderer.invoke('session:create', { title, activity, id, projectId }),
+    list: (activity?: string, projectId?: string | null): Promise<{ sessions: SessionInfo[] }> =>
+      ipcRenderer.invoke('session:list', { activity, projectId }),
     get: (id: string): Promise<{ session: SessionInfo | null }> =>
       ipcRenderer.invoke('session:get', { id }),
     update: (id: string, patch: { title?: string }): Promise<{ session: SessionInfo | null }> =>
@@ -211,6 +211,18 @@ const api = {
       ipcRenderer.invoke('git:log', { repoPath, maxCount }),
     show: (repoPath: string, ref: string): Promise<{ success: boolean; diff?: string; error?: string }> =>
       ipcRenderer.invoke('git:show', { repoPath, ref }),
+  },
+
+  // Project API
+  project: {
+    create: (name: string, rootPath: string): Promise<{ success: boolean; project?: ProjectInfo; error?: string }> =>
+      ipcRenderer.invoke('project:create', { name, rootPath }),
+    list: (): Promise<{ success: boolean; projects?: ProjectInfo[]; error?: string }> =>
+      ipcRenderer.invoke('project:list'),
+    remove: (projectId: string): Promise<{ success: boolean; deletedSessions?: number; cancelledTasks?: number; error?: string }> =>
+      ipcRenderer.invoke('project:remove', { projectId }),
+    validate: (rootPath: string): Promise<{ success: boolean; valid?: boolean; exists?: boolean; writable?: boolean; error?: string }> =>
+      ipcRenderer.invoke('project:validate', { rootPath }),
   },
 
   // Terminal API

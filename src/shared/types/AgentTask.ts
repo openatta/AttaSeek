@@ -5,6 +5,7 @@ export interface SessionInfo {
   id: string
   title: string
   activity: string
+  projectId: string | null   // null = CHATS, non-null = project session
   createdAt: number
   updatedAt: number
 }

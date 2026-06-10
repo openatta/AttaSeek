@@ -44,3 +44,11 @@ export interface GitCommit {
   author: string
   date: number
 }
+
+/** Project metadata stored in global projects.json */
+export interface ProjectInfo {
+  id: string
+  name: string
+  rootPath: string
+  createdAt: number
+}
