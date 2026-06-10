@@ -1,0 +1,39 @@
+{
+  "name": "coding-write-unit-tests",
+  "description": "Testing: write unit tests for a validator module covering normal and edge cases",
+  "profile": "coding",
+  "guestFiles": {
+    "src/validator.ts": "export interface ValidationRule {\n  field: string;\n  test: (value: unknown) => boolean;\n  message: string;\n}\n\nexport interface ValidationResult {\n  valid: boolean;\n  errors: { field: string; message: string }[];\n}\n\nexport function validate(data: Record<string, unknown>, rules: ValidationRule[]): ValidationResult {\n  const errors: { field: string; message: string }[] = [];\n  for (const rule of rules) {\n    const value = data[rule.field];\n    if (!rule.test(value)) {\n      errors.push({ field: rule.field, message: rule.message });\n    }\n  }\n  return { valid: errors.length === 0, errors };\n}\n\nexport function required(field: string, message?: string): ValidationRule {\n  return {\n    field,\n    test: (v: unknown) => v !== undefined && v !== null && v !== '',\n    message: message || `${field} is required`,\n  };\n}\n\nexport function minLength(field: string, min: number, message?: string): ValidationRule {\n  return {\n    field,\n    test: (v: unknown) => typeof v === 'string' && v.length >= min,\n    message: message || `${field} must be at least ${min} characters`,\n  };\n}\n\nexport function isEmail(field: string, message?: string): ValidationRule {\n  return {\n    field,\n    test: (v: unknown) => typeof v === 'string' && /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(v),\n    message: message || `${field} must be a valid email`,\n  };\n}\n"
+  },
+  "turns": [
+    {
+      "userMessage": "Write unit tests for all public functions in `src/validator.ts`. Cover normal paths AND edge cases: empty data, missing fields, null values, boundary values, and multiple validation failures.",
+      "mockResponses": [
+        [
+          { "type": "tool_use_start", "id": "tu_1", "name": "read_file" },
+          { "type": "tool_use_delta", "id": "tu_1", "input_json": "{\"path\":\"src/validator.ts\"}" },
+          { "type": "content_block_stop", "index": 1 },
+          { "type": "message_stop" }
+        ],
+        [
+          { "type": "tool_use_start", "id": "tu_2", "name": "write_file" },
+          { "type": "tool_use_delta", "id": "tu_2", "input_json": "{\"path\":\"src/validator.test.ts\",\"content\":\"import { validate, required, minLength, isEmail } from './validator';\\n\\ndescribe('validate', () => {\\n  it('returns valid=true when all rules pass', () => {\\n    const result = validate({ name: 'Alice', email: 'a@b.com' }, [required('name'), isEmail('email')]);\\n    expect(result.valid).toBe(true);\\n    expect(result.errors).toHaveLength(0);\\n  });\\n\\n  it('returns valid=false with error messages', () => {\\n    const result = validate({ name: '' }, [required('name')]);\\n    expect(result.valid).toBe(false);\\n    expect(result.errors[0].field).toBe('name');\\n  });\\n\\n  it('handles empty data object', () => {\\n    const result = validate({}, [required('name')]);\\n    expect(result.valid).toBe(false);\\n  });\\n\\n  it('handles null/undefined values', () => {\\n    const r1 = validate({ name: null }, [required('name')]);\\n    expect(r1.valid).toBe(false);\\n    const r2 = validate({ name: undefined }, [required('name')]);\\n    expect(r2.valid).toBe(false);\\n  });\\n\\n  it('collects multiple errors', () => {\\n    const result = validate({}, [required('name'), required('email'), minLength('bio', 10)]);\\n    expect(result.errors).toHaveLength(3);\\n  });\\n});\\n\\ndescribe('required', () => {\\n  it('rejects empty string', () => expect(required('x').test('')).toBe(false));\\n  it('rejects null', () => expect(required('x').test(null)).toBe(false));\\n  it('accepts non-empty string', () => expect(required('x').test('hi')).toBe(true));\\n  it('accepts number 0', () => expect(required('x').test(0)).toBe(true));\\n});\\n\\ndescribe('minLength', () => {\\n  it('rejects short string', () => expect(minLength('x', 5).test('abc')).toBe(false));\\n  it('accepts exact length', () => expect(minLength('x', 3).test('abc')).toBe(true));\\n  it('accepts longer string', () => expect(minLength('x', 3).test('abcd')).toBe(true));\\n  it('rejects non-string', () => expect(minLength('x', 3).test(123)).toBe(false));\\n});\\n\\ndescribe('isEmail', () => {\\n  it('accepts valid email', () => expect(isEmail('e').test('a@b.com')).toBe(true));\\n  it('rejects missing @', () => expect(isEmail('e').test('ab.com')).toBe(false));\\n  it('rejects missing domain', () => expect(isEmail('e').test('a@')).toBe(false));\\n  it('rejects empty string', () => expect(isEmail('e').test('')).toBe(false));\\n  it('rejects non-string', () => expect(isEmail('e').test(123)).toBe(false));\\n});\\n\"}" },
+          { "type": "content_block_stop", "index": 1 },
+          { "type": "message_stop" }
+        ],
+        [
+          { "type": "text_delta", "text": "Created `src/validator.test.ts` with comprehensive tests: (1) `validate` — normal path, empty data, null/undefined values, multiple errors, (2) `required` — empty string, null, non-empty, number 0, (3) `minLength` — short, exact, longer, non-string, (4) `isEmail` — valid, missing @, missing domain, empty, non-string. All edge cases covered." },
+          { "type": "message_stop" }
+        ]
+      ],
+      "assert": {
+        "terminalReason": "completed",
+        "toolCalls": 2,
+        "toolsUsed": ["read_file", "write_file"],
+        "finalTextContains": "edge case",
+        "eventsContain": ["AgentMessage", "TaskCompleted"],
+        "eventsNotContain": ["TaskFailed"]
+      }
+    }
+  ]
+}

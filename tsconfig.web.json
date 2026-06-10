@@ -18,6 +18,8 @@
     "src/renderer/**/*.tsx",
     "src/renderer/**/*.d.ts",
     "src/shared/**/*.ts",
-    "src/preload/index.d.ts"
+    "src/preload/index.ts",
+    "src/preload/index.d.ts",
+    "src/types/electron.d.ts"
   ]
 }

@@ -1,0 +1,58 @@
+{
+  "name": "coding-feature-json-format",
+  "description": "Feature: add --format json option to list command with structured output",
+  "profile": "coding",
+  "guestFiles": {
+    "src/commands.ts": "import type { CliConfig } from './args';\n\nexport async function runCommand(config: CliConfig): Promise<void> {\n  console.log(`Running: ${config.command}`);\n  if (config.command === 'list') {\n    console.log(JSON.stringify(['item1', 'item2']));\n  }\n}\n",
+    "src/args.ts": "export interface CliConfig { command: string; args: string[]; verbose: boolean; }\nexport function parseArgs(argv: string[]): CliConfig {\n  const raw = argv.slice(2);\n  const verbose = raw.includes('--verbose');\n  const filtered = raw.filter(a => a !== '--verbose');\n  return { command: filtered[0] || 'help', args: filtered.slice(1), verbose };\n}\n"
+  },
+  "turns": [
+    {
+      "userMessage": "Add a `--format json` option to the `list` command. When specified, the output should be a structured JSON object with metadata (command name, timestamp, item count, items array) instead of just the raw array.",
+      "mockResponses": [
+        [
+          { "type": "tool_use_start", "id": "tu_1", "name": "read_file" },
+          { "type": "tool_use_delta", "id": "tu_1", "input_json": "{\"path\":\"src/args.ts\"}" },
+          { "type": "content_block_stop", "index": 1 },
+          { "type": "message_stop" }
+        ],
+        [
+          { "type": "tool_use_start", "id": "tu_2", "name": "read_file" },
+          { "type": "tool_use_delta", "id": "tu_2", "input_json": "{\"path\":\"src/commands.ts\"}" },
+          { "type": "content_block_stop", "index": 1 },
+          { "type": "message_stop" }
+        ],
+        [
+          { "type": "tool_use_start", "id": "tu_3", "name": "edit_file" },
+          { "type": "tool_use_delta", "id": "tu_3", "input_json": "{\"path\":\"src/args.ts\",\"old_str\":\"export interface CliConfig { command: string; args: string[]; verbose: boolean; }\",\"new_str\":\"export interface CliConfig { command: string; args: string[]; verbose: boolean; format?: 'json' | 'text'; }\"}" },
+          { "type": "content_block_stop", "index": 1 },
+          { "type": "message_stop" }
+        ],
+        [
+          { "type": "tool_use_start", "id": "tu_4", "name": "edit_file" },
+          { "type": "tool_use_delta", "id": "tu_4", "input_json": "{\"path\":\"src/args.ts\",\"old_str\":\"  const verbose = raw.includes('--verbose');\\n  const filtered = raw.filter(a => a !== '--verbose');\",\"new_str\":\"  const verbose = raw.includes('--verbose');\\n  const formatIdx = raw.indexOf('--format');\\n  const format = formatIdx >= 0 && raw[formatIdx + 1] === 'json' ? 'json' : undefined;\\n  const filtered = raw.filter((a, i) => a !== '--verbose' && a !== '--format' && (i === 0 || raw[i - 1] !== '--format'));\"}" },
+          { "type": "content_block_stop", "index": 1 },
+          { "type": "message_stop" }
+        ],
+        [
+          { "type": "tool_use_start", "id": "tu_5", "name": "edit_file" },
+          { "type": "tool_use_delta", "id": "tu_5", "input_json": "{\"path\":\"src/commands.ts\",\"old_str\":\"  if (config.command === 'list') {\\n    console.log(JSON.stringify(['item1', 'item2']));\\n  }\",\"new_str\":\"  if (config.command === 'list') {\\n    const items = ['item1', 'item2'];\\n    if (config.format === 'json') {\\n      console.log(JSON.stringify({\\n        command: 'list',\\n        timestamp: new Date().toISOString(),\\n        itemCount: items.length,\\n        items,\\n      }, null, 2));\\n    } else {\\n      console.log(JSON.stringify(items));\\n    }\\n  }\"}" },
+          { "type": "content_block_stop", "index": 1 },
+          { "type": "message_stop" }
+        ],
+        [
+          { "type": "text_delta", "text": "Added `--format json` support: (1) `CliConfig` now has optional `format?: 'json' | 'text'`, (2) `parseArgs` parses `--format json` from argv, (3) `list` command outputs structured JSON with metadata (command, timestamp, itemCount, items) when format=json." },
+          { "type": "message_stop" }
+        ]
+      ],
+      "assert": {
+        "terminalReason": "completed",
+        "toolCalls": 5,
+        "toolsUsed": ["read_file", "edit_file"],
+        "finalTextContains": "json",
+        "eventsContain": ["AgentMessage", "TaskCompleted"],
+        "eventsNotContain": ["TaskFailed"]
+      }
+    }
+  ]
+}

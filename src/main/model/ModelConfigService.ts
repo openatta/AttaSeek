@@ -88,6 +88,9 @@ function providerToModelConfig(def: ProviderDef, isDefault: boolean): ModelConfi
       def.compact_model,
     ].filter((m): m is string => !!m),
     defaultModel: def.model,
+    extraParams: primary.interfaceType === 'openai_compatible'
+      ? { search: true } as Record<string, unknown>
+      : undefined,
     interfaces: convertSecondaryInterfaces(def),
     isDefault,
     createdAt: def.created_at ?? 0,

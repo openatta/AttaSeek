@@ -10,7 +10,7 @@ import { initializeRegistries } from '../registries/init'
 import ActivityBar from '../components/ActivityBar/ActivityBar'
 import SidebarSlot from './SidebarSlot'
 import AppSpace from './AppSpace'
-import ArtifactPane from '../components/Artifact/ArtifactPane'
+import ApContainer from '../components/Artifact/ApContainer'
 import WorkspaceRouter from './WorkspaceRouter'
 
 export default function Shell() {
@@ -41,7 +41,7 @@ export default function Shell() {
       <AppSpace
         fullscreen={fullscreen}
         agentPane={<WorkspaceRouter activity={activeActivity} />}
-        artifactPane={showArtifact ? <ArtifactPane /> : null}
+        artifactPane={showArtifact ? <ApContainer /> : null}
       />
     </div>
   )

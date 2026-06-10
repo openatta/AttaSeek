@@ -44,9 +44,17 @@ export function assertToolsUsed(events: SessionEvent[], toolIds: string[]): void
 
 /** Verify final text response contains substring */
 export function assertFinalTextContains(events: SessionEvent[], substr: string): void {
-  const agentMessages = events.filter(e => e.type === 'AgentMessageChunk')
-  const texts = agentMessages.map(e => (e.payload as any)?.content || '').join(' ')
-  expect(texts, `final text should contain "${substr}"`).toContain(substr)
+  // Check AgentMessageChunk events first (streaming), then AgentMessage (final)
+  const chunkText = events
+    .filter(e => e.type === 'AgentMessageChunk')
+    .map(e => (e.payload as any)?.content || '')
+    .join(' ')
+  const finalText = events
+    .filter(e => e.type === 'AgentMessage')
+    .map(e => (e.payload as any)?.content || '')
+    .join(' ')
+  const allText = chunkText + ' ' + finalText
+  expect(allText, `final text should contain "${substr}"`).toContain(substr)
 }
 
 /** Verify certain events do NOT appear */

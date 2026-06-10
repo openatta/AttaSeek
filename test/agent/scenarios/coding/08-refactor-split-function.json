@@ -1,0 +1,39 @@
+{
+  "name": "coding-refactor-split-god-function",
+  "description": "Refactor: split a large function into smaller focused helpers",
+  "profile": "coding",
+  "guestFiles": {
+    "src/processor.ts": "export async function processAll(items: string[]): Promise<Report> {\n  // Step 1: validate all inputs\n  const valid: string[] = [];\n  const invalid: string[] = [];\n  for (const item of items) {\n    if (item && item.length > 0 && item.length <= 100) {\n      valid.push(item);\n    } else {\n      invalid.push(item);\n    }\n  }\n\n  // Step 2: transform valid items\n  const transformed: TransformedItem[] = [];\n  for (const item of valid) {\n    const upper = item.toUpperCase();\n    const reversed = item.split('').reverse().join('');\n    transformed.push({ original: item, upper, reversed, length: item.length });\n  }\n\n  // Step 3: aggregate statistics\n  let totalLength = 0;\n  let minLength = Infinity;\n  let maxLength = 0;\n  for (const t of transformed) {\n    totalLength += t.length;\n    if (t.length < minLength) minLength = t.length;\n    if (t.length > maxLength) maxLength = t.length;\n  }\n  if (transformed.length === 0) minLength = 0;\n\n  // Step 4: format report\n  const report: Report = {\n    totalItems: items.length,\n    validCount: valid.length,\n    invalidCount: invalid.length,\n    averageLength: valid.length > 0 ? totalLength / valid.length : 0,\n    minLength,\n    maxLength,\n    items: transformed,\n  };\n\n  return report;\n}\n\nexport interface TransformedItem { original: string; upper: string; reversed: string; length: number; }\nexport interface Report { totalItems: number; validCount: number; invalidCount: number; averageLength: number; minLength: number; maxLength: number; items: TransformedItem[]; }\n"
+  },
+  "turns": [
+    {
+      "userMessage": "Refactor `src/processor.ts`: the `processAll` function is doing too many things in one 40+ line function. Split it into 4 focused helper functions: `validateItems`, `transformItems`, `computeStats`, and `buildReport`. Keep the public API identical.",
+      "mockResponses": [
+        [
+          { "type": "tool_use_start", "id": "tu_1", "name": "read_file" },
+          { "type": "tool_use_delta", "id": "tu_1", "input_json": "{\"path\":\"src/processor.ts\"}" },
+          { "type": "content_block_stop", "index": 1 },
+          { "type": "message_stop" }
+        ],
+        [
+          { "type": "tool_use_start", "id": "tu_2", "name": "edit_file" },
+          { "type": "tool_use_delta", "id": "tu_2", "input_json": "{\"path\":\"src/processor.ts\",\"old_str\":\"export async function processAll(items: string[]): Promise<Report> {\\n  // Step 1: validate all inputs\\n  const valid: string[] = [];\\n  const invalid: string[] = [];\\n  for (const item of items) {\\n    if (item && item.length > 0 && item.length <= 100) {\\n      valid.push(item);\\n    } else {\\n      invalid.push(item);\\n    }\\n  }\\n\\n  // Step 2: transform valid items\\n  const transformed: TransformedItem[] = [];\\n  for (const item of valid) {\\n    const upper = item.toUpperCase();\\n    const reversed = item.split('').reverse().join('');\\n    transformed.push({ original: item, upper, reversed, length: item.length });\\n  }\\n\\n  // Step 3: aggregate statistics\\n  let totalLength = 0;\\n  let minLength = Infinity;\\n  let maxLength = 0;\\n  for (const t of transformed) {\\n    totalLength += t.length;\\n    if (t.length < minLength) minLength = t.length;\\n    if (t.length > maxLength) maxLength = t.length;\\n  }\\n  if (transformed.length === 0) minLength = 0;\\n\\n  // Step 4: format report\\n  const report: Report = {\\n    totalItems: items.length,\\n    validCount: valid.length,\\n    invalidCount: invalid.length,\\n    averageLength: valid.length > 0 ? totalLength / valid.length : 0,\\n    minLength,\\n    maxLength,\\n    items: transformed,\\n  };\\n\\n  return report;\\n}\",\"new_str\":\"function validateItems(items: string[]): { valid: string[]; invalid: string[] } {\\n  const valid: string[] = [];\\n  const invalid: string[] = [];\\n  for (const item of items) {\\n    if (item && item.length > 0 && item.length <= 100) valid.push(item);\\n    else invalid.push(item);\\n  }\\n  return { valid, invalid };\\n}\\n\\nfunction transformItems(items: string[]): TransformedItem[] {\\n  return items.map(item => ({\\n    original: item,\\n    upper: item.toUpperCase(),\\n    reversed: item.split('').reverse().join(''),\\n    length: item.length,\\n  }));\\n}\\n\\nfunction computeStats(transformed: TransformedItem[]): Pick<Report, 'averageLength' | 'minLength' | 'maxLength'> {\\n  if (transformed.length === 0) return { averageLength: 0, minLength: 0, maxLength: 0 };\\n  let totalLength = 0, minLength = Infinity, maxLength = 0;\\n  for (const t of transformed) {\\n    totalLength += t.length;\\n    if (t.length < minLength) minLength = t.length;\\n    if (t.length > maxLength) maxLength = t.length;\\n  }\\n  return { averageLength: totalLength / transformed.length, minLength, maxLength };\\n}\\n\\nfunction buildReport(items: string[], valid: string[], invalid: string[], transformed: TransformedItem[], stats: Pick<Report, 'averageLength' | 'minLength' | 'maxLength'>): Report {\\n  return { totalItems: items.length, validCount: valid.length, invalidCount: invalid.length, ...stats, items: transformed };\\n}\\n\\nexport async function processAll(items: string[]): Promise<Report> {\\n  const { valid, invalid } = validateItems(items);\\n  const transformed = transformItems(valid);\\n  const stats = computeStats(transformed);\\n  return buildReport(items, valid, invalid, transformed, stats);\\n}\"}" },
+          { "type": "content_block_stop", "index": 1 },
+          { "type": "message_stop" }
+        ],
+        [
+          { "type": "text_delta", "text": "Split `processAll` into 4 focused helpers: `validateItems` (input classification), `transformItems` (data transformation), `computeStats` (aggregation), and `buildReport` (report assembly). The public `processAll` now orchestrates them in a clean 4-line pipeline. Each helper is testable independently." },
+          { "type": "message_stop" }
+        ]
+      ],
+      "assert": {
+        "terminalReason": "completed",
+        "toolCalls": 2,
+        "toolsUsed": ["read_file", "edit_file"],
+        "finalTextContains": "validateItems",
+        "eventsContain": ["AgentMessage", "TaskCompleted"],
+        "eventsNotContain": ["TaskFailed"]
+      }
+    }
+  ]
+}

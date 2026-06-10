@@ -15,6 +15,9 @@ import { registerSessionHandlers, setSessionWindow } from './ipc/session'
 import { registerModelHandlers } from './ipc/model'
 import { registerAppHandlers } from './ipc/app'
 import { registerQuestionHandlers } from './ipc/question'
+import { registerFilesystemHandlers } from './ipc/filesystem'
+import { registerGitHandlers } from './ipc/git'
+import { registerTerminalHandlers, setTerminalWindow } from './ipc/terminal'
 import { boot } from './boot'
 import { agentEventBus } from './agent/AgentEventBus'
 import { permissionBridge } from './permission/PermissionBridge'
@@ -96,6 +99,9 @@ registerSessionHandlers()
 registerModelHandlers()
 registerAppHandlers()
 registerQuestionHandlers()
+registerFilesystemHandlers()
+registerGitHandlers()
+registerTerminalHandlers()
 
 // ── Window management ──
 
@@ -123,7 +129,7 @@ function createWindow(): BrowserWindow {
   mainWindow = win
 
   // Wire agent event bus to this window
-  setAgentWindow(win); setSessionWindow(win)
+  setAgentWindow(win); setSessionWindow(win); setTerminalWindow(win)
 
   win.on('ready-to-show', () => {
     win.show()

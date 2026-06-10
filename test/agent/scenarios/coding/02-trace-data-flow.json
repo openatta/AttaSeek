@@ -1,0 +1,47 @@
+{
+  "name": "coding-trace-data-flow",
+  "description": "Code comprehension: trace data flow from input through multiple modules",
+  "profile": "coding",
+  "guestFiles": {
+    "src/handler.ts": "import { parseQuery, type Query } from './parser';\nimport { executeQuery } from './executor';\n\nexport async function handleRequest(raw: string): Promise<Result> {\n  const query = parseQuery(raw);\n  const result = await executeQuery(query);\n  return { query: query.raw, data: result };\n}\n\nexport interface Result {\n  query: string;\n  data: unknown;\n}\n",
+    "src/parser.ts": "export function parseQuery(input: string): Query {\n  if (!input || input.trim() === '') throw new Error('Empty input');\n  const tokens = input.trim().split(/\\s+/);\n  return { command: tokens[0], args: tokens.slice(1), raw: input.trim() };\n}\nexport interface Query { command: string; args: string[]; raw: string; }\n",
+    "src/executor.ts": "export async function executeQuery(q: Query): Promise<unknown> {\n  switch (q.command) {\n    case 'read': return `Reading: ${q.args.join(', ')}`;\n    case 'write': return `Writing: ${q.args.join(', ')}`;\n    default: return `Unknown command: ${q.command}`;\n  }\n}\n"
+  },
+  "turns": [
+    {
+      "userMessage": "Trace the data flow from user input to final output in handleRequest. List each transformation step and identify error handling gaps.",
+      "mockResponses": [
+        [
+          { "type": "tool_use_start", "id": "tu_1", "name": "read_file" },
+          { "type": "tool_use_delta", "id": "tu_1", "input_json": "{\"path\":\"src/handler.ts\"}" },
+          { "type": "content_block_stop", "index": 1 },
+          { "type": "message_stop" }
+        ],
+        [
+          { "type": "tool_use_start", "id": "tu_2", "name": "read_file" },
+          { "type": "tool_use_delta", "id": "tu_2", "input_json": "{\"path\":\"src/parser.ts\"}" },
+          { "type": "content_block_stop", "index": 1 },
+          { "type": "message_stop" }
+        ],
+        [
+          { "type": "tool_use_start", "id": "tu_3", "name": "read_file" },
+          { "type": "tool_use_delta", "id": "tu_3", "input_json": "{\"path\":\"src/executor.ts\"}" },
+          { "type": "content_block_stop", "index": 1 },
+          { "type": "message_stop" }
+        ],
+        [
+          { "type": "text_delta", "text": "**Data flow**: 1) `raw` string → `parseQuery()` → `Query` object (command + args). 2) `Query` → `executeQuery()` → result. 3) Both wrapped in `Result` by `handleRequest()`. **Gaps**: (1) `executeQuery` has no error handling — if args are missing when expected, no validation, (2) `handleRequest` does not catch parse exceptions, (3) no input sanitization before parsing." },
+          { "type": "message_stop" }
+        ]
+      ],
+      "assert": {
+        "terminalReason": "completed",
+        "toolCalls": 3,
+        "toolsUsed": ["read_file"],
+        "finalTextContains": "data flow",
+        "eventsContain": ["AgentMessage", "TaskCompleted"],
+        "eventsNotContain": ["TaskFailed"]
+      }
+    }
+  ]
+}

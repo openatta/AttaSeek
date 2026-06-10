@@ -1,0 +1,46 @@
+{
+  "name": "coding-bug-fix-empty-input",
+  "description": "Bug fix: diagnose and fix a parser crash on empty input",
+  "profile": "coding",
+  "guestFiles": {
+    "src/parser.ts": "export function parseQuery(input: string): Query {\n  const tokens = input.trim().split(/\\s+/);\n  const cmd = tokens[0].toLowerCase();\n  return { command: cmd, args: tokens.slice(1), raw: input.trim() };\n}\nexport interface Query { command: string; args: string[]; raw: string; }\n",
+    "src/parser.test.ts": "import { parseQuery } from './parser';\n\ndescribe('parseQuery', () => {\n  it('parses simple command', () => {\n    const q = parseQuery('read file.txt');\n    expect(q.command).toBe('read');\n    expect(q.args).toEqual(['file.txt']);\n  });\n  it('crashes on empty input', () => {\n    expect(() => parseQuery('')).toThrow();\n  });\n});\n"
+  },
+  "turns": [
+    {
+      "userMessage": "The test `crashes on empty input` in src/parser.test.ts is failing because parseQuery crashes on empty string input. Run the tests, find the root cause, and fix the parser to handle empty input gracefully instead of throwing.",
+      "mockResponses": [
+        [
+          { "type": "tool_use_start", "id": "tu_1", "name": "read_file" },
+          { "type": "tool_use_delta", "id": "tu_1", "input_json": "{\"path\":\"src/parser.ts\"}" },
+          { "type": "content_block_stop", "index": 1 },
+          { "type": "message_stop" }
+        ],
+        [
+          { "type": "tool_use_start", "id": "tu_2", "name": "read_file" },
+          { "type": "tool_use_delta", "id": "tu_2", "input_json": "{\"path\":\"src/parser.test.ts\"}" },
+          { "type": "content_block_stop", "index": 1 },
+          { "type": "message_stop" }
+        ],
+        [
+          { "type": "tool_use_start", "id": "tu_3", "name": "edit_file" },
+          { "type": "tool_use_delta", "id": "tu_3", "input_json": "{\"path\":\"src/parser.ts\",\"old_str\":\"export function parseQuery(input: string): Query {\\n  const tokens = input.trim().split(/\\\\s+/);\\n  const cmd = tokens[0].toLowerCase();\",\"new_str\":\"export function parseQuery(input: string): Query {\\n  if (!input || input.trim() === '') return { command: '', args: [], raw: '' };\\n  const tokens = input.trim().split(/\\\\s+/);\\n  const cmd = tokens[0].toLowerCase();\"}" },
+          { "type": "content_block_stop", "index": 1 },
+          { "type": "message_stop" }
+        ],
+        [
+          { "type": "text_delta", "text": "Fixed: added empty input guard at the top of parseQuery(). When input is empty or whitespace-only, it returns a default Query instead of crashing. The test should now pass — empty input produces `{command:'', args:[], raw:''}` instead of throwing." },
+          { "type": "message_stop" }
+        ]
+      ],
+      "assert": {
+        "terminalReason": "completed",
+        "toolCalls": 3,
+        "toolsUsed": ["read_file", "edit_file"],
+        "finalTextContains": "fix",
+        "eventsContain": ["AgentMessage", "ToolCallStarted", "ToolCallFinished", "TaskCompleted"],
+        "eventsNotContain": ["TaskFailed"]
+      }
+    }
+  ]
+}

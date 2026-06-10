@@ -1,0 +1,39 @@
+{
+  "name": "coding-refactor-extract-error-handler",
+  "description": "Refactor: extract duplicated error handling into a shared helper",
+  "profile": "coding",
+  "guestFiles": {
+    "src/main.ts": "import * as fs from 'fs';\n\nexport async function handleRead(path: string): Promise<string> {\n  try {\n    if (!fs.existsSync(path)) {\n      console.error(`Error: file not found at ${path}`);\n      throw new Error('File not found');\n    }\n    return fs.readFileSync(path, 'utf-8');\n  } catch (err) {\n    if (err instanceof Error && err.message === 'File not found') throw err;\n    console.error(`Error reading ${path}: ${err instanceof Error ? err.message : err}`);\n    throw new Error(`Failed to read ${path}`);\n  }\n}\n\nexport async function handleWrite(path: string, content: string): Promise<void> {\n  try {\n    const dir = path.substring(0, path.lastIndexOf('/'));\n    if (dir && !fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });\n    fs.writeFileSync(path, content, 'utf-8');\n  } catch (err) {\n    console.error(`Error writing ${path}: ${err instanceof Error ? err.message : err}`);\n    throw new Error(`Failed to write ${path}`);\n  }\n}\n"
+  },
+  "turns": [
+    {
+      "userMessage": "Refactor `src/main.ts`: the error handling patterns in `handleRead` and `handleWrite` are duplicated. Extract them into a shared `handleIoError` helper function. Keep behavior identical.",
+      "mockResponses": [
+        [
+          { "type": "tool_use_start", "id": "tu_1", "name": "read_file" },
+          { "type": "tool_use_delta", "id": "tu_1", "input_json": "{\"path\":\"src/main.ts\"}" },
+          { "type": "content_block_stop", "index": 1 },
+          { "type": "message_stop" }
+        ],
+        [
+          { "type": "tool_use_start", "id": "tu_2", "name": "edit_file" },
+          { "type": "tool_use_delta", "id": "tu_2", "input_json": "{\"path\":\"src/main.ts\",\"old_str\":\"import * as fs from 'fs';\\n\\nexport async function handleRead(path: string): Promise<string> {\\n  try {\\n    if (!fs.existsSync(path)) {\\n      console.error(`Error: file not found at ${path}`);\\n      throw new Error('File not found');\\n    }\\n    return fs.readFileSync(path, 'utf-8');\\n  } catch (err) {\\n    if (err instanceof Error && err.message === 'File not found') throw err;\\n    console.error(`Error reading ${path}: ${err instanceof Error ? err.message : err}`);\\n    throw new Error(`Failed to read ${path}`);\\n  }\\n}\\n\\nexport async function handleWrite(path: string, content: string): Promise<void> {\\n  try {\\n    const dir = path.substring(0, path.lastIndexOf('/'));\\n    if (dir && !fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });\\n    fs.writeFileSync(path, content, 'utf-8');\\n  } catch (err) {\\n    console.error(`Error writing ${path}: ${err instanceof Error ? err.message : err}`);\\n    throw new Error(`Failed to write ${path}`);\\n  }\\n}\",\"new_str\":\"import * as fs from 'fs';\\n\\nfunction handleIoError(operation: string, path: string, err: unknown, rethrow?: Error): never {\\n  if (rethrow && err instanceof Error && err.message === rethrow.message) throw rethrow;\\n  const msg = err instanceof Error ? err.message : String(err);\\n  console.error(`Error ${operation} ${path}: ${msg}`);\\n  throw new Error(`Failed to ${operation} ${path}`);\\n}\\n\\nexport async function handleRead(path: string): Promise<string> {\\n  try {\\n    if (!fs.existsSync(path)) {\\n      console.error(`Error: file not found at ${path}`);\\n      throw new Error('File not found');\\n    }\\n    return fs.readFileSync(path, 'utf-8');\\n  } catch (err) {\\n    handleIoError('read', path, err, new Error('File not found'));\\n  }\\n}\\n\\nexport async function handleWrite(path: string, content: string): Promise<void> {\\n  try {\\n    const dir = path.substring(0, path.lastIndexOf('/'));\\n    if (dir && !fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });\\n    fs.writeFileSync(path, content, 'utf-8');\\n  } catch (err) {\\n    handleIoError('write', path, err);\\n  }\\n}\"}" },
+          { "type": "content_block_stop", "index": 1 },
+          { "type": "message_stop" }
+        ],
+        [
+          { "type": "text_delta", "text": "Extracted `handleIoError(operation, path, err, rethrow?)` — a shared error handler that (1) logs the error with operation context, (2) optionally rethrows a specific error, (3) otherwise wraps in a generic `Failed to <operation> <path>` error. Both `handleRead` and `handleWrite` now delegate to it, eliminating the duplicated error handling pattern." },
+          { "type": "message_stop" }
+        ]
+      ],
+      "assert": {
+        "terminalReason": "completed",
+        "toolCalls": 2,
+        "toolsUsed": ["read_file", "edit_file"],
+        "finalTextContains": "handleIoError",
+        "eventsContain": ["AgentMessage", "TaskCompleted"],
+        "eventsNotContain": ["TaskFailed"]
+      }
+    }
+  ]
+}

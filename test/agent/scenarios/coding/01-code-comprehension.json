@@ -1,0 +1,33 @@
+{
+  "name": "coding-read-and-explain-function",
+  "description": "Code comprehension: read a function and explain what it does, identify edge cases",
+  "profile": "coding",
+  "guestFiles": {
+    "src/parser.ts": "export function parseQuery(input: string): Query {\n  if (!input || input.trim() === '') {\n    throw new Error('Empty input');\n  }\n  const tokens = input.trim().split(/\\s+/);\n  if (tokens.length === 0) {\n    throw new Error('No tokens');\n  }\n  return {\n    command: tokens[0],\n    args: tokens.slice(1),\n    raw: input.trim(),\n  };\n}\n\nexport interface Query {\n  command: string;\n  args: string[];\n  raw: string;\n}\n"
+  },
+  "turns": [
+    {
+      "userMessage": "Explain what the parseQuery function does and identify all potential edge cases.",
+      "mockResponses": [
+        [
+          { "type": "tool_use_start", "id": "tu_1", "name": "read_file" },
+          { "type": "tool_use_delta", "id": "tu_1", "input_json": "{\"path\":\"src/parser.ts\"}" },
+          { "type": "content_block_stop", "index": 1 },
+          { "type": "message_stop" }
+        ],
+        [
+          { "type": "text_delta", "text": "The `parseQuery` function parses a raw input string into a structured Query object. **Edge cases**: (1) empty string throws, (2) whitespace-only input throws after trim but before split, (3) single-word input produces empty args array, (4) leading/trailing whitespace is handled by trim(), (5) multiple consecutive spaces are collapsed by regex split." },
+          { "type": "message_stop" }
+        ]
+      ],
+      "assert": {
+        "terminalReason": "completed",
+        "toolCalls": 1,
+        "toolsUsed": ["read_file"],
+        "finalTextContains": "edge case",
+        "eventsContain": ["AgentMessage", "ToolCallStarted", "ToolCallFinished", "TaskCompleted"],
+        "eventsNotContain": ["TaskFailed"]
+      }
+    }
+  ]
+}

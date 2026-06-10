@@ -16,6 +16,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { AgentTask, SessionInfo } from '../shared/types/AgentTask'
 import type { SessionEvent } from '../shared/types/SessionEvent'
 import type { Artifact, ArtifactSummary } from '../shared/types/Artifact'
+import type { DirEntry, GitFileStatus, GitDiffFile, GitCommit } from '../shared/types/ipc'
 import type { MemoryEntry, MemoryQuery } from '../shared/types/Memory'
 import type { AuditLog, AuditFilters } from '../shared/types/Audit'
 import type { PermissionPolicy } from '../shared/types/Permission'
@@ -166,6 +167,67 @@ const api = {
       ipcRenderer.invoke('app:get-state', key),
     setState: (key: string, value: string): Promise<{ success: boolean }> =>
       ipcRenderer.invoke('app:set-state', { key, value }),
+  },
+
+  // Filesystem API
+  fs: {
+    readDir: (dirPath: string): Promise<{ success: boolean; entries?: DirEntry[]; error?: string }> =>
+      ipcRenderer.invoke('fs:read-dir', { path: dirPath }),
+    readFile: (filePath: string, maxSize?: number): Promise<{ success: boolean; content?: string; size?: number; mime?: string; error?: string }> =>
+      ipcRenderer.invoke('fs:read-file', { path: filePath, maxSize }),
+    fileInfo: (filePath: string): Promise<{ success: boolean; exists?: boolean; size?: number; mime?: string; isDir?: boolean; error?: string }> =>
+      ipcRenderer.invoke('fs:file-info', { path: filePath }),
+    createFile: (filePath: string, content?: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('fs:create-file', { path: filePath, content }),
+    createDir: (dirPath: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('fs:create-dir', { path: dirPath }),
+    delete: (targetPath: string, recursive?: boolean): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('fs:delete', { path: targetPath, recursive }),
+    rename: (oldPath: string, newPath: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('fs:rename', { oldPath, newPath }),
+    addRoot: (rootPath: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('fs:add-root', { path: rootPath }),
+    removeRoot: (rootPath: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('fs:remove-root', { path: rootPath }),
+  },
+
+  // Git API
+  git: {
+    status: (repoPath: string): Promise<{ success: boolean; branch?: string; changedFiles?: GitFileStatus[]; error?: string }> =>
+      ipcRenderer.invoke('git:status', { repoPath }),
+    branches: (repoPath: string): Promise<{ success: boolean; branches?: string[]; current?: string; error?: string }> =>
+      ipcRenderer.invoke('git:branches', { repoPath }),
+    diff: (repoPath: string, scope?: string, staged?: boolean): Promise<{ success: boolean; files?: GitDiffFile[]; error?: string }> =>
+      ipcRenderer.invoke('git:diff', { repoPath, scope, staged }),
+    stage: (repoPath: string, files?: string[]): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('git:stage', { repoPath, files }),
+    unstage: (repoPath: string, files?: string[]): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('git:unstage', { repoPath, files }),
+    revert: (repoPath: string, files?: string[]): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('git:revert', { repoPath, files }),
+    commit: (repoPath: string, message: string): Promise<{ success: boolean; commitHash?: string; error?: string }> =>
+      ipcRenderer.invoke('git:commit', { repoPath, message }),
+    log: (repoPath: string, maxCount?: number): Promise<{ success: boolean; commits?: GitCommit[]; error?: string }> =>
+      ipcRenderer.invoke('git:log', { repoPath, maxCount }),
+    show: (repoPath: string, ref: string): Promise<{ success: boolean; diff?: string; error?: string }> =>
+      ipcRenderer.invoke('git:show', { repoPath, ref }),
+  },
+
+  // Terminal API
+  terminal: {
+    create: (cwd?: string, cols?: number, rows?: number): Promise<{ success: boolean; terminalId?: string; error?: string }> =>
+      ipcRenderer.invoke('terminal:create', { cwd, cols, rows }),
+    write: (terminalId: string, data: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('terminal:write', { terminalId, data }),
+    resize: (terminalId: string, cols: number, rows: number): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('terminal:resize', { terminalId, cols, rows }),
+    destroy: (terminalId: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('terminal:destroy', { terminalId }),
+    onOutput: (cb: (data: { terminalId: string; data: string }) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { terminalId: string; data: string }) => cb(data)
+      ipcRenderer.on('terminal:output', listener)
+      return () => ipcRenderer.removeListener('terminal:output', listener)
+    },
   },
 
 }

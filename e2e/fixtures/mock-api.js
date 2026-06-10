@@ -337,6 +337,158 @@
     app: {
       getState: function(_k) { return Promise.resolve({ success: false, value: null }); },
       setState: function(_k, _v) { return Promise.resolve({ success: true }); }
+    },
+
+    // ── Filesystem API ──
+    fs: {
+      readDir: function(dirPath) {
+        // Normalize path — strip trailing slash if present
+        var dir = dirPath.endsWith('/') ? dirPath.slice(0, -1) : dirPath;
+        var entries = (window.__mockFsEntries__ || []).filter(function(e) {
+          // Entry must be under this directory (not the directory itself)
+          if (e.path === dir || !e.path.startsWith(dir + '/')) return false;
+          // Entry must be a DIRECT child (no intermediate slashes after dir/)
+          var rest = e.path.slice(dir.length + 1);
+          return rest.indexOf('/') === -1;
+        });
+        return Promise.resolve({ success: true, entries: entries });
+      },
+      readFile: function(filePath) {
+        var files = window.__mockFsFiles__ || {};
+        var f = files[filePath];
+        if (f) return Promise.resolve({ success: true, content: f.content, size: f.size, mime: f.mime });
+        return Promise.resolve({ success: false, error: 'File not found: ' + filePath });
+      },
+      fileInfo: function(filePath) {
+        var files = window.__mockFsFiles__ || {};
+        var f = files[filePath];
+        if (f) return Promise.resolve({ success: true, exists: true, size: f.size, mime: f.mime, isDir: false });
+        var entries = window.__mockFsEntries__ || [];
+        var dir = entries.find(function(e) { return e.path === filePath && e.isDir; });
+        if (dir) return Promise.resolve({ success: true, exists: true, size: 0, isDir: true });
+        return Promise.resolve({ success: true, exists: false, size: 0, isDir: false });
+      },
+      createFile: function(filePath, content) {
+        var files = window.__mockFsFiles__ || {};
+        files[filePath] = { content: content || '', size: (content || '').length, mime: 'text/plain' };
+        window.__mockFsFiles__ = files;
+        return Promise.resolve({ success: true });
+      },
+      createDir: function(_dirPath) {
+        return Promise.resolve({ success: true });
+      },
+      delete: function(_path, _recursive) {
+        return Promise.resolve({ success: true });
+      },
+      rename: function(_oldP, _newP) {
+        return Promise.resolve({ success: true });
+      },
+      addRoot: function(_rootPath) {
+        return Promise.resolve({ success: true });
+      },
+      removeRoot: function(_rootPath) {
+        return Promise.resolve({ success: true });
+      }
+    },
+
+    // ── Git API ──
+    git: {
+      status: function(repoPath) {
+        var git = window.__mockGitData__ || {};
+        if (!git.branch) {
+          return Promise.resolve({ success: false, error: 'Not a git repository' });
+        }
+        return Promise.resolve({
+          success: true,
+          branch: git.branch,
+          changedFiles: git.changedFiles || []
+        });
+      },
+      branches: function(_repoPath) {
+        var git = window.__mockGitData__ || {};
+        return Promise.resolve({ success: true, branches: git.branches || [], current: git.branch || '' });
+      },
+      diff: function(_repoPath, _scope, _staged) {
+        var git = window.__mockGitData__ || {};
+        return Promise.resolve({ success: true, files: git.diffFiles || [] });
+      },
+      stage: function(_repoPath, _files) {
+        return Promise.resolve({ success: true });
+      },
+      unstage: function(_repoPath, _files) {
+        return Promise.resolve({ success: true });
+      },
+      revert: function(_repoPath, _files) {
+        return Promise.resolve({ success: true });
+      },
+      commit: function(_repoPath, _message) {
+        return Promise.resolve({ success: true, commitHash: 'abc1234' + '0'.repeat(33) });
+      },
+      log: function(_repoPath, _maxCount) {
+        var git = window.__mockGitData__ || {};
+        return Promise.resolve({ success: true, commits: git.commits || [] });
+      },
+      show: function(_repoPath, _ref) {
+        return Promise.resolve({
+          success: true,
+          diff: 'diff --git a/src/App.tsx b/src/App.tsx\n--- a/src/App.tsx\n+++ b/src/App.tsx\n@@ -29,3 +29,4 @@\n     </div>\n   );\n }\n+// TODO: add more features'
+        });
+      }
+    },
+
+    // ── Terminal API ──
+    terminal: {
+      create: function(_cwd, _cols, _rows) {
+        var tid = 'mock-term-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+        var terms = window.__mockTerminals__ || [];
+        terms.push(tid);
+        window.__mockTerminals__ = terms;
+        // Emit a welcome line
+        setTimeout(function() {
+          (window.__mockTerminalListeners__ || []).forEach(function(cb) {
+            try { cb({ terminalId: tid, data: 'Welcome to AttaSeek Terminal\r\n$ ' }); } catch(e) {}
+          });
+        }, 100);
+        return Promise.resolve({ success: true, terminalId: tid });
+      },
+      write: function(_terminalId, _data) {
+        return Promise.resolve({ success: true });
+      },
+      resize: function(_terminalId, _cols, _rows) {
+        return Promise.resolve({ success: true });
+      },
+      destroy: function(_terminalId) {
+        return Promise.resolve({ success: true });
+      },
+      onOutput: function(cb) {
+        if (!window.__mockTerminalListeners__) window.__mockTerminalListeners__ = [];
+        window.__mockTerminalListeners__.push(cb);
+        return function() {
+          window.__mockTerminalListeners__ = (window.__mockTerminalListeners__ || []).filter(function(l) { return l !== cb; });
+        };
+      }
     }
   };
+
+  // ── window.__mockSet* helpers for test data injection ──
+
+  window.__mockSetFsData__ = function(entries, files) {
+    window.__mockFsEntries__ = entries;
+    window.__mockFsFiles__ = files || {};
+  };
+
+  window.__mockSetGitData__ = function(data) {
+    window.__mockGitData__ = data;
+  };
+
+  window.__mockSetNoGit__ = function() {
+    window.__mockGitData__ = {};
+  };
+
+  window.__mockTerminalListeners__ = [];
+
+  // Initialize default FS data with empty project
+  window.__mockFsEntries__ = [];
+  window.__mockFsFiles__ = {};
+  window.__mockGitData__ = {};
 })();

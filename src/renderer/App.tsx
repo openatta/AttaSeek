@@ -10,6 +10,7 @@ import {
 } from './atoms/sessionAtom'
 import { modelConfigsAtom } from './atoms/modelConfigAtom'
 import { languageAtom } from './atoms/settingsAtom'
+import TestHookInjector from './components/Artifact/TestHookInjector'
 
 
 /**
@@ -107,6 +108,7 @@ function AppContent() {
   return (
     <I18nProvider initialLocale="en">
       <LanguageSync />
+      <TestHookInjector />
       <ErrorBoundary>
         <Shell />
       </ErrorBoundary>

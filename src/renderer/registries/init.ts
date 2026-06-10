@@ -33,6 +33,13 @@ import TableRenderer from '../renderers/table/TableRenderer'
 import CodeRenderer from '../renderers/code/CodeRenderer'
 import DiffRenderer from '../renderers/diff/DiffRenderer'
 
+// AP Panes
+import { registerPane } from '../components/Artifact/PaneRegistry'
+import BrowserPane from '../components/Artifact/panes/BrowserPane/BrowserPane'
+import TerminalPane from '../components/Artifact/panes/TerminalPane/TerminalPane'
+import FilePane from '../components/Artifact/panes/FilePane/FilePane'
+import ReviewPane from '../components/Artifact/panes/ReviewPane/ReviewPane'
+
 let initialized = false
 
 export function initializeRegistries(): void {
@@ -73,7 +80,14 @@ export function initializeRegistries(): void {
   registerArtifactRenderer({ type: 'code', component: CodeRenderer, label: 'Code' })
   registerArtifactRenderer({ type: 'diff', component: DiffRenderer, label: 'Diff' })
 
-  console.log('[registries] initialized — 7 activities, 5 sidebars, 6 renderers')
+  // ── AP Panes ──────────────────────────────────────────
+
+  registerPane({ type: 'browser',  component: BrowserPane,  label: '浏览器', icon: '🌐', constraints: { singleInstance: true,  requireProject: false } })
+  registerPane({ type: 'terminal', component: TerminalPane, label: '终端',   icon: '>_', constraints: { singleInstance: false, requireProject: false } })
+  registerPane({ type: 'file',     component: FilePane,     label: '文件',   icon: '📂', constraints: { singleInstance: false, requireProject: true  } })
+  registerPane({ type: 'review',   component: ReviewPane,   label: '审查',   icon: '📊', constraints: { singleInstance: false, requireProject: true  } })
+
+  console.log('[registries] initialized — 7 activities, 5 sidebars, 6 renderers, 4 panes')
 }
 
 // Auto-init at module load — ensures registries are populated before first render

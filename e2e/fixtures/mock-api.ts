@@ -12,9 +12,9 @@
  * plain JS file that sets up window.api synchronously before React mounts.
  */
 
-import type { SessionInfo, AgentTask } from '../src/shared/types/AgentTask'
-import type { SessionEvent } from '../src/shared/types/SessionEvent'
-import type { ModelConfig } from '../src/shared/types/model'
+import type { SessionInfo, AgentTask } from '../../src/shared/types/AgentTask'
+import type { SessionEvent } from '../../src/shared/types/SessionEvent'
+import type { ModelConfig } from '../../src/shared/types/model'
 
 // ── In-memory stores (reset per test via window.__mockReset__) ──
 

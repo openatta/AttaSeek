@@ -53,13 +53,21 @@ export function createAllProviders(config: ModelConfig, apiKey: string): Provide
   const entries: ProviderEntry[] = []
   const baseUrl = config.endpointUrl
 
-  // Primary provider
+  // Primary provider — only lists non-reasoning models (secondary gets pro ones)
+  const secondaryProModels = new Set(
+    config.interfaces
+      ? Object.values(config.interfaces)
+          .filter(i => i && typeof i === 'object' && i.interfaceType !== config.interfaceType)
+          .flatMap(() => config.models.filter(m => m.includes('-pro') || m === config.opusModel))
+      : []
+  )
+  const primaryModels = config.models.filter(m => !secondaryProModels.has(m))
   const primary = buildProvider(
     config.interfaceType,
     baseUrl,
     apiKey,
     config.defaultModel,
-    config.models,
+    primaryModels.length > 0 ? primaryModels : config.models,
     config.extraParams,
   )
   if (primary) {
@@ -71,13 +79,19 @@ export function createAllProviders(config: ModelConfig, apiKey: string): Provide
     for (const [key, iface] of Object.entries(config.interfaces)) {
       if (!iface || typeof iface !== 'object') continue
       const endpointUrl = iface.endpointUrl || baseUrl
-      // Use first model from models list as defaultModel for secondary providers
+      // Filter models: secondary interface handles reasoning models (pro/opus),
+      // primary handles all others. This ensures findProviderForModel routes
+      // each model to the correct interface.
+      const secondaryModels = config.models.filter(m =>
+        m.includes('-pro') || m.includes('opus') || m === config.opusModel
+      )
+      if (secondaryModels.length === 0) continue
       const sec = buildProvider(
         iface.interfaceType,
         endpointUrl,
         apiKey,
-        config.defaultModel, // fallback
-        config.models,       // same models list
+        secondaryModels[0],
+        secondaryModels,
         { ...config.extraParams, ...iface.extraParams },
       )
       if (sec) {

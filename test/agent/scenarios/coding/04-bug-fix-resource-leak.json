@@ -1,0 +1,45 @@
+{
+  "name": "coding-bug-fix-resource-leak",
+  "description": "Bug fix: find and fix a resource leak in cache module",
+  "profile": "coding",
+  "guestFiles": {
+    "src/cache.ts": "import * as fs from 'fs';\n\nconst cache = new Map<string, string>();\n\nexport function getCached(key: string): string | undefined {\n  // Try memory cache first\n  if (cache.has(key)) return cache.get(key);\n\n  // Fallback to disk cache\n  try {\n    const fd = fs.openSync(`/tmp/cache/${key}`, 'r');\n    const buf = Buffer.alloc(4096);\n    const bytesRead = fs.readSync(fd, buf, 0, 4096, 0);\n    const content = buf.toString('utf-8', 0, bytesRead);\n    cache.set(key, content);\n    return content;\n  } catch {\n    return undefined;\n  }\n}\n\nexport function setCached(key: string, value: string): void {\n  cache.set(key, value);\n  const dir = '/tmp/cache';\n  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });\n  fs.writeFileSync(`${dir}/${key}`, value, 'utf-8');\n}\n"
+  },
+  "turns": [
+    {
+      "userMessage": "In `src/cache.ts`, the `getCached` function opens a file descriptor but never closes it. Find the leak and fix it. Make sure the fd is always released.",
+      "mockResponses": [
+        [
+          { "type": "tool_use_start", "id": "tu_1", "name": "read_file" },
+          { "type": "tool_use_delta", "id": "tu_1", "input_json": "{\"path\":\"src/cache.ts\"}" },
+          { "type": "content_block_stop", "index": 1 },
+          { "type": "message_stop" }
+        ],
+        [
+          { "type": "tool_use_start", "id": "tu_2", "name": "grep" },
+          { "type": "tool_use_delta", "id": "tu_2", "input_json": "{\"pattern\":\"openSync|closeSync|close\",\"path\":\"src/cache.ts\"}" },
+          { "type": "content_block_stop", "index": 1 },
+          { "type": "message_stop" }
+        ],
+        [
+          { "type": "tool_use_start", "id": "tu_3", "name": "edit_file" },
+          { "type": "tool_use_delta", "id": "tu_3", "input_json": "{\"path\":\"src/cache.ts\",\"old_str\":\"  try {\\n    const fd = fs.openSync(`/tmp/cache/${key}`, 'r');\\n    const buf = Buffer.alloc(4096);\\n    const bytesRead = fs.readSync(fd, buf, 0, 4096, 0);\\n    const content = buf.toString('utf-8', 0, bytesRead);\\n    cache.set(key, content);\\n    return content;\\n  } catch {\",\"new_str\":\"  let fd: number | undefined;\\n  try {\\n    fd = fs.openSync(`/tmp/cache/${key}`, 'r');\\n    const buf = Buffer.alloc(4096);\\n    const bytesRead = fs.readSync(fd, buf, 0, 4096, 0);\\n    const content = buf.toString('utf-8', 0, bytesRead);\\n    cache.set(key, content);\\n    return content;\\n  } catch {\\n    return undefined;\\n  } finally {\\n    if (fd !== undefined) fs.closeSync(fd);\\n  }\"}" },
+          { "type": "content_block_stop", "index": 1 },
+          { "type": "message_stop" }
+        ],
+        [
+          { "type": "text_delta", "text": "Fixed the resource leak in `getCached()`: (1) moved fd declaration outside try so it's accessible in finally, (2) added `finally` block that calls `fs.closeSync(fd)` to guarantee the file descriptor is always released, (3) guards against undefined fd in case `openSync` itself throws." },
+          { "type": "message_stop" }
+        ]
+      ],
+      "assert": {
+        "terminalReason": "completed",
+        "toolCalls": 3,
+        "toolsUsed": ["read_file", "grep", "edit_file"],
+        "finalTextContains": "finally",
+        "eventsContain": ["AgentMessage", "ToolCallStarted", "TaskCompleted"],
+        "eventsNotContain": ["TaskFailed"]
+      }
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import { useRef, useState, useEffect } from 'react'
 import { useAtomValue } from 'jotai'
 import { streamingBuffersAtom } from '../../../atoms/sessionAtom'
 import type { AgentMessagePayload } from '../../../../shared/types/SessionEvent'
@@ -7,13 +8,31 @@ import { useCopyToClipboard } from '../../../hooks/useCopyToClipboard'
 
 interface Props { payload: AgentMessagePayload; streamingMessageId?: string; onRegenerate?: () => void }
 
+/** After this many ms without content, show "推理中..." instead of "Thinking..." */
+const REASONING_THRESHOLD_MS = 3000
+
 export default function AgentMessageEvent({ payload, streamingMessageId, onRegenerate }: Props) {
   const streamingBuffers = useAtomValue(streamingBuffersAtom)
   const streamingContent = streamingMessageId ? streamingBuffers[streamingMessageId] : undefined
   const displayContent = streamingContent || payload.content
   const hasContent = !!payload.content
-  const isStreaming = !hasContent // show animation immediately, before first chunk arrives
+  const isStreaming = !hasContent
   const [copied, copy] = useCopyToClipboard()
+  const waitingSince = useRef<number>(Date.now())
+  const [showReasoning, setShowReasoning] = useState(false)
+
+  // Switch to "推理中..." after REASONING_THRESHOLD_MS without content.
+  // DeepSeek v4-pro and similar reasoning models spend seconds on internal
+  // reasoning before emitting any visible output.
+  useEffect(() => {
+    if (hasContent) {
+      setShowReasoning(false)
+      return
+    }
+    waitingSince.current = Date.now()
+    const timer = setTimeout(() => setShowReasoning(true), REASONING_THRESHOLD_MS)
+    return () => clearTimeout(timer)
+  }, [hasContent, streamingContent])
 
   const handleCopy = () => copy(displayContent || '')
 
@@ -23,7 +42,7 @@ export default function AgentMessageEvent({ payload, streamingMessageId, onRegen
         <MarkdownRenderer content={displayContent} />
       ) : isStreaming ? (
         <span className="inline-flex items-center gap-1 text-[var(--app-text-secondary)] animate-pulse">
-          Thinking<span className="inline-flex gap-0.5 mx-0.5">···</span>
+          {showReasoning ? '推理中' : 'Thinking'}<span className="inline-flex gap-0.5 mx-0.5">···</span>
         </span>
       ) : null}
 
