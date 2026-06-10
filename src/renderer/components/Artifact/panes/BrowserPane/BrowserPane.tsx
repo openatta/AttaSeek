@@ -71,15 +71,25 @@ export default function BrowserPane(_props: PaneProps) {
     if (!href || href === 'about:blank') return
     const final = /^https?:\/\//i.test(href) || href.startsWith('about:') ? href : 'https://' + href
 
-    console.log('[BrowserPane] navigateTo target:', targetUrl, '→ final:', final)
     setDisplayUrl(final)
 
     const wv = webviewRef.current
-    if (wv) {
-      console.log('[BrowserPane] setting webview src to:', final)
-      wv.src = final
-    } else {
-      console.warn('[BrowserPane] webviewRef is null, cannot navigate')
+    if (!wv) {
+      console.warn('[BrowserPane] webviewRef is null')
+      return
+    }
+
+    // Try all available navigation methods. In some Electron/Chromium
+    // combinations, setting the src attribute is more reliable than
+    // loadURL(), and vice versa.
+    console.log('[BrowserPane] navigating to:', final)
+    wv.setAttribute('src', final)
+    try {
+      wv.loadURL(final).catch((err: Error) => {
+        console.error('[BrowserPane] loadURL rejected:', err.message)
+      })
+    } catch (err) {
+      console.error('[BrowserPane] loadURL threw:', err)
     }
   }, [])
 
@@ -142,11 +152,15 @@ export default function BrowserPane(_props: PaneProps) {
 
       <div className="flex-1 relative bg-white">
         {/* JSX webview — Electron natively registers and initialises the custom element.
-            No reactive src: navigation is done imperatively via ref. */}
+            No reactive src: navigation is done imperatively via ref.
+            Use a data: URL for the initial load so the webview has a real document
+            context; about:blank can prevent navigation in some Electron versions. */}
         <webview
           ref={webviewRef}
-          src="about:blank"
-          className="w-full h-full"
+          src="data:text/html,<html><body style='background:#fff'></body></html>"
+          nodeintegration="false"
+          webpreferences="sandbox=yes"
+          style={{ width: '100%', height: '100%', display: 'flex' } as React.CSSProperties}
         />
         {displayUrl && (
           <div className="absolute top-0 left-0 right-0 px-2 py-0.5 text-[10px] text-gray-400 bg-white/80 truncate pointer-events-none">

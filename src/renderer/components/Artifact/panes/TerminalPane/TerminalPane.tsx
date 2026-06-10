@@ -21,7 +21,7 @@ export default function TerminalPane(_props: PaneProps) {
 
   return (
     <div
-      style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}
+      className="flex-1 min-h-0 overflow-hidden"
       ref={containerRef as React.RefObject<HTMLDivElement>}
     />
   )

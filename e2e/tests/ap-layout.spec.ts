@@ -51,7 +51,7 @@ test.describe('AP Layout', () => {
     // Open second pane via [+] menu (empty state is hidden)
     await page.locator('button[title="Add pane"]').click()
     await page.waitForTimeout(200)
-    const addMenu = page.locator('.absolute.top-full.left-0')
+    const addMenu = page.locator('div.fixed.z-50')
     await expect(addMenu).toBeVisible({ timeout: 3000 })
     await addMenu.locator('button').filter({ hasText: '终端' }).click()
     await page.waitForTimeout(400)
@@ -67,7 +67,7 @@ test.describe('AP Layout', () => {
     for (let i = 0; i < 2; i++) {
       await page.locator('button[title="Add pane"]').click()
       await page.waitForTimeout(200)
-      const menu = page.locator('.absolute.top-full.left-0')
+      const menu = page.locator('div.fixed.z-50')
       if (await menu.isVisible().catch(() => false)) {
         await menu.locator('button').filter({ hasText: '终端' }).click()
         await page.waitForTimeout(300)
@@ -87,7 +87,7 @@ test.describe('AP Layout', () => {
   test('T4.7: [+] menu closes on backdrop click', async ({ page }) => {
     await page.locator('button[title="Add pane"]').click()
     await page.waitForTimeout(200)
-    const menu = page.locator('.absolute.top-full.left-0')
+    const menu = page.locator('div.fixed.z-50')
     await expect(menu).toBeVisible({ timeout: 3000 })
     await page.locator('.fixed.inset-0.z-40').first().click()
     await page.waitForTimeout(200)
@@ -107,7 +107,7 @@ test.describe('AP Edge Cases', () => {
     for (let i = 0; i < 2; i++) {
       await page.locator('button[title="Add pane"]').click()
       await page.waitForTimeout(150)
-      const menu = page.locator('.absolute.top-full.left-0')
+      const menu = page.locator('div.fixed.z-50')
       if (await menu.isVisible().catch(() => false)) {
         await menu.locator('button').filter({ hasText: '终端' }).click()
         await page.waitForTimeout(200)

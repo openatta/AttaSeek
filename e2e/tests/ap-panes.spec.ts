@@ -81,7 +81,7 @@ test.describe('Terminal Pane', () => {
     // Open second terminal via [+] menu
     await page.locator('button[title="Add pane"]').click()
     await page.waitForTimeout(200)
-    const menu = page.locator('.absolute.top-full.left-0')
+    const menu = page.locator('div.fixed.z-50')
     await expect(menu).toBeVisible({ timeout: 3000 })
     await menu.locator('button').filter({ hasText: '终端' }).click()
     await page.waitForTimeout(500)
@@ -111,7 +111,7 @@ test.describe('File Pane gating', () => {
   test('T3.8: [+] menu respects requireProject constraint', async ({ page }) => {
     await page.locator('button[title="Add pane"]').click()
     await page.waitForTimeout(200)
-    const menu = page.locator('.absolute.top-full.left-0')
+    const menu = page.locator('div.fixed.z-50')
     if (await menu.isVisible().catch(() => false)) {
       // File should not be in the menu in CHATS context
       const fileInMenu = menu.locator('button').filter({ hasText: '文件' })

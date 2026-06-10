@@ -40,7 +40,7 @@ test.describe('AP Tab System', () => {
     // Open browser via [+] menu (empty state is gone now)
     await page.locator('button[title="Add pane"]').click()
     await page.waitForTimeout(200)
-    const menu = page.locator('.absolute.top-full.left-0')
+    const menu = page.locator('div.fixed.z-50')
     await expect(menu).toBeVisible({ timeout: 3000 })
     await menu.locator('button').filter({ hasText: '浏览器' }).click()
     await page.waitForTimeout(400)
@@ -85,7 +85,7 @@ test.describe('AP Tab System', () => {
     await page.waitForTimeout(300)
 
     // Dropdown menu should appear
-    const menu = page.locator('.absolute.top-full.left-0')
+    const menu = page.locator('div.fixed.z-50')
     await expect(menu).toBeVisible({ timeout: 3000 })
 
     // Click "终端" in the menu
@@ -106,7 +106,7 @@ test.describe('AP Tab System', () => {
     await page.waitForTimeout(300)
 
     // Browser should NOT be in the menu (single-instance constraint)
-    const menu = page.locator('.absolute.top-full.left-0')
+    const menu = page.locator('div.fixed.z-50')
     const browserInMenu = menu.locator('button').filter({ hasText: '浏览器' })
     await expect(browserInMenu).toHaveCount(0)
 

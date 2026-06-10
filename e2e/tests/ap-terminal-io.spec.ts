@@ -51,7 +51,7 @@ test.describe('Terminal I/O', () => {
     // Open second terminal via [+] menu
     await page.locator('button[title="Add pane"]').click()
     await page.waitForTimeout(300)
-    const menu = page.locator('.absolute.top-full.left-0')
+    const menu = page.locator('div.fixed.z-50')
     await expect(menu).toBeVisible({ timeout: 3000 })
     await menu.locator('button').filter({ hasText: '终端' }).click()
     await page.waitForTimeout(800)
