@@ -78,97 +78,98 @@ export default function ApTabBar() {
 
   return (
     <div
-      className="flex items-center h-[40px] px-2 border-b border-[var(--app-border)] flex-shrink-0 gap-1"
+      className="flex items-center h-[40px] px-2 border-b border-[var(--app-border)] flex-shrink-0 gap-1 overflow-hidden"
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
-      {/* Scroll left */}
-      {showLeftScroll && (
-        <button
-          onClick={scrollLeft}
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded text-[var(--app-text-tertiary)] hover:text-[var(--app-text-secondary)] hover:bg-[var(--app-bg-hover)]"
-        >
-          <ChevronLeft className="w-3 h-3" />
-        </button>
-      )}
-
-      {/* Tab list */}
-      <div
-        ref={tabListRef}
-        className="flex items-center gap-0.5 overflow-hidden flex-1 min-w-0"
-      >
-        {tabs.map((tab) => (
-          <div
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+      {/* ── Left group: tab area (flex-1, shrinks first, scrolls when overflowed) ── */}
+      <div className="flex items-center gap-0.5 flex-1 min-w-0 overflow-hidden">
+        {showLeftScroll && (
+          <button
+            onClick={scrollLeft}
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-            className={`group flex items-center gap-1 px-2.5 py-1 text-xs rounded cursor-pointer transition-colors whitespace-nowrap select-none flex-shrink-0 ${
-              activeTab === tab.id
-                ? 'bg-[var(--app-bg-primary)] text-[var(--app-text-primary)]'
-                : 'text-[var(--app-text-tertiary)] hover:text-[var(--app-text-secondary)] hover:bg-[var(--app-bg-hover)]'
-            }`}
+            className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded text-[var(--app-text-tertiary)] hover:text-[var(--app-text-secondary)] hover:bg-[var(--app-bg-hover)]"
           >
-            <span className="text-xs">{getPaneIcon(tab.paneType)}</span>
-            <span>{tab.label}</span>
-            <button
-              onClick={(e) => closeTab(tab.id, e)}
-              className="flex-shrink-0 rounded-sm opacity-0 group-hover:opacity-100 hover:bg-[var(--app-bg-hover)] transition-opacity"
-              title="Close tab"
+            <ChevronLeft className="w-3 h-3" />
+          </button>
+        )}
+
+        <div
+          ref={tabListRef}
+          className="flex items-center gap-0.5 overflow-hidden flex-1 min-w-0"
+        >
+          {tabs.map((tab) => (
+            <div
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              className={`group flex items-center gap-1 px-2.5 py-1 text-xs rounded cursor-pointer transition-colors whitespace-nowrap select-none flex-shrink-0 ${
+                activeTab === tab.id
+                  ? 'bg-[var(--app-bg-primary)] text-[var(--app-text-primary)]'
+                  : 'text-[var(--app-text-tertiary)] hover:text-[var(--app-text-secondary)] hover:bg-[var(--app-bg-hover)]'
+              }`}
             >
-              <span className="text-[10px] leading-none px-0.5">✕</span>
-            </button>
-          </div>
-        ))}
-      </div>
-
-      {/* Scroll right */}
-      {showRightScroll && (
-        <button
-          onClick={scrollRight}
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded text-[var(--app-text-tertiary)] hover:text-[var(--app-text-secondary)] hover:bg-[var(--app-bg-hover)]"
-        >
-          <ChevronRight className="w-3 h-3" />
-        </button>
-      )}
-
-      {/* [+] Add button */}
-      <div className="relative flex-shrink-0" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-        <button
-          onClick={() => setAddMenuOpen(!addMenuOpen)}
-          className="flex items-center justify-center w-6 h-6 rounded text-[var(--app-text-tertiary)] hover:text-[var(--app-text-secondary)] hover:bg-[var(--app-bg-hover)] transition-colors"
-          title="Add pane"
-        >
-          <Plus className="w-3.5 h-3.5" />
-        </button>
-        {addMenuOpen && (
-          <>
-            <div className="fixed inset-0 z-40" onClick={() => setAddMenuOpen(false)} />
-            <div className="absolute top-full left-0 mt-1 w-40 bg-[var(--app-bg-elevated)] border border-[var(--app-border)] rounded-lg shadow-lg z-50 py-1">
-              {availablePanes.length === 0 ? (
-                <div className="px-3 py-2 text-xs text-[var(--app-text-tertiary)]">No available panes</div>
-              ) : (
-                availablePanes.map((p) => (
-                  <button
-                    key={p.type}
-                    onClick={() => handleAddTab(p.type)}
-                    className="w-full text-left px-3 py-1.5 text-xs text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors flex items-center gap-2"
-                  >
-                    <span>{p.icon}</span>
-                    <span>{p.label}</span>
-                  </button>
-                ))
-              )}
+              <span className="text-xs">{getPaneIcon(tab.paneType)}</span>
+              <span>{tab.label}</span>
+              <button
+                onClick={(e) => closeTab(tab.id, e)}
+                className="flex-shrink-0 rounded-sm opacity-0 group-hover:opacity-100 hover:bg-[var(--app-bg-hover)] transition-opacity"
+                title="Close tab"
+              >
+                <span className="text-[10px] leading-none px-0.5">✕</span>
+              </button>
             </div>
-          </>
+          ))}
+        </div>
+
+        {showRightScroll && (
+          <button
+            onClick={scrollRight}
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded text-[var(--app-text-tertiary)] hover:text-[var(--app-text-secondary)] hover:bg-[var(--app-bg-hover)]"
+          >
+            <ChevronRight className="w-3 h-3" />
+          </button>
         )}
       </div>
 
-      {/* Right-side controls: zoom toggle + show/hide toggle */}
+      {/* ── Right group: [+] + controls (never shrink, always visible) ── */}
       <div
-        className="flex items-center gap-1 flex-shrink-0 ml-auto"
+        className="flex items-center gap-1 flex-shrink-0"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
+        {/* [+] Add button */}
+        <div className="relative">
+          <button
+            onClick={() => setAddMenuOpen(!addMenuOpen)}
+            className="flex items-center justify-center w-6 h-6 rounded text-[var(--app-text-tertiary)] hover:text-[var(--app-text-secondary)] hover:bg-[var(--app-bg-hover)] transition-colors"
+            title="Add pane"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+          {addMenuOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setAddMenuOpen(false)} />
+              <div className="absolute top-full right-0 mt-1 w-40 bg-[var(--app-bg-elevated)] border border-[var(--app-border)] rounded-lg shadow-lg z-50 py-1">
+                {availablePanes.length === 0 ? (
+                  <div className="px-3 py-2 text-xs text-[var(--app-text-tertiary)]">No available panes</div>
+                ) : (
+                  availablePanes.map((p) => (
+                    <button
+                      key={p.type}
+                      onClick={() => handleAddTab(p.type)}
+                      className="w-full text-left px-3 py-1.5 text-xs text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors flex items-center gap-2"
+                    >
+                      <span>{p.icon}</span>
+                      <span>{p.label}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Zoom toggle */}
         <button
           onClick={() => setFullscreen(!fullscreen)}
           className="w-6 h-6 flex items-center justify-center rounded text-[var(--app-text-tertiary)] hover:text-[var(--app-text-secondary)] hover:bg-[var(--app-bg-hover)]"
@@ -176,6 +177,8 @@ export default function ApTabBar() {
         >
           {fullscreen ? <Shrink className="w-3.5 h-3.5" /> : <Expand className="w-3.5 h-3.5" />}
         </button>
+
+        {/* Show/hide toggle */}
         <button
           onClick={() => setApVisible(false)}
           className="w-6 h-6 flex items-center justify-center rounded text-[var(--app-text-tertiary)] hover:text-[var(--app-text-secondary)] hover:bg-[var(--app-bg-hover)]"

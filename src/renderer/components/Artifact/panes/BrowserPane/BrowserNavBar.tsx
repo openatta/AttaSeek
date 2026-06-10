@@ -25,7 +25,11 @@ export default function BrowserNavBar({
   const [focused, setFocused] = useState(false)
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') onNavigate((e.target as HTMLInputElement).value)
+    if (e.key === 'Enter') {
+      const rawValue = (e.target as HTMLInputElement).value
+      console.log('[BrowserNavBar] Enter pressed, value:', rawValue)
+      onNavigate(rawValue)
+    }
   }
 
   return (

@@ -64,8 +64,10 @@ export default function BrowserPane(_props: PaneProps) {
 
   const navigateTo = useCallback((targetUrl: string) => {
     const href = targetUrl.trim()
+    console.log('[BrowserPane] navigateTo called:', { targetUrl, href, webviewRef: !!webviewRef.current })
     if (!href || href === 'about:blank') return
     const final = /^https?:\/\//i.test(href) || href.startsWith('about:') ? href : 'https://' + href
+    console.log('[BrowserPane] navigating to:', final)
     setUrl(final)
     setDisplayUrl(final)
     webviewRef.current?.loadURL(final)
