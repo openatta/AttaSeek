@@ -20,6 +20,9 @@ export default function TerminalPane(_props: PaneProps) {
   const { containerRef } = useTerminal({ cwd })
 
   return (
-    <div className="flex-1 overflow-hidden" ref={containerRef as React.RefObject<HTMLDivElement>} />
+    <div
+      className="w-full h-full overflow-hidden"
+      ref={containerRef as React.RefObject<HTMLDivElement>}
+    />
   )
 }

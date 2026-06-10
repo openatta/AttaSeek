@@ -6,6 +6,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { Plus, ChevronLeft, ChevronRight, Expand, Shrink, PanelRightClose } from 'lucide-react'
 import { apTabsAtom, activeApTabAtom, apVisibleAtom, apFullscreenAtom } from './ApAtoms'
@@ -21,9 +22,11 @@ export default function ApTabBar() {
   const [, setApVisible] = useAtom(apVisibleAtom)
 
   const [addMenuOpen, setAddMenuOpen] = useState(false)
+  const [menuPos, setMenuPos] = useState<{ left: number; top: number }>({ left: 0, top: 0 })
   const [showLeftScroll, setShowLeftScroll] = useState(false)
   const [showRightScroll, setShowRightScroll] = useState(false)
   const tabListRef = useRef<HTMLDivElement>(null)
+  const addBtnRef = useRef<HTMLDivElement>(null)
 
   const availablePanes = useAvailablePanes()
   const addTab = useAddTab()
@@ -138,36 +141,23 @@ export default function ApTabBar() {
         className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
-        {/* [+] Add button — opens upward to avoid webview z-index occlusion */}
-        <div className="relative">
+        {/* [+] Add button — menu rendered via portal to document.body so it
+            escapes overflow-hidden parents and can layer above webview content. */}
+        <div ref={addBtnRef}>
           <button
-            onClick={() => setAddMenuOpen(!addMenuOpen)}
+            onClick={() => {
+              const rect = addBtnRef.current?.getBoundingClientRect()
+              if (rect) {
+                // Position menu below the button, right-aligned
+                setMenuPos({ left: rect.right - 160, top: rect.bottom + 4 })
+              }
+              setAddMenuOpen(!addMenuOpen)
+            }}
             className="flex items-center justify-center w-6 h-6 rounded text-[var(--app-text-tertiary)] hover:text-[var(--app-text-secondary)] hover:bg-[var(--app-bg-hover)] transition-colors"
             title="Add pane"
           >
             <Plus className="w-3.5 h-3.5" />
           </button>
-          {addMenuOpen && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setAddMenuOpen(false)} />
-              <div className="absolute bottom-full right-0 mb-1 w-40 bg-[var(--app-bg-elevated)] border border-[var(--app-border)] rounded-lg shadow-lg z-50 py-1">
-                {availablePanes.length === 0 ? (
-                  <div className="px-3 py-2 text-xs text-[var(--app-text-tertiary)]">No available panes</div>
-                ) : (
-                  availablePanes.map((p) => (
-                    <button
-                      key={p.type}
-                      onClick={() => handleAddTab(p.type)}
-                      className="w-full text-left px-3 py-1.5 text-xs text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors flex items-center gap-2"
-                    >
-                      <span>{p.icon}</span>
-                      <span>{p.label}</span>
-                    </button>
-                  ))
-                )}
-              </div>
-            </>
-          )}
         </div>
 
         {/* Zoom toggle */}
@@ -188,6 +178,36 @@ export default function ApTabBar() {
           <PanelRightClose className="w-3.5 h-3.5" />
         </button>
       </div>
+
+      {/* ── [+] Menu rendered via portal to document.body ── */}
+      {addMenuOpen &&
+        createPortal(
+          <>
+            {/* Backdrop */}
+            <div className="fixed inset-0 z-40" onClick={() => setAddMenuOpen(false)} />
+            {/* Menu — positioned just below the tab bar, relative to the button */}
+            <div
+              className="fixed z-50 w-40 bg-[var(--app-bg-elevated)] border border-[var(--app-border)] rounded-lg shadow-lg py-1"
+              style={{ left: menuPos.left, top: menuPos.top }}
+            >
+              {availablePanes.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-[var(--app-text-tertiary)]">No available panes</div>
+              ) : (
+                availablePanes.map((p) => (
+                  <button
+                    key={p.type}
+                    onClick={() => handleAddTab(p.type)}
+                    className="w-full text-left px-3 py-1.5 text-xs text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors flex items-center gap-2"
+                  >
+                    <span>{p.icon}</span>
+                    <span>{p.label}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          </>,
+          document.body,
+        )}
     </div>
   )
 }

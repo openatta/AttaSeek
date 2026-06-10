@@ -51,7 +51,13 @@ export default function BrowserPane(_props: PaneProps) {
       setTitle((e as CustomEvent).detail || '')
     }
 
+    const onFailLoad = (e: Event) => {
+      const detail = e as CustomEvent<{ errorCode: number; errorDescription: string; validatedURL: string }>
+      console.error('[BrowserPane] Navigation failed:', detail.detail)
+    }
+
     wv.addEventListener('did-finish-load', onFinishLoad)
+    wv.addEventListener('did-fail-load', onFailLoad)
     wv.addEventListener('page-title-updated', onTitleUpdated)
 
     container.appendChild(wv)
@@ -59,6 +65,7 @@ export default function BrowserPane(_props: PaneProps) {
 
     return () => {
       wv.removeEventListener('did-finish-load', onFinishLoad)
+      wv.removeEventListener('did-fail-load', onFailLoad)
       wv.removeEventListener('page-title-updated', onTitleUpdated)
       try { wv.remove() } catch { /* already removed */ }
       webviewRef.current = null
@@ -83,7 +90,7 @@ export default function BrowserPane(_props: PaneProps) {
 
     const wv = webviewRef.current
     if (wv) {
-      wv.loadURL(final)
+      wv.src = final
     } else {
       console.warn('[BrowserPane] webviewRef is null, cannot navigate')
     }
@@ -124,7 +131,7 @@ export default function BrowserPane(_props: PaneProps) {
   // ── Render ───────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col flex-1 min-h-0">
       <BrowserNavBar
         url={displayUrl}
         canGoBack={canGoBack}
