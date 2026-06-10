@@ -1,12 +1,10 @@
 /**
- * BrowserPane — embedded web browser via Electron <webview> element.
+ * BrowserPane — embedded web browser via Electron <webview> tag.
  *
- * The webview is created imperatively (not via JSX) because React's
- * reconciliation can interfere with Electron's custom element lifecycle:
- * StrictMode double-mount, reactive src binding, and attribute re-setting
- * can all prevent the webview from initializing its internal browser process.
- *
- * Single-instance constraint enforced at AP Tab level (PaneRegistry).
+ * The webview is rendered via JSX (not imperative createElement) so
+ * Electron's native custom-element registration initialises it properly.
+ * Navigation is controlled imperatively via ref — no reactive src binding
+ * that could interfere with Electron's internal browser process lifecycle.
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react'
@@ -17,7 +15,6 @@ import DeviceToolbar from './DeviceToolbar'
 
 export default function BrowserPane(_props: PaneProps) {
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
 
   const [displayUrl, setDisplayUrl] = useState('')
   const [canGoBack, setCanGoBack] = useState(false)
@@ -26,53 +23,40 @@ export default function BrowserPane(_props: PaneProps) {
   const [zoom, setZoom] = useState(100)
   const [title, setTitle] = useState('')
 
-  // ── Imperative webview creation ──────────────────────────────
-  // Avoids React JSX reconciliation which can break Electron's
-  // custom element initialization (especially in StrictMode).
-
+  // Attach listeners to the webview once it mounts
   useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-
-    const wv = document.createElement('webview') as unknown as Electron.WebviewTag
-    wv.setAttribute('src', 'about:blank')
-    wv.setAttribute('nodeintegration', 'false')
-    wv.setAttribute('webpreferences', 'sandbox=yes')
-    wv.style.width = '100%'
-    wv.style.height = '100%'
+    const wv = webviewRef.current
+    if (!wv) return
 
     const onFinishLoad = () => {
       setCanGoBack(wv.canGoBack())
       setCanGoForward(wv.canGoForward())
       setDisplayUrl(wv.getURL())
+      console.log('[BrowserPane] webview loaded:', wv.getURL())
+    }
+
+    const onFailLoad = (e: Event) => {
+      const d = e as CustomEvent<{ errorCode: number; errorDescription: string; validatedURL: string }>
+      console.error('[BrowserPane] load failed:', d.detail)
     }
 
     const onTitleUpdated = (e: Event) => {
       setTitle((e as CustomEvent).detail || '')
     }
 
-    const onFailLoad = (e: Event) => {
-      const detail = e as CustomEvent<{ errorCode: number; errorDescription: string; validatedURL: string }>
-      console.error('[BrowserPane] Navigation failed:', detail.detail)
-    }
-
     wv.addEventListener('did-finish-load', onFinishLoad)
     wv.addEventListener('did-fail-load', onFailLoad)
     wv.addEventListener('page-title-updated', onTitleUpdated)
 
-    container.appendChild(wv)
-    webviewRef.current = wv
+    // Log that the webview is ready
+    console.log('[BrowserPane] webview attached, src:', wv.src || wv.getAttribute('src'))
 
     return () => {
       wv.removeEventListener('did-finish-load', onFinishLoad)
       wv.removeEventListener('did-fail-load', onFailLoad)
       wv.removeEventListener('page-title-updated', onTitleUpdated)
-      try { wv.remove() } catch { /* already removed */ }
-      webviewRef.current = null
     }
   }, [])
-
-  // ── Navigation ───────────────────────────────────────────────
 
   const updateNavState = useCallback(() => {
     const wv = webviewRef.current
@@ -86,10 +70,13 @@ export default function BrowserPane(_props: PaneProps) {
     const href = targetUrl.trim()
     if (!href || href === 'about:blank') return
     const final = /^https?:\/\//i.test(href) || href.startsWith('about:') ? href : 'https://' + href
+
+    console.log('[BrowserPane] navigateTo target:', targetUrl, '→ final:', final)
     setDisplayUrl(final)
 
     const wv = webviewRef.current
     if (wv) {
+      console.log('[BrowserPane] setting webview src to:', final)
       wv.src = final
     } else {
       console.warn('[BrowserPane] webviewRef is null, cannot navigate')
@@ -110,8 +97,7 @@ export default function BrowserPane(_props: PaneProps) {
     webviewRef.current?.reload()
   }, [])
 
-  // ── Zoom ─────────────────────────────────────────────────────
-
+  // Sync zoom to webview style
   useEffect(() => {
     const wv = webviewRef.current
     if (wv) {
@@ -119,16 +105,12 @@ export default function BrowserPane(_props: PaneProps) {
     }
   }, [zoom])
 
-  // ── Device toolbar ───────────────────────────────────────────
-
   const handleDeviceChange = useCallback((device: { userAgent: string }) => {
     const wv = webviewRef.current
     if (wv && device.userAgent) {
       wv.setUserAgent(device.userAgent)
     }
   }, [])
-
-  // ── Render ───────────────────────────────────────────────────
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
@@ -158,7 +140,20 @@ export default function BrowserPane(_props: PaneProps) {
         <DeviceToolbar onDeviceChange={handleDeviceChange} />
       )}
 
-      <div ref={containerRef} className="flex-1 relative bg-white" />
+      <div className="flex-1 relative bg-white">
+        {/* JSX webview — Electron natively registers and initialises the custom element.
+            No reactive src: navigation is done imperatively via ref. */}
+        <webview
+          ref={webviewRef}
+          src="about:blank"
+          className="w-full h-full"
+        />
+        {displayUrl && (
+          <div className="absolute top-0 left-0 right-0 px-2 py-0.5 text-[10px] text-gray-400 bg-white/80 truncate pointer-events-none">
+            {displayUrl}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
