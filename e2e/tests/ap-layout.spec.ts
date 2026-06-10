@@ -77,7 +77,7 @@ test.describe('AP Layout', () => {
     const firstTab = page.locator('[class*="group flex items-center gap-1 px-2\\.5 py-1"]').first()
     await firstTab.hover()
     await page.waitForTimeout(300)
-    const closeBtn = firstTab.locator('button[title="Close tab"]')
+    const closeBtn = firstTab.locator('span[title="Close tab"]')
     await expect(closeBtn).toBeVisible({ timeout: 3000 })
     await closeBtn.click()
     await page.waitForTimeout(400)

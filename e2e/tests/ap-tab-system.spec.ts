@@ -69,7 +69,7 @@ test.describe('AP Tab System', () => {
     await page.waitForTimeout(300)
 
     // Close button should appear and be clickable
-    const closeBtn = tabGroup.locator('button[title="Close tab"]')
+    const closeBtn = tabGroup.locator('span[title="Close tab"]')
     await expect(closeBtn).toBeVisible({ timeout: 3000 })
     await closeBtn.click()
     await page.waitForTimeout(400)
@@ -127,7 +127,7 @@ test.describe('AP Tab System', () => {
     const tabGroup = page.locator('.group.flex.items-center.gap-1.px-2\\.5.py-1').first()
     await tabGroup.hover()
     await page.waitForTimeout(300)
-    await tabGroup.locator('button[title="Close tab"]').click()
+    await tabGroup.locator('span[title="Close tab"]').click()
     await page.waitForTimeout(400)
 
     // Empty state should reappear

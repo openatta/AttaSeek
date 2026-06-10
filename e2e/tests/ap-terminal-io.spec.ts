@@ -77,7 +77,7 @@ test.describe('Terminal I/O', () => {
     const tabGroup = page.locator('.group.flex.items-center.gap-1.px-2\\.5.py-1').first()
     await tabGroup.hover()
     await page.waitForTimeout(300)
-    await tabGroup.locator('button[title="Close tab"]').click()
+    await tabGroup.locator('span[title="Close tab"]').click()
     await page.waitForTimeout(500)
 
     // Terminal destroy should have been called
