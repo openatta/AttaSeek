@@ -16,7 +16,7 @@ import { WebglAddon } from '@xterm/addon-webgl'
 import { getApi } from '../../../../utils/api'
 
 interface UseTerminalOptions {
-  cwd: string
+  cwd?: string
 }
 
 interface UseTerminalResult {

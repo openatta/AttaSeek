@@ -13,8 +13,9 @@ export default function TerminalPane(_props: PaneProps) {
   const context = useAtomValue(apContextAtom)
   const projectRoot = useAtomValue(projectRootAtom)
 
-  // Default cwd: home dir in CHATS, project root in project context
-  const cwd = context === 'project' && projectRoot ? projectRoot : '~'
+  // Default cwd: home dir in CHATS, project root in project context.
+  // Pass undefined for home — the main process resolves os.homedir().
+  const cwd = context === 'project' && projectRoot ? projectRoot : undefined
 
   const { containerRef } = useTerminal({ cwd })
 

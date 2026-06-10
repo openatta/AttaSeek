@@ -58,7 +58,9 @@ export function registerTerminalHandlers(): void {
       }
 
       const id = generateTerminalId()
-      const cwd = p.cwd || os.homedir()
+      // Resolve cwd: use provided path (if non-empty and not '~'), else home dir.
+      // path.resolve() doesn't expand shell '~', so we normalize here.
+      const rawCwd = p.cwd && p.cwd !== '~' ? p.cwd : os.homedir()
       const cols = p.cols || 80
       const rows = p.rows || 24
 
@@ -66,7 +68,7 @@ export function registerTerminalHandlers(): void {
         name: 'xterm-256color',
         cols,
         rows,
-        cwd: path.resolve(cwd),
+        cwd: path.resolve(rawCwd),
         env: { ...process.env, TERM: 'xterm-256color' } as Record<string, string>,
       })
 
