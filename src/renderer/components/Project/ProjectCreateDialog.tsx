@@ -39,7 +39,13 @@ export default function ProjectCreateDialog({ open, onClose, onCreated }: Props)
         setError(result.error || '创建项目失败')
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '创建项目失败')
+      const msg = err instanceof Error ? err.message : '创建项目失败'
+      const code = (err as { code?: string }).code
+      if (code === 'DIR_NOT_FOUND') {
+        setError(`目录不存在: ${rootPath.trim()}。请确认路径后重试。`)
+      } else {
+        setError(msg)
+      }
     } finally {
       setLoading(false)
     }

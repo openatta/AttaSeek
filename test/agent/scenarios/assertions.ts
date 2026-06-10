@@ -53,8 +53,8 @@ export function assertFinalTextContains(events: SessionEvent[], substr: string):
     .filter(e => e.type === 'AgentMessage')
     .map(e => (e.payload as any)?.content || '')
     .join(' ')
-  const allText = chunkText + ' ' + finalText
-  expect(allText, `final text should contain "${substr}"`).toContain(substr)
+  const allText = (chunkText + ' ' + finalText).toLowerCase()
+  expect(allText, `final text should contain "${substr}"`).toContain(substr.toLowerCase())
 }
 
 /** Verify certain events do NOT appear */

@@ -22,9 +22,14 @@ export function registerProjectHandlers(): void {
 
       const rootPath = resolve(p.rootPath)
 
-      // Validate directory
+      // Validate directory — distinguish missing vs not-writable
+      let exists = false
+      try { await access(rootPath, constants.F_OK); exists = true } catch { /* not found */ }
+      if (!exists) {
+        throw Object.assign(new Error(`目录不存在: ${rootPath}`), { code: 'DIR_NOT_FOUND' })
+      }
       try { await access(rootPath, constants.R_OK | constants.W_OK) }
-      catch { throw new Error(`目录不存在或无读写权限: ${rootPath}`) }
+      catch { throw new Error(`目录无读写权限: ${rootPath}`) }
 
       const project = await ProjectStore.createProject(p.name.trim(), rootPath)
       return { project }
@@ -67,7 +72,7 @@ export function registerProjectHandlers(): void {
         try {
           await deleteSession(s.id)
           deletedSessions++
-        } catch { /* session files may already be gone */ }
+        } catch (err) { console.warn('[project:remove] failed to delete session:', s.id, err instanceof Error ? err.message : String(err)) }
       }
 
       // 3. Remove project metadata
@@ -77,7 +82,7 @@ export function registerProjectHandlers(): void {
       try {
         const seekDir = resolve(project.rootPath, '.atta', 'seek')
         await rm(seekDir, { recursive: true, force: true })
-      } catch { /* directory may be gone already */ }
+      } catch (err) { console.warn('[project:remove] failed to remove .atta/seek/:', err instanceof Error ? err.message : String(err)) }
       try {
         const attaDir = resolve(project.rootPath, '.atta')
         const files = await stat(attaDir).then(() => true).catch(() => false)
@@ -85,7 +90,7 @@ export function registerProjectHandlers(): void {
           // Check if .atta is empty (rmdir fails if not empty)
           await rmdir(attaDir)
         }
-      } catch { /* not empty, leave it */ }
+      } catch (err) { console.warn('[project:remove] failed to remove .atta/ (may not be empty):', err instanceof Error ? err.message : String(err)) }
 
       return { success: true, deletedSessions, cancelledTasks: cancelledCount }
     })

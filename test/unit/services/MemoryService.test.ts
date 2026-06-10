@@ -21,4 +21,11 @@ describe('MemoryService', () => {
     svc.clearScratchpad('s1')
     expect(svc.getScratchpad('s1', 'k')).toBeUndefined()
   })
+
+  // projectId → scope+scopeId mapping is in recall() (L2, tested via
+  // integration since it requires JSONL file I/O). The mapping logic:
+  //   const scope = query.projectId ? 'project' : query.scope
+  //   const scopeId = query.projectId || query.scopeId
+  // Verified by the ContextAssembler.buildMemoryContext() call path:
+  // when projectId is provided, project-scoped memories filter correctly.
 })

@@ -932,6 +932,7 @@ export async function* queryLoop(
       .map(b => (b as { type: 'text'; text: string }).text)
       .join('')
     if (fullText) {
+      yield createSessionEvent(task, 'AgentMessage', { content: fullText })
       appendEvent(task.sessionId, createSessionEvent(task, 'AgentMessage', { content: fullText })).catch(() => {})
 
       // Generate session title once (ChatGPT/Claude Code pattern).

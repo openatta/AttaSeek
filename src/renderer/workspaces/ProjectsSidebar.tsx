@@ -31,6 +31,7 @@ export default function ProjectsSidebar({ selectedSessionId, onSelectSession }: 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [projectSessions, setProjectSessions] = useState<Record<string, SessionInfo[]>>({})
   const [contextMenu, setContextMenu] = useState<{ projectId: string; x: number; y: number } | null>(null)
+  const [missingDirProjectId, setMissingDirProjectId] = useState<string | null>(null)
 
   // Load projects on mount
   useEffect(() => {
@@ -52,6 +53,21 @@ export default function ProjectsSidebar({ selectedSessionId, onSelectSession }: 
       }
     }).catch((err) => { console.warn('[ProjectsSidebar] failed to load sessions:', err) })
   }, [selectedProjectId])
+
+  // Validate selected project's directory still exists
+  useEffect(() => {
+    if (!selectedProjectId) { setMissingDirProjectId(null); return }
+    const project = projects.find((p) => p.id === selectedProjectId)
+    if (!project) return
+    const api = getApi()
+    api.project.validate(project.rootPath).then((r) => {
+      if (r.success && !r.valid) {
+        setMissingDirProjectId(project.id)
+      } else {
+        setMissingDirProjectId(null)
+      }
+    }).catch(() => { setMissingDirProjectId(null) })
+  }, [selectedProjectId, projects])
 
   // Activate project context
   const activateProject = useCallback((project: ProjectInfo) => {
@@ -118,6 +134,21 @@ export default function ProjectsSidebar({ selectedSessionId, onSelectSession }: 
           <Plus className="w-4 h-4" />
         </button>
       </div>
+
+      {/* Missing directory warning */}
+      {missingDirProjectId && selectedProject && (
+        <div className="px-4 pb-2">
+          <div className="text-[10px] text-[var(--app-warning)] bg-[var(--app-warning-bg)] border border-[var(--app-warning-border)] rounded px-2 py-1.5">
+            项目目录不存在或无法访问
+            <button
+              onClick={() => handleRemoveProject(missingDirProjectId)}
+              className="ml-2 text-[var(--app-error)] hover:underline"
+            >
+              移除项目
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Content */}
       <div className="flex-1 min-h-0 overflow-y-auto">

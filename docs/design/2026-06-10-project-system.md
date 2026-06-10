@@ -11,14 +11,15 @@
 |------|----------|------|
 | `src/main/store/ProjectStore.ts` | 新建 | 项目元数据持久化（全局 `projects.json`），CRUD |
 | `src/main/ipc/project.ts` | 新建 | `project:*` IPC 处理器：create/list/remove/validate |
-| `src/renderer/components/Project/ProjectCreateDialog.tsx` | 新建 | 创建项目弹窗（名称输入 + 目录选择器 + 验证） |
-| `src/renderer/components/Project/ProjectContextBadge.tsx` | 新建 | 当前活跃项目名的面包屑指示器（可选：置于 header 或 composer 上方） |
+| `src/renderer/components/Project/ProjectCreateDialog.tsx` | 新建 | 创建项目弹窗（名称输入 + 目录验证） |
+| `src/renderer/components/Project/ProjectContextBadge.tsx` | 未来 | 当前活跃项目名的面包屑指示器（低优先级，暂未实现） |
 | `src/shared/types/ipc.ts` | 修改 | 新增 `ProjectInfo` 类型 |
 | `src/shared/types/AgentTask.ts` | 修改 | `SessionInfo` 新增 `projectId?: string` |
 | `src/shared/types/Memory.ts` | 修改 | `MemoryQuery` 新增 `projectId?: string` |
 | `src/main/ipc/session.ts` | 修改 | `session:list` 支持 `projectId` 过滤 |
-| `src/main/ipc/agent.ts` | 修改 | 新增 `agent:cancel-by-project` 通道（或扩展现有 cancel 逻辑） |
+| `src/main/ipc/agent.ts` | 不变 | 项目移除时直接调用 `agentRuntime.listBySession()` + `cancelTask()`，无需独立 IPC 通道 |
 | `src/main/ipc/memory.ts` | 修改 | `memory:list` 支持 `projectId` 过滤 |
+| `src/main/memory/MemoryService.ts` | 修改 | `recall()` 将 `projectId` 映射为 `scope='project'` + `scopeId` |
 | `src/preload/index.ts` | 修改 | 新增 `api.project` 命名空间 |
 | `src/main/index.ts` | 修改 | 注册 `registerProjectHandlers()` |
 | `src/renderer/workspaces/ProjectsSidebar.tsx` | 修改 | 替换 mock 数据为真实 IPC 调用；新增移除项目右键菜单 |
@@ -40,8 +41,8 @@ src/
 ├── renderer/
 │   ├── components/
 │   │   └── Project/
-│   │       ├── ProjectCreateDialog.tsx  ← 新建
-│   │       └── ProjectContextBadge.tsx  ← 新建
+│   │       └── ProjectCreateDialog.tsx  ← 新建
+│   │       /* ProjectContextBadge.tsx — 未来扩展 */
 │   └── workspaces/
 │       ├── ProjectsSidebar.tsx      ← 修改（替换 mock）
 │       └── SidebarWrappers.tsx      ← 修改（集成回调）
@@ -119,7 +120,8 @@ export interface MemoryQuery {
 | `session:create` | 请求新增可选 `projectId?: string`，响应 session 含 projectId |
 | `session:list` | 请求新增可选 `projectId?: string`，按 projectId 过滤 |
 | `memory:list` | 请求新增可选 `projectId?: string`，映射为 `scope=project, scopeId=projectId` |
-| `agent:cancel-by-project` | 新建通道：`{ projectId: string }` → `{ cancelled: number }` |
+
+> **注：** 设计曾规划 `agent:cancel-by-project` 通道，最终在 `project:remove` handler 中直接调用 `agentRuntime.listBySession()` + `cancelTask()` —— 同一主进程内无需 IPC 绕路。
 
 ---
 

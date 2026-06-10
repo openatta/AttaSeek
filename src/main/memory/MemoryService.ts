@@ -32,11 +32,15 @@ export class MemoryService {
   }
 
   async recall(query: MemoryQuery): Promise<MemoryEntry[]> {
+    // Map projectId shorthand to scope + scopeId (design doc: MemoryQuery.projectId)
+    const scope = query.projectId ? 'project' : query.scope
+    const scopeId = query.projectId || query.scopeId
+
     const results: MemoryEntry[] = []
     for await (const e of store.read()) {
       const m = e as MemoryEntry
-      if (query.scope && m.scope !== query.scope) continue
-      if (query.scopeId && m.scopeId !== query.scopeId) continue
+      if (scope && m.scope !== scope) continue
+      if (scopeId && m.scopeId !== scopeId) continue
       if (query.type && m.type !== query.type) continue
       if (query.layer && m.layer !== query.layer) continue
       if (query.query && !m.content.toLowerCase().includes(query.query.toLowerCase())) continue

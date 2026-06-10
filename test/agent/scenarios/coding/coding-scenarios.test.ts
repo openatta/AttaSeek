@@ -175,9 +175,11 @@ describe('Coding Agent — A: Code Comprehension', () => {
       if (assert.finalTextContains) assertFinalTextContains(events, assert.finalTextContains)
       if (assert.terminalReason === 'completed') assertTaskCompleted(events)
 
-      // Category-specific: code comprehension should include explanation patterns
+      // Category-specific: code comprehension should include explanation text
+      // Uses AgentMessage (final text) rather than AgentMessageChunk (streaming
+      // events are emitted via EventBus, not yielded through the generator).
       const allText = events
-        .filter(e => e.type === 'AgentMessageChunk')
+        .filter(e => e.type === 'AgentMessage')
         .map(e => (e.payload as any)?.content || '')
         .join(' ')
       expect(allText.length).toBeGreaterThan(0)
