@@ -5,9 +5,8 @@
 
 import { ipcMain, type BrowserWindow } from 'electron'
 import { newId } from '../store/id'
-import { agentEventBus } from '../agent/AgentEventBus'
 import { ipcWrapAsync, validateRequiredString } from '../store/util'
-import { createSession, getSession, listSessions, updateSession, deleteSession, setProjectSessions } from '../store/SessionStore'
+import { createSession, getSession, listSessions, updateSession, deleteSession } from '../store/SessionStore'
 
 let mainWindow: BrowserWindow | null = null
 

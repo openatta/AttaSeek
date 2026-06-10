@@ -49,9 +49,9 @@ const api = {
       ipcRenderer.invoke('agent:create-task', { goal, sessionId, projectId, modelConfigId, modelName, language }),
     cancelTask: (taskId: string): Promise<{ success: boolean }> =>
       ipcRenderer.invoke('agent:cancel-task', { taskId }),
-    getTask: (taskId: string): Promise<{ task: AgentTask | null }> =>
+    getTask: (taskId: string): Promise<{ success: boolean; task: AgentTask | null }> =>
       ipcRenderer.invoke('agent:get-task', { taskId }),
-    listEvents: (sessionId: string): Promise<{ events: SessionEvent[] }> =>
+    listEvents: (sessionId: string): Promise<{ success: boolean; events: SessionEvent[] }> =>
       ipcRenderer.invoke('agent:list-events', { sessionId }),
     onEvent: (cb: (event: SessionEvent) => void) => {
       const listener = (_event: Electron.IpcRendererEvent, data: SessionEvent) => cb(data)

@@ -69,7 +69,7 @@ export default function ReviewPane(_props: PaneProps) {
       if (result.success && result.files) {
         setDiffFiles(result.files)
       }
-    } catch { /* ignore */ }
+    } catch (err) { console.warn('[ReviewPane] failed to load diff:', err) }
   }, [repoPath, scope])
 
   useEffect(() => { loadStatus() }, [loadStatus])

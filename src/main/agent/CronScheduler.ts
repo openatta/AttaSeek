@@ -50,6 +50,11 @@ export class CronScheduler {
    * a job fires with the job's prompt.
    */
   start(onFire: (job: CronJob) => void): void {
+    // Guard against double-start: clear any existing timer first
+    if (this.timer) {
+      clearInterval(this.timer)
+      this.timer = null
+    }
     this.onFire = onFire
     // Check every 30 seconds for jobs that need to fire
     this.timer = setInterval(() => this.tick(), 30_000)

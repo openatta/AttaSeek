@@ -82,18 +82,16 @@ export function registerAgentHandlers(): void {
     try {
       validateRequiredString(params, 'taskId', 'taskId')
       const task = agentRuntime.getTask(params.taskId)
-      return { task: task || null }
-    } catch (err) { return { task: null, error: err instanceof Error ? err.message : 'Internal error' } }
+      return { success: true, task: task || null }
+    } catch (err) { return { success: false, task: null, error: err instanceof Error ? err.message : 'Internal error' } }
   })
 
   ipcMain.handle('agent:list-events', async (_event, params: { sessionId: string }) => {
     try {
       validateRequiredString(params, 'sessionId', 'sessionId')
-      // Return disk-persisted events only — in-memory events arrive via
-      // real-time agent:event push and are already in the renderer atom.
       const events = await readEvents(params.sessionId)
-      return { events: events as Array<{ id?: string }> }
-    } catch (err) { return { events: [], error: err instanceof Error ? err.message : 'Internal error' } }
+      return { success: true, events: events as Array<{ id?: string }> }
+    } catch (err) { return { success: false, events: [], error: err instanceof Error ? err.message : 'Internal error' } }
   })
 
   console.log('[IPC:agent] handlers registered')

@@ -90,7 +90,8 @@ export default function FileExplorer({ rootPath, activeFilePath, onFileClick }: 
           isDir: entry.isDir,
           depth: 0, // depth assigned during flattening
         }))
-    } catch {
+    } catch (err) {
+      console.warn('[FileExplorer] failed to load directory:', err)
       return []
     }
   }, [])

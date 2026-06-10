@@ -15,6 +15,10 @@ import { useAvailablePanes } from '../../hooks/useAvailablePanes'
 import { useAddTab } from '../../hooks/useAddTab'
 import type { ApTab } from './ApAtoms'
 
+const SCROLL_STEP_PX = 150
+const RIGHT_CONTROLS_WIDTH_PX = 84
+const ADD_MENU_WIDTH_PX = 160
+
 export default function ApTabBar() {
   const [tabs, setTabs] = useAtom(apTabsAtom)
   const [activeTab, setActiveTab] = useAtom(activeApTabAtom)
@@ -73,16 +77,16 @@ export default function ApTabBar() {
   }
 
   const scrollLeft = () => {
-    tabListRef.current?.scrollBy({ left: -150, behavior: 'smooth' })
+    tabListRef.current?.scrollBy({ left: -SCROLL_STEP_PX, behavior: 'smooth' })
   }
   const scrollRight = () => {
-    tabListRef.current?.scrollBy({ left: 150, behavior: 'smooth' })
+    tabListRef.current?.scrollBy({ left: SCROLL_STEP_PX, behavior: 'smooth' })
   }
 
   return (
     <div
       className="flex items-center h-[40px] pl-2 border-b border-[var(--app-border)] flex-shrink-0 gap-1 relative"
-      style={{ WebkitAppRegion: 'drag', paddingRight: '84px' } as React.CSSProperties}
+      style={{ WebkitAppRegion: 'drag', paddingRight: `${RIGHT_CONTROLS_WIDTH_PX}px` } as React.CSSProperties}
     >
       {/* ── Tab area (scrollable, takes remaining space) ── */}
       <div className="flex items-center gap-0.5 flex-1 min-w-0 overflow-hidden">
@@ -150,7 +154,7 @@ export default function ApTabBar() {
               const rect = addBtnRef.current?.getBoundingClientRect()
               if (rect) {
                 // Position menu below the button, right-aligned
-                setMenuPos({ left: rect.right - 160, top: rect.bottom + 4 })
+                setMenuPos({ left: rect.right - ADD_MENU_WIDTH_PX, top: rect.bottom + 4 })
               }
               setAddMenuOpen(!addMenuOpen)
             }}

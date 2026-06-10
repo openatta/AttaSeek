@@ -24,6 +24,10 @@ interface UseTerminalResult {
   containerRef: React.RefObject<HTMLDivElement>
 }
 
+const MAX_FIT_ATTEMPTS = 8
+const FIT_BACKOFF_BASE_MS = 50
+const INITIAL_FIT_DELAY_MS = 50
+
 export function useTerminal({ cwd }: UseTerminalOptions): UseTerminalResult {
   const containerRef = useRef<HTMLDivElement>(null!)
   const terminalRef = useRef<Terminal | null>(null)
@@ -111,12 +115,11 @@ export function useTerminal({ cwd }: UseTerminalOptions): UseTerminalResult {
             if (tid) api.terminal.resize(tid, term.cols, term.rows)
           }
         } catch { /* ignore */ }
-        if (++fitAttempts < 8) {
-          // Exponential backoff: 50, 100, 200, 400, 800, 1600, 3200, 6400ms
-          setTimeout(tryFit, 50 * Math.pow(2, fitAttempts - 1))
+        if (++fitAttempts < MAX_FIT_ATTEMPTS) {
+          setTimeout(tryFit, FIT_BACKOFF_BASE_MS * Math.pow(2, fitAttempts - 1))
         }
       }
-      setTimeout(tryFit, 50)
+      setTimeout(tryFit, INITIAL_FIT_DELAY_MS)
     }).catch((err: Error) => {
       if (!disposed) {
         term.write(`\r\n\x1b[31mTerminal error: ${err.message}\x1b[0m\r\n`)

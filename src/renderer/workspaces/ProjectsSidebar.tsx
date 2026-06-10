@@ -47,10 +47,10 @@ export default function ProjectsSidebar({ selectedSessionId, onSelectSession }: 
     if (!selectedProjectId) return
     const api = getApi()
     api.session.list(undefined, selectedProjectId).then((r) => {
-      if (r.sessions) {
+      if (r.success && r.sessions) {
         setProjectSessions((prev) => ({ ...prev, [selectedProjectId]: r.sessions }))
       }
-    }).catch(() => {})
+    }).catch((err) => { console.warn('[ProjectsSidebar] failed to load sessions:', err) })
   }, [selectedProjectId])
 
   // Activate project context
