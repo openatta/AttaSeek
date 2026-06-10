@@ -37,7 +37,7 @@ export default function ApContainer() {
     <div className={`flex flex-col bg-[var(--app-bg-secondary)] ${fullscreen ? 'flex-1' : ''}`}>
       <ApTabBar />
 
-      {/* Content area — relative for absolute-positioned panes, flex for flex-based panes */}
+      {/* Content area — relative for absolute panes (Terminal), flex column for flex panes (Browser/File/Review) */}
       <div className="flex-1 min-h-0 overflow-hidden relative flex flex-col">
         {currentTab ? (
           <ApPaneHost tab={currentTab} />

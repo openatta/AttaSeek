@@ -99,10 +99,24 @@ export function useTerminal({ cwd }: UseTerminalOptions): UseTerminalResult {
         }
       })
 
-      // Fit after PTY is ready
-      setTimeout(() => {
-        try { fitAddon.fit() } catch { /* ignore */ }
-      }, 100)
+      // Fit after PTY is ready — try at multiple intervals to handle
+      // flex layout settling (the container may not have its final size yet)
+      let fitAttempts = 0
+      const tryFit = () => {
+        if (disposed) return
+        try {
+          if (container.clientHeight > 0 && container.clientWidth > 0) {
+            fitAddon.fit()
+            const tid = terminalIdRef.current
+            if (tid) api.terminal.resize(tid, term.cols, term.rows)
+          }
+        } catch { /* ignore */ }
+        if (++fitAttempts < 8) {
+          // Exponential backoff: 50, 100, 200, 400, 800, 1600, 3200, 6400ms
+          setTimeout(tryFit, 50 * Math.pow(2, fitAttempts - 1))
+        }
+      }
+      setTimeout(tryFit, 50)
     }).catch((err: Error) => {
       if (!disposed) {
         term.write(`\r\n\x1b[31mTerminal error: ${err.message}\x1b[0m\r\n`)
