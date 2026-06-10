@@ -9,6 +9,7 @@
 import { join } from 'path'
 import { readFile, writeFile, mkdir } from 'fs/promises'
 import { dataDir } from './paths'
+import { newId } from './id'
 import type { ProjectInfo } from '../../shared/types/ipc'
 
 function projectsPath(): string {
@@ -37,12 +38,12 @@ export async function createProject(name: string, rootPath: string): Promise<Pro
   const projects = await readProjects()
 
   // Reject duplicate rootPath
-  if (projects.some((p) => p.rootPath === rootPath)) {
-    throw new Error(`目录已被项目 "${projects.find((p) => p.rootPath === rootPath)!.name}" 使用`)
+  const existing = projects.find((p) => p.rootPath === rootPath)
+  if (existing) {
+    throw new Error(`目录已被项目 "${existing.name}" 使用`)
   }
 
-  const id = generateProjectId()
-  const project: ProjectInfo = { id, name, rootPath, createdAt: Date.now() }
+  const project: ProjectInfo = { id: newId().slice(0, 12), name, rootPath, createdAt: Date.now() }
   projects.push(project)
   await writeProjects(projects)
   return project
@@ -66,12 +67,3 @@ export async function removeProject(id: string): Promise<ProjectInfo | null> {
   return removed
 }
 
-/** Generate a short unique project ID */
-function generateProjectId(): string {
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
-  let id = ''
-  for (let i = 0; i < 12; i++) {
-    id += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return `proj_${id}`
-}

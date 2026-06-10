@@ -22,15 +22,6 @@ export default function ProjectCreateDialog({ open, onClose, onCreated }: Props)
 
   const isValid = name.trim().length > 0 && rootPath.trim().length > 0
 
-  const handleSelectDir = async () => {
-    const api = getApi()
-    // Use native directory picker via Electron dialog
-    if (api.fs?.addRoot) {
-      // Fallback: let user type the path manually
-      // In a future iteration, this will open the native file dialog
-    }
-  }
-
   const handleSubmit = async () => {
     if (!isValid) return
     setLoading(true)
@@ -79,21 +70,15 @@ export default function ProjectCreateDialog({ open, onClose, onCreated }: Props)
           <label className="block text-xs text-[var(--app-text-secondary)] mb-1">
             项目目录 <span className="text-[var(--app-error)]">*</span>
           </label>
-          <div className="flex gap-2 mb-1">
+          <div className="mb-1">
             <input
               type="text"
               value={rootPath}
               onChange={(e) => setRootPath(e.target.value)}
               placeholder="/Users/xbits/MyApp"
-              className="flex-1 h-[28px] px-2 text-xs bg-[var(--app-bg-primary)] border border-[var(--app-border)] rounded text-[var(--app-text-primary)] outline-none focus:border-[var(--app-accent)]"
+              className="w-full h-[28px] px-2 text-xs bg-[var(--app-bg-primary)] border border-[var(--app-border)] rounded text-[var(--app-text-primary)] outline-none focus:border-[var(--app-accent)]"
               onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit() }}
             />
-            <button
-              onClick={handleSelectDir}
-              className="px-3 py-0 text-xs rounded border border-[var(--app-border)] text-[var(--app-text-secondary)] hover:bg-[var(--app-bg-hover)] transition-colors"
-            >
-              选择
-            </button>
           </div>
 
           {error && (

@@ -37,7 +37,7 @@ export default function ProjectsSidebar({ selectedSessionId, onSelectSession }: 
     const api = getApi()
     api.project.list().then((r) => {
       if (r.success && r.projects) setProjects(r.projects)
-    }).catch(() => {})
+    }).catch((err) => { console.warn('[ProjectsSidebar] failed to load projects:', err) })
   }, [setProjects])
 
   // Load sessions for selected project
