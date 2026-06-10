@@ -34,7 +34,7 @@ export default function ApContainer() {
   const currentTab = tabs.find((t) => t.id === activeTab)
 
   return (
-    <div className={`flex flex-col bg-[var(--app-bg-secondary)] ${fullscreen ? 'flex-1' : ''}`}>
+    <div className={`flex flex-col bg-[var(--app-bg-secondary)] h-full ${fullscreen ? 'flex-1' : ''}`}>
       <ApTabBar />
 
       {/* Content area — relative for absolute panes (Terminal), flex column for flex panes (Browser/File/Review) */}
