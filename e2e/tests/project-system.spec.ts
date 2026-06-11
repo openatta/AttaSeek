@@ -239,11 +239,23 @@ test.describe('Project System', () => {
   })
 
   test('P11: Switch between two projects — correct highlight and sessions', async ({ page }) => {
+    // Pre-set projects AND a projectId-aware session.list mock
     await page.evaluate(() => {
       ;(window as any).__mockProjects__ = [
         { id: 'proj-a', name: 'ProjectA', rootPath: '/tmp/a', createdAt: Date.now() },
         { id: 'proj-b', name: 'ProjectB', rootPath: '/tmp/b', createdAt: Date.now() },
       ]
+      // Replace session.list with a projectId-aware mock
+      const allSessions = [
+        { id: 'sa', title: 'Session A', activity: 'projects', projectId: 'proj-a', createdAt: 1, updatedAt: 1 },
+        { id: 'sb', title: 'Session B', activity: 'projects', projectId: 'proj-b', createdAt: 1, updatedAt: 1 },
+      ]
+      ;(window as any).api.session.list = (_activity: any, projectId: any) => {
+        const filtered = projectId !== undefined
+          ? allSessions.filter((s: any) => s.projectId === projectId)
+          : allSessions
+        return Promise.resolve({ success: true, sessions: filtered })
+      }
     })
 
     await page.locator('button[aria-label="Projects"]').click()
@@ -251,28 +263,15 @@ test.describe('Project System', () => {
 
     // Click ProjectA
     await page.getByText('ProjectA').first().click()
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(400)
 
-    // Give ProjectA a session via mock
-    await page.evaluate(() => {
-      ;(window as any).api.session.list = () =>
-        Promise.resolve({ success: true, sessions: [
-          { id: 'sa', title: 'Session A', activity: 'projects', projectId: 'proj-a', createdAt: 1, updatedAt: 1 }
-        ]})
-    })
+    // Session A should appear under ProjectA
+    await expect(page.getByText('Session A').first()).toBeVisible({ timeout: 5000 })
 
     // Click ProjectB
     await page.getByText('ProjectB').first().click()
-    await page.waitForTimeout(300)
-
-    await page.evaluate(() => {
-      ;(window as any).api.session.list = () =>
-        Promise.resolve({ success: true, sessions: [
-          { id: 'sb', title: 'Session B', activity: 'projects', projectId: 'proj-b', createdAt: 1, updatedAt: 1 }
-        ]})
-    })
-
     await page.waitForTimeout(400)
+
     // Session B should appear (not Session A)
     await expect(page.getByText('Session B').first()).toBeVisible({ timeout: 5000 })
   })
