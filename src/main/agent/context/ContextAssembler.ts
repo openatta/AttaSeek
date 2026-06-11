@@ -177,7 +177,7 @@ export class ContextAssembler {
 
     // ── User context (CLAUDE.md, memories, skills) ──
     const userContext: Record<string, string> = {}
-    const memoryContext = await this.buildMemoryContext(sessionId, projectId, goal)
+    const memoryContext = await this.buildMemoryContext(sessionId, projectId, this.config.cwd, goal)
     if (memoryContext) userContext.memory = memoryContext
 
     const skillContext = this.buildSkillContext(goal)
@@ -305,11 +305,12 @@ export class ContextAssembler {
   private async buildMemoryContext(
     sessionId: string,
     projectId?: string,
+    projectRoot?: string,
     goal?: string,
   ): Promise<string> {
     const parts: string[] = []
 
-    // L2: SQLite memory
+    // L2: JSONL memory (scope = projectId)
     const recall = this.deps.recallMemories ?? (async (params) => {
       const entries = await memoryService.recall(params)
       return entries.map(e => ({ type: e.type, content: e.content }))
@@ -323,15 +324,15 @@ export class ContextAssembler {
       parts.push(entries.map(e => `- [${e.type}] ${e.content}`).join('\n'))
     }
 
-    // L0: File system memory
-    if (this.config.includeFileMemories && projectId) {
+    // L0: File system memory (CLAUDE.md + .atta/seek/memories/)
+    if (this.config.includeFileMemories && projectRoot) {
       try {
-        const fileEntries = await loadFileMemories(projectId)
+        const fileEntries = await loadFileMemories(projectRoot)
         if (fileEntries.length > 0) {
-          const memEntries = toMemoryEntries(fileEntries, 'project', projectId)
+          const memEntries = toMemoryEntries(fileEntries, 'project', projectId || projectRoot)
           parts.push(memEntries.map(e => `- [${e.type}] ${e.content.slice(0, 500)}`).join('\n'))
         }
-      } catch { /* best-effort */ }
+      } catch (err) { console.warn('[ContextAssembler] failed to load file memories:', err instanceof Error ? err.message : String(err)) }
     }
 
     return parts.join('\n')

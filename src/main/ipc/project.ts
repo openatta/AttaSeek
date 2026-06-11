@@ -64,6 +64,8 @@ export function registerProjectHandlers(): void {
         for (const task of tasks) {
           if (agentRuntime.cancelTask(task.id)) cancelledCount++
         }
+        // Close the session's QueryEngine to release memory and event listeners
+        agentRuntime.closeSession(s.id)
       }
 
       // 2. Delete sessions from global store

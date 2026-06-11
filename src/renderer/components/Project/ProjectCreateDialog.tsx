@@ -3,7 +3,7 @@
  * Requires: project name (non-empty) + project directory (must exist and be writable).
  */
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { getApi } from '../../utils/api'
 
 interface Props {
@@ -17,13 +17,15 @@ export default function ProjectCreateDialog({ open, onClose, onCreated }: Props)
   const [rootPath, setRootPath] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const submittingRef = useRef(false)
 
   if (!open) return null
 
   const isValid = name.trim().length > 0 && rootPath.trim().length > 0
 
   const handleSubmit = async () => {
-    if (!isValid) return
+    if (!isValid || submittingRef.current) return
+    submittingRef.current = true
     setLoading(true)
     setError('')
 
@@ -48,6 +50,7 @@ export default function ProjectCreateDialog({ open, onClose, onCreated }: Props)
       }
     } finally {
       setLoading(false)
+      submittingRef.current = false
     }
   }
 

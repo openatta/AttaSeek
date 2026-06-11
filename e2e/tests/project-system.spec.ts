@@ -452,4 +452,76 @@ test.describe('Project System', () => {
     // Verify at least the PROJECTS sidebar is still visible (component didn't crash)
     await expect(page.locator('text=PROJECTS').first()).toBeVisible({ timeout: 3000 })
   })
+
+  test('P20: Rapid project switch — sessions stay correct (BUG4 regression)', async ({ page }) => {
+    await page.evaluate(() => {
+      ;(window as any).__mockProjects__ = [
+        { id: 'p-fast-a', name: 'FastA', rootPath: '/tmp/a', createdAt: Date.now() },
+        { id: 'p-fast-b', name: 'FastB', rootPath: '/tmp/b', createdAt: Date.now() },
+      ]
+      const allSessions = [
+        { id: 'sa', title: 'Session A1', activity: 'projects', projectId: 'p-fast-a', createdAt: 1, updatedAt: 1 },
+        { id: 'sb', title: 'Session B1', activity: 'projects', projectId: 'p-fast-b', createdAt: 1, updatedAt: 1 },
+      ]
+      ;(window as any).api.session.list = (_a: any, projectId: any) => {
+        if (projectId !== undefined) {
+          return Promise.resolve({ success: true, sessions: allSessions.filter((s: any) => s.projectId === projectId) })
+        }
+        return Promise.resolve({ success: true, sessions: allSessions })
+      }
+    })
+
+    await page.locator('button[aria-label="Projects"]').click()
+    await page.waitForTimeout(500)
+
+    // Click FastA, then immediately click FastB (simulating rapid switch)
+    await page.getByText('FastA').first().click()
+    await page.getByText('FastB').first().click()
+    await page.waitForTimeout(600)
+
+    // FastB's session should be visible, NOT FastA's
+    await expect(page.getByText('Session B1').first()).toBeVisible({ timeout: 5000 })
+    // FastA's session must NOT leak into FastB's view
+    await expect(page.getByText('Session A1')).not.toBeVisible({ timeout: 3000 })
+  })
+
+  test('P21: Remove project with AP panel open — panel closes (BUG7 regression)', async ({ page }) => {
+    await page.evaluate(() => {
+      ;(window as any).__mockProjects__ = [{
+        id: 'p-close', name: 'CloseAP', rootPath: '/tmp/apclose', createdAt: Date.now(),
+      }]
+    })
+
+    await page.locator('button[aria-label="Projects"]').click()
+    await page.waitForTimeout(500)
+
+    // Select project and open AP panel
+    await page.getByText('CloseAP').first().click()
+    await page.waitForTimeout(300)
+
+    // Open AP panel
+    const apBtn = page.locator('button[aria-label="Show output area"]')
+    if (await apBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await apBtn.click()
+      await page.waitForTimeout(400)
+    }
+
+    // Right-click and remove project
+    page.on('dialog', (d) => d.accept())
+    await page.getByText('CloseAP').first().click({ button: 'right' })
+    await page.waitForTimeout(300)
+    await page.locator('text=移除').first().click()
+    await page.waitForTimeout(500)
+
+    // Project should be gone
+    await expect(page.getByText('CloseAP')).not.toBeVisible({ timeout: 3000 })
+    // AP panel should have closed or show hide button
+    const hideBtn = page.locator('button[aria-label="Hide output area"]')
+    // Either the hide button is not visible (panel closed) or still visible with empty state
+    const visible = await hideBtn.isVisible({ timeout: 2000 }).catch(() => false)
+    // If still visible, the AP panel content should not show project-specific controls
+    if (visible) {
+      await expect(page.locator('button').filter({ hasText: '文件' }).first()).not.toBeVisible({ timeout: 3000 })
+    }
+  })
 })

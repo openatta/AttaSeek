@@ -11,7 +11,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { useAtom } from 'jotai'
 import { Plus, Trash2 } from 'lucide-react'
 import { projectsAtom, selectedProjectIdAtom } from '../atoms/sessionAtom'
-import { apContextAtom, projectRootAtom } from '../components/Artifact/ApAtoms'
+import { apContextAtom, apVisibleAtom, projectRootAtom } from '../components/Artifact/ApAtoms'
 import { getApi } from '../utils/api'
 import type { ProjectInfo } from '../../shared/types/ipc'
 import type { SessionInfo } from '../../shared/types/AgentTask'
@@ -27,11 +27,13 @@ export default function ProjectsSidebar({ selectedSessionId, onSelectSession }: 
   const [selectedProjectId, setSelectedProjectId] = useAtom(selectedProjectIdAtom)
   const [, setProjectRoot] = useAtom(projectRootAtom)
   const [, setApContext] = useAtom(apContextAtom)
+  const [, setApVisible] = useAtom(apVisibleAtom)
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [projectSessions, setProjectSessions] = useState<Record<string, SessionInfo[]>>({})
   const [contextMenu, setContextMenu] = useState<{ projectId: string; x: number; y: number } | null>(null)
   const [missingDirProjectId, setMissingDirProjectId] = useState<string | null>(null)
+  const [creatingSession, setCreatingSession] = useState(false)
 
   // Load projects on mount
   useEffect(() => {
@@ -46,12 +48,16 @@ export default function ProjectsSidebar({ selectedSessionId, onSelectSession }: 
 
   useEffect(() => {
     if (!selectedProjectId) return
+    let cancelled = false
+    const projectId = selectedProjectId
     const api = getApi()
-    api.session.list(undefined, selectedProjectId).then((r) => {
+    api.session.list(undefined, projectId).then((r) => {
+      if (cancelled) return
       if (r.success && r.sessions) {
-        setProjectSessions((prev) => ({ ...prev, [selectedProjectId]: r.sessions }))
+        setProjectSessions((prev) => ({ ...prev, [projectId]: r.sessions }))
       }
-    }).catch((err) => { console.warn('[ProjectsSidebar] failed to load sessions:', err) })
+    }).catch((err) => { if (!cancelled) console.warn('[ProjectsSidebar] failed to load sessions:', err) })
+    return () => { cancelled = true }
   }, [selectedProjectId])
 
   // Validate selected project's directory still exists
@@ -78,16 +84,21 @@ export default function ProjectsSidebar({ selectedSessionId, onSelectSession }: 
 
   // Create new session in selected project
   const handleCreateSession = useCallback(async () => {
-    if (!selectedProjectId) return
-    const api = getApi()
-    const result = await api.session.create('New Session', 'projects', undefined, selectedProjectId)
-    if (result.session) {
-      setProjectSessions((prev) => {
-        const existing = prev[selectedProjectId] || []
-        return { ...prev, [selectedProjectId]: [result.session!, ...existing] }
-      })
+    if (!selectedProjectId || creatingSession) return
+    setCreatingSession(true)
+    try {
+      const api = getApi()
+      const result = await api.session.create('New Session', 'projects', undefined, selectedProjectId)
+      if (result.session) {
+        setProjectSessions((prev) => {
+          const existing = prev[selectedProjectId] || []
+          return { ...prev, [selectedProjectId]: [result.session!, ...existing] }
+        })
+      }
+    } finally {
+      setCreatingSession(false)
     }
-  }, [selectedProjectId])
+  }, [selectedProjectId, creatingSession])
 
   // Remove project
   const handleRemoveProject = useCallback(async (projectId: string) => {
@@ -100,6 +111,7 @@ export default function ProjectsSidebar({ selectedSessionId, onSelectSession }: 
         setSelectedProjectId(null)
         setProjectRoot(null)
         setApContext('chats')
+        setApVisible(false)
       }
     }
     setContextMenu(null)
@@ -118,7 +130,8 @@ export default function ProjectsSidebar({ selectedSessionId, onSelectSession }: 
         {selectedProjectId && (
           <button
             onClick={handleCreateSession}
-            className="w-6 h-6 flex items-center justify-center rounded text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors"
+            disabled={creatingSession}
+            className="w-6 h-6 flex items-center justify-center rounded text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors disabled:opacity-30"
             title="New session in project"
             aria-label="New Project Session"
           >

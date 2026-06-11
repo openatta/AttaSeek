@@ -19,6 +19,7 @@ const state = vi.hoisted(() => ({
     deleteSession: vi.fn(),
     listBySession: vi.fn(),
     cancelTask: vi.fn(),
+    closeSession: vi.fn(),
   },
   fsAccessOk: true,
   fsRmOk: true,
@@ -49,6 +50,7 @@ vi.mock('../../../src/main/agent/AgentRuntime', () => ({
   agentRuntime: {
     listBySession: (...a: any[]) => state.mock.listBySession(...a),
     cancelTask: (...a: any[]) => state.mock.cancelTask(...a),
+    closeSession: (...a: any[]) => state.mock.closeSession(...a),
   },
 }))
 
