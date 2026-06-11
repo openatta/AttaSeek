@@ -18,12 +18,17 @@ test.describe('FilePane Full (project context)', () => {
     await page.waitForTimeout(800)
   })
 
-  test('T5.1: FilePane sub-header shows root path', async ({ page }) => {
-    // The sub-header should display the project root path
-    const subHeader = page.locator('[class*="h-\\[28px\\]"]').first()
-    await expect(subHeader).toBeVisible({ timeout: 5000 })
-    // Root path should contain the test project directory name
-    await expect(page.locator('text=test-project')).toBeVisible({ timeout: 5000 })
+  test('T5.1: FilePane renders internal tab bar with explorer toggle', async ({ page }) => {
+    // The internal tab bar replaces the old FileSubHeader.
+    // It shows "No open files" placeholder text or an explorer toggle button.
+    // Check for the explorer toggle button (visible when explorer is open).
+    const toggleBtn = page.locator('button[title="Hide Explorer"]').or(
+      page.locator('button[title="Show Explorer"]')
+    )
+    await expect(toggleBtn.first()).toBeVisible({ timeout: 5000 })
+    // The internal tab bar should be present (height 28px + border)
+    const tabBar = page.locator('.h-\\[28px\\].border-b')
+    await expect(tabBar.first()).toBeVisible({ timeout: 5000 })
   })
 
   test('T5.2: FileExplorer renders top-level directories', async ({ page }) => {

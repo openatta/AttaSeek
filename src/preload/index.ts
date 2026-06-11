@@ -173,8 +173,8 @@ const api = {
   fs: {
     readDir: (dirPath: string): Promise<{ success: boolean; entries?: DirEntry[]; error?: string }> =>
       ipcRenderer.invoke('fs:read-dir', { path: dirPath }),
-    readFile: (filePath: string, maxSize?: number): Promise<{ success: boolean; content?: string; size?: number; mime?: string; error?: string }> =>
-      ipcRenderer.invoke('fs:read-file', { path: filePath, maxSize }),
+    readFile: (filePath: string, maxSize?: number, encoding?: 'utf-8' | 'base64'): Promise<{ success: boolean; content?: string; size?: number; mime?: string; encoding?: string; error?: string }> =>
+      ipcRenderer.invoke('fs:read-file', { path: filePath, maxSize, encoding }),
     fileInfo: (filePath: string): Promise<{ success: boolean; exists?: boolean; size?: number; mime?: string; isDir?: boolean; error?: string }> =>
       ipcRenderer.invoke('fs:file-info', { path: filePath }),
     createFile: (filePath: string, content?: string): Promise<{ success: boolean; error?: string }> =>

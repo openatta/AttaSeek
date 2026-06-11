@@ -144,9 +144,9 @@ test.describe('Project System', () => {
     await fileBtn.click()
     await page.waitForTimeout(600)
 
-    // FileSubHeader should show the root path (or "No folder open" fallback)
-    const subHeader = page.locator('text=/No folder open|test-project/')
-    await expect(subHeader.first()).toBeVisible({ timeout: 5000 })
+    // FilePane should show internal tab bar with "No open files" state
+    const noFiles = page.locator('text=No open files')
+    await expect(noFiles.first()).toBeVisible({ timeout: 5000 })
   })
 
   test('P7: FilePane — Explorer renders entries', async ({ page }) => {

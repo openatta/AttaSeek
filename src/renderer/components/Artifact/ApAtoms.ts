@@ -29,6 +29,12 @@ export const apContextAtom = atom<ApContext>('chats')
 /** Whether a browser Pane instance is currently open (single-instance guard) */
 export const browserInstanceAtom = atom(false)
 
+/** Whether a file Pane instance is currently open (single-instance guard) */
+export const fileInstanceAtom = atom(false)
+
+/** Whether a review Pane instance is currently open (single-instance guard) */
+export const reviewInstanceAtom = atom(false)
+
 /** Project root path — null when no project is open */
 export const projectRootAtom = atom<string | null>(null)
 

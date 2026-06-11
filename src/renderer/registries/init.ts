@@ -84,8 +84,8 @@ export function initializeRegistries(): void {
 
   registerPane({ type: 'browser',  component: BrowserPane,  label: '浏览器', icon: '🌐', constraints: { singleInstance: true,  requireProject: false } })
   registerPane({ type: 'terminal', component: TerminalPane, label: '终端',   icon: '>_', constraints: { singleInstance: false, requireProject: false } })
-  registerPane({ type: 'file',     component: FilePane,     label: '文件',   icon: '📂', constraints: { singleInstance: false, requireProject: true  } })
-  registerPane({ type: 'review',   component: ReviewPane,   label: '审查',   icon: '📊', constraints: { singleInstance: false, requireProject: true  } })
+  registerPane({ type: 'file',     component: FilePane,     label: '文件',   icon: '📂', constraints: { singleInstance: true, requireProject: true  } })
+  registerPane({ type: 'review',   component: ReviewPane,   label: '审查',   icon: '📊', constraints: { singleInstance: true, requireProject: true  } })
 
   console.log('[registries] initialized — 7 activities, 5 sidebars, 6 renderers, 4 panes')
 }

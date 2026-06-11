@@ -59,7 +59,7 @@ export function registerFilesystemHandlers(): void {
     })
   })
 
-  ipcMain.handle('fs:read-file', async (_e, p: { path: string; maxSize?: number }) => {
+  ipcMain.handle('fs:read-file', async (_e, p: { path: string; maxSize?: number; encoding?: 'utf-8' | 'base64' }) => {
     return ipcWrapAsync(async () => {
       validateRequiredString(p, 'path', 'path')
       const filePath = validatePath(p.path)
@@ -68,9 +68,12 @@ export function registerFilesystemHandlers(): void {
       if (stat.size > maxSize) {
         throw new Error(`File too large (${(stat.size / 1024 / 1024).toFixed(1)}MB > ${(maxSize / 1024 / 1024).toFixed(0)}MB limit)`)
       }
-      const content = await fs.readFile(filePath, 'utf-8')
+      const encoding = p.encoding || 'utf-8'
+      const content = encoding === 'base64'
+        ? (await fs.readFile(filePath)).toString('base64')
+        : await fs.readFile(filePath, 'utf-8')
       const mime = getMimeType(filePath) || 'application/octet-stream'
-      return { content, size: stat.size, mime }
+      return { content, size: stat.size, mime, encoding }
     })
   })
 

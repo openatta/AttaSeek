@@ -11,7 +11,7 @@
 
 import { useEffect } from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
-import { apTabsAtom, activeApTabAtom, browserInstanceAtom, apVisibleAtom, apFullscreenAtom } from './ApAtoms'
+import { apTabsAtom, activeApTabAtom, browserInstanceAtom, fileInstanceAtom, reviewInstanceAtom, apVisibleAtom, apFullscreenAtom } from './ApAtoms'
 import ApTabBar from './ApTabBar'
 import ApEmptyState from './ApEmptyState'
 import ApPaneHost from './ApPaneHost'
@@ -22,12 +22,16 @@ export default function ApContainer() {
   const visible = useAtomValue(apVisibleAtom)
   const fullscreen = useAtomValue(apFullscreenAtom)
   const setHasBrowser = useSetAtom(browserInstanceAtom)
+  const setHasFile = useSetAtom(fileInstanceAtom)
+  const setHasReview = useSetAtom(reviewInstanceAtom)
 
-  // Sync browser instance atom when tabs change (for single-instance constraint)
+  // Sync single-instance guard atoms when tabs change
   const hasBrowserTab = tabs.some((t) => t.paneType === 'browser')
-  useEffect(() => {
-    setHasBrowser(hasBrowserTab)
-  }, [hasBrowserTab, setHasBrowser])
+  const hasFileTab = tabs.some((t) => t.paneType === 'file')
+  const hasReviewTab = tabs.some((t) => t.paneType === 'review')
+  useEffect(() => { setHasBrowser(hasBrowserTab) }, [hasBrowserTab, setHasBrowser])
+  useEffect(() => { setHasFile(hasFileTab) }, [hasFileTab, setHasFile])
+  useEffect(() => { setHasReview(hasReviewTab) }, [hasReviewTab, setHasReview])
 
   if (!visible) return null
 
