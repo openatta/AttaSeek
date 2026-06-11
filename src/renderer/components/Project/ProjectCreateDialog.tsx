@@ -79,15 +79,26 @@ export default function ProjectCreateDialog({ open, onClose, onCreated }: Props)
           <label className="block text-xs text-[var(--app-text-secondary)] mb-1">
             项目目录 <span className="text-[var(--app-error)]">*</span>
           </label>
-          <div className="mb-1">
+          <div className="flex gap-2 mb-1">
             <input
               type="text"
               value={rootPath}
               onChange={(e) => setRootPath(e.target.value)}
               placeholder="/Users/xbits/MyApp"
-              className="w-full h-[28px] px-2 text-xs bg-[var(--app-bg-primary)] border border-[var(--app-border)] rounded text-[var(--app-text-primary)] outline-none focus:border-[var(--app-accent)]"
+              className="flex-1 h-[28px] px-2 text-xs bg-[var(--app-bg-primary)] border border-[var(--app-border)] rounded text-[var(--app-text-primary)] outline-none focus:border-[var(--app-accent)]"
               onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit() }}
             />
+            <button
+              type="button"
+              onClick={async () => {
+                const api = getApi()
+                const r = await api.app.selectDir()
+                if (r.success && !r.canceled && r.path) setRootPath(r.path)
+              }}
+              className="px-3 h-[28px] text-xs rounded border border-[var(--app-border)] text-[var(--app-text-secondary)] hover:bg-[var(--app-bg-hover)] transition-colors flex-shrink-0"
+            >
+              选择...
+            </button>
           </div>
 
           {error && (

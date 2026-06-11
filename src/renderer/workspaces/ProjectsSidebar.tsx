@@ -1,17 +1,25 @@
 /**
  * ProjectsSidebar — project list + per-project session tree.
  *
- * Level 1: list of all projects. Click to select/activate.
- * Level 2 (when project selected): sessions for that project.
+ * Layout:
+ *   PROJECTS                        [+]
+ *   ───────────────────────────────────
+ *   ● ProjectA  (3)  [+]  [⋯]         ← row buttons on selected project
+ *     └─ Debug API crash
+ *     └─ Refactor auth module
+ *   ○ ProjectB  (0)
+ *   ○ ProjectC  (1)
  *
- * Replaces the old mock-based implementation with real IPC calls.
+ * Session creation uses temp IDs (like CHATS) — only appears in
+ * sidebar when the first message is sent and SessionTitleGenerated fires.
  */
 
 import { useState, useCallback, useEffect } from 'react'
-import { useAtom } from 'jotai'
-import { Plus, Trash2 } from 'lucide-react'
-import { projectsAtom, selectedProjectIdAtom } from '../atoms/sessionAtom'
+import { useAtom, useSetAtom } from 'jotai'
+import { Plus, MoreVertical, Trash2 } from 'lucide-react'
+import { projectsAtom, selectedProjectIdAtom, currentSessionIdAtom, sessionEventsAtom } from '../atoms/sessionAtom'
 import { apContextAtom, apVisibleAtom, projectRootAtom } from '../components/Artifact/ApAtoms'
+import { createTempSessionId } from '../../shared/constants'
 import { getApi } from '../utils/api'
 import type { ProjectInfo } from '../../shared/types/ipc'
 import type { SessionInfo } from '../../shared/types/AgentTask'
@@ -28,12 +36,13 @@ export default function ProjectsSidebar({ selectedSessionId, onSelectSession }: 
   const [, setProjectRoot] = useAtom(projectRootAtom)
   const [, setApContext] = useAtom(apContextAtom)
   const [, setApVisible] = useAtom(apVisibleAtom)
+  const setCurrentSessionId = useSetAtom(currentSessionIdAtom)
+  const setSessionEvents = useSetAtom(sessionEventsAtom)
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [projectSessions, setProjectSessions] = useState<Record<string, SessionInfo[]>>({})
-  const [contextMenu, setContextMenu] = useState<{ projectId: string; x: number; y: number } | null>(null)
+  const [projectMenu, setProjectMenu] = useState<{ projectId: string; x: number; y: number } | null>(null)
   const [missingDirProjectId, setMissingDirProjectId] = useState<string | null>(null)
-  const [creatingSession, setCreatingSession] = useState(false)
 
   // Load projects on mount
   useEffect(() => {
@@ -82,23 +91,12 @@ export default function ProjectsSidebar({ selectedSessionId, onSelectSession }: 
     setApContext('project')
   }, [setSelectedProjectId, setProjectRoot, setApContext])
 
-  // Create new session in selected project
-  const handleCreateSession = useCallback(async () => {
-    if (!selectedProjectId || creatingSession) return
-    setCreatingSession(true)
-    try {
-      const api = getApi()
-      const result = await api.session.create('New Session', 'projects', undefined, selectedProjectId)
-      if (result.session) {
-        setProjectSessions((prev) => {
-          const existing = prev[selectedProjectId] || []
-          return { ...prev, [selectedProjectId]: [result.session!, ...existing] }
-        })
-      }
-    } finally {
-      setCreatingSession(false)
-    }
-  }, [selectedProjectId, creatingSession])
+  // Create new session (temp ID — like CHATS, only persists on first message)
+  const handleCreateSession = useCallback((projectId: string) => {
+    const tempId = createTempSessionId()
+    setCurrentSessionId(tempId)
+    setSessionEvents([])
+  }, [setCurrentSessionId, setSessionEvents])
 
   // Remove project
   const handleRemoveProject = useCallback(async (projectId: string) => {
@@ -114,33 +112,38 @@ export default function ProjectsSidebar({ selectedSessionId, onSelectSession }: 
         setApVisible(false)
       }
     }
-    setContextMenu(null)
-  }, [selectedProjectId, setProjects, setSelectedProjectId, setProjectRoot, setApContext])
+    setProjectMenu(null)
+  }, [selectedProjectId, setProjects, setSelectedProjectId, setProjectRoot, setApContext, setApVisible])
+
+  // Subscribe to session updates (new sessions appear when first message is sent)
+  useEffect(() => {
+    const api = getApi()
+    const unsubscribe = api.session.onUpdate((data: { id: string; title: string }) => {
+      // Refresh sessions for current project when a session gets its first title
+      if (selectedProjectId) {
+        api.session.list(undefined, selectedProjectId).then((r) => {
+          if (r.success && r.sessions) {
+            setProjectSessions((prev) => ({ ...prev, [selectedProjectId]: r.sessions }))
+          }
+        }).catch(() => {})
+      }
+    })
+    return unsubscribe
+  }, [selectedProjectId])
 
   const sessions = selectedProjectId ? (projectSessions[selectedProjectId] || []) : []
 
   return (
     <div className="flex flex-col h-full">
-      {/* Title row */}
+      {/* Title row — only one [+] for adding projects */}
       <div className="flex items-center px-4 pb-2">
         <h2 className="text-xs font-semibold text-[var(--app-text-secondary)] uppercase tracking-wider">
           PROJECTS
         </h2>
         <div className="flex-1" />
-        {selectedProjectId && (
-          <button
-            onClick={handleCreateSession}
-            disabled={creatingSession}
-            className="w-6 h-6 flex items-center justify-center rounded text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors disabled:opacity-30"
-            title="New session in project"
-            aria-label="New Project Session"
-          >
-            <Plus className="w-4 h-4" />
-          </button>
-        )}
         <button
           onClick={() => setDialogOpen(true)}
-          className="w-6 h-6 flex items-center justify-center rounded text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors ml-1"
+          className="w-6 h-6 flex items-center justify-center rounded text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors"
           title="New Project"
           aria-label="New Project"
         >
@@ -174,24 +177,51 @@ export default function ProjectsSidebar({ selectedSessionId, onSelectSession }: 
           <div className="px-2">
             {projects.map((project) => (
               <div key={project.id}>
-                <button
-                  onClick={() => activateProject(project)}
-                  onContextMenu={(e) => {
-                    e.preventDefault()
-                    setContextMenu({ projectId: project.id, x: e.clientX, y: e.clientY })
-                  }}
-                  className={`w-full flex items-center gap-2 px-2 py-2 rounded text-xs transition-colors text-left ${
+                {/* Project row */}
+                <div
+                  className={`group flex items-center gap-2 px-2 py-2 rounded text-xs transition-colors ${
                     selectedProjectId === project.id
                       ? 'bg-[var(--app-bg-active)] text-[var(--app-text)]'
                       : 'text-[var(--app-text-secondary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)]'
                   }`}
                 >
-                  <span className="text-[10px]">{selectedProjectId === project.id ? '●' : '○'}</span>
-                  <span className="flex-1 truncate">{project.name}</span>
-                  <span className="text-[10px] text-[var(--app-text-dim)]">
-                    {(projectSessions[project.id] || []).length}
-                  </span>
-                </button>
+                  <button
+                    onClick={() => activateProject(project)}
+                    className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                  >
+                    <span className="text-[10px] flex-shrink-0">{selectedProjectId === project.id ? '●' : '○'}</span>
+                    <span className="flex-1 truncate">{project.name}</span>
+                    <span className="text-[10px] text-[var(--app-text-dim)] flex-shrink-0">
+                      {(projectSessions[project.id] || []).length}
+                    </span>
+                  </button>
+
+                  {/* Row actions (visible on selected project) */}
+                  {selectedProjectId === project.id && (
+                    <div className="flex items-center gap-0.5 flex-shrink-0">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleCreateSession(project.id) }}
+                        className="w-5 h-5 flex items-center justify-center rounded text-[var(--app-text-tertiary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors"
+                        title="New session"
+                        aria-label="New Project Session"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          const rect = (e.target as HTMLElement).getBoundingClientRect()
+                          setProjectMenu({ projectId: project.id, x: rect.left, y: rect.bottom + 4 })
+                        }}
+                        className="w-5 h-5 flex items-center justify-center rounded text-[var(--app-text-tertiary)] hover:text-[var(--app-text)] hover:bg-[var(--app-bg-hover)] transition-colors"
+                        title="Project menu"
+                        aria-label="Project menu"
+                      >
+                        <MoreVertical className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+                </div>
 
                 {/* Sessions under this project (only for selected project) */}
                 {selectedProjectId === project.id && (
@@ -223,19 +253,19 @@ export default function ProjectsSidebar({ selectedSessionId, onSelectSession }: 
         )}
       </div>
 
-      {/* Context menu */}
-      {contextMenu && (
+      {/* Project menu dropdown (⋯) */}
+      {projectMenu && (
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setContextMenu(null)} />
+          <div className="fixed inset-0 z-40" onClick={() => setProjectMenu(null)} />
           <div
-            className="fixed z-50 w-36 bg-[var(--app-bg-elevated)] border border-[var(--app-border)] rounded-lg shadow-lg py-1"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
+            className="fixed z-50 w-40 bg-[var(--app-bg-elevated)] border border-[var(--app-border)] rounded-lg shadow-lg py-1"
+            style={{ left: projectMenu.x, top: projectMenu.y }}
           >
             <button
-              onClick={() => handleRemoveProject(contextMenu.projectId)}
+              onClick={() => handleRemoveProject(projectMenu.projectId)}
               className="w-full text-left px-3 py-1.5 text-xs text-[var(--app-error)] hover:bg-[var(--app-bg-hover)] flex items-center gap-2"
             >
-              <Trash2 className="w-3 h-3" /> 移除
+              <Trash2 className="w-3 h-3" /> 删除项目
             </button>
           </div>
         </>
@@ -246,7 +276,6 @@ export default function ProjectsSidebar({ selectedSessionId, onSelectSession }: 
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         onCreated={() => {
-          // Reload project list
           getApi().project.list().then((r) => {
             if (r.success && r.projects) setProjects(r.projects)
           }).catch(() => {})

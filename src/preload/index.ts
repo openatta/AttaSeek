@@ -161,12 +161,14 @@ const api = {
       ipcRenderer.invoke('question:respond', { questionId, answer }),
   },
 
-  // App state persistence
+  // App state persistence + native dialogs
   app: {
     getState: (key: string): Promise<{ success: boolean; value: string | null }> =>
       ipcRenderer.invoke('app:get-state', key),
     setState: (key: string, value: string): Promise<{ success: boolean }> =>
       ipcRenderer.invoke('app:set-state', { key, value }),
+    selectDir: (): Promise<{ success: boolean; canceled?: boolean; path?: string | null; error?: string }> =>
+      ipcRenderer.invoke('dialog:select-dir'),
   },
 
   // Filesystem API

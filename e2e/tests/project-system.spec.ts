@@ -71,11 +71,14 @@ test.describe('Project System', () => {
 
   // ── Project Sessions ──────────────────────────────────────
 
-  test('P4: [+] creates session under selected project', async ({ page }) => {
+  test('P4: [+] creates temp session (does not appear until first message)', async ({ page }) => {
     await page.evaluate(() => {
       ;(window as any).__mockProjects__ = [{
         id: 'proj-sess-1', name: 'MyApp', rootPath: '/tmp/myapp', createdAt: Date.now(),
       }]
+      // Override session.list to always return empty (no pre-existing sessions)
+      ;(window as any).api.session.list = () =>
+        Promise.resolve({ success: true, sessions: [] })
     })
 
     await page.locator('button[aria-label="Projects"]').click()
@@ -85,19 +88,21 @@ test.describe('Project System', () => {
     await page.getByText('MyApp').first().click()
     await page.waitForTimeout(300)
 
-    // [+] Add session button visible
+    // [+] Add session button visible on project row
     const addBtn = page.locator('button[aria-label="New Project Session"]')
     await expect(addBtn).toBeVisible({ timeout: 3000 })
 
-    // Click to create session
+    // Click to create temp session (like CHATS behavior)
     await addBtn.click()
     await page.waitForTimeout(500)
 
-    // Session appears under project
-    await expect(page.getByText('New Session').first()).toBeVisible({ timeout: 5000 })
+    // No sessions should appear under the project in the sidebar
+    // (temp session only appears when first message is sent)
+    // "No sessions" text should be visible instead
+    await expect(page.getByText('No sessions')).toBeVisible({ timeout: 5000 })
   })
 
-  test('P5: Remove project via context menu', async ({ page }) => {
+  test('P5: Remove project via ⋯ menu', async ({ page }) => {
     await page.evaluate(() => {
       ;(window as any).__mockProjects__ = [{
         id: 'proj-rm', name: 'ToRemove', rootPath: '/tmp/to-remove', createdAt: Date.now(),
@@ -107,16 +112,20 @@ test.describe('Project System', () => {
     await page.locator('button[aria-label="Projects"]').click()
     await page.waitForTimeout(500)
 
-    // Right-click project
-    await page.getByText('ToRemove').first().click({ button: 'right' })
+    // Select project first (row actions only show on selected project)
+    await page.getByText('ToRemove').first().click()
     await page.waitForTimeout(300)
 
-    // Context menu appears
-    await expect(page.locator('text=移除').first()).toBeVisible({ timeout: 3000 })
+    // Click ⋯ menu button
+    await page.locator('button[aria-label="Project menu"]').click()
+    await page.waitForTimeout(300)
+
+    // Menu appears with "删除项目"
+    await expect(page.locator('text=删除项目').first()).toBeVisible({ timeout: 3000 })
 
     // Accept confirm dialog and click remove
     page.on('dialog', (d) => d.accept())
-    await page.locator('text=移除').first().click()
+    await page.locator('text=删除项目').first().click()
     await page.waitForTimeout(500)
 
     // Project gone
@@ -506,11 +515,11 @@ test.describe('Project System', () => {
       await page.waitForTimeout(400)
     }
 
-    // Right-click and remove project
+    // Click ⋯ menu and remove project
     page.on('dialog', (d) => d.accept())
-    await page.getByText('CloseAP').first().click({ button: 'right' })
+    await page.locator('button[aria-label="Project menu"]').click()
     await page.waitForTimeout(300)
-    await page.locator('text=移除').first().click()
+    await page.locator('text=删除项目').first().click()
     await page.waitForTimeout(500)
 
     // Project should be gone

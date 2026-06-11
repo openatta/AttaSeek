@@ -15,7 +15,8 @@ beforeAll(() => {
   const noop = () => Promise.resolve({})
   ;(globalThis as any).api = {
     project: { create: noop, list: () => Promise.resolve({ success: true, projects: [] }), remove: noop, validate: noop },
-    session: { create: noop, list: () => Promise.resolve({ success: true, sessions: [] }) },
+    session: { create: noop, list: () => Promise.resolve({ success: true, sessions: [] }), onUpdate: () => () => {} },
+    app: { selectDir: noop, getState: noop, setState: noop },
   }
 })
 
