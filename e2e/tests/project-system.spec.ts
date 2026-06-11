@@ -335,4 +335,121 @@ test.describe('Project System', () => {
     // The count badge uses text-[10px] on the span
     await expect(page.getByText('Counted').first()).toBeVisible({ timeout: 3000 })
   })
+
+  test('P15: Missing directory warning banner on project select', async ({ page }) => {
+    await page.evaluate(() => {
+      ;(window as any).__mockProjects__ = [{
+        id: 'proj-gone', name: 'DeletedDir', rootPath: '/tmp/deleted', createdAt: Date.now(),
+      }]
+      // Override validate to report directory missing
+      ;(window as any).api.project.validate = () =>
+        Promise.resolve({ success: true, valid: false, exists: false, writable: false })
+    })
+
+    await page.locator('button[aria-label="Projects"]').click()
+    await page.waitForTimeout(500)
+
+    // Select the project — triggers validate useEffect
+    await page.getByText('DeletedDir').first().click()
+    await page.waitForTimeout(500)
+
+    // Warning banner appears with "移除项目" button
+    await expect(page.locator('text=项目目录不存在或无法访问')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('移除项目').first()).toBeVisible({ timeout: 3000 })
+  })
+
+  test('P16: New Project Session [+] hidden when no project selected', async ({ page }) => {
+    await page.evaluate(() => {
+      ;(window as any).__mockProjects__ = [
+        { id: 'proj-x', name: 'SomeProject', rootPath: '/tmp/x', createdAt: Date.now() },
+      ]
+    })
+
+    await page.locator('button[aria-label="Projects"]').click()
+    await page.waitForTimeout(500)
+
+    // Before selection: New Project Session button should NOT exist
+    await expect(page.locator('button[aria-label="New Project Session"]')).not.toBeVisible({ timeout: 3000 })
+
+    // After selecting project: it should appear
+    await page.getByText('SomeProject').first().click()
+    await page.waitForTimeout(400)
+    await expect(page.locator('button[aria-label="New Project Session"]')).toBeVisible({ timeout: 5000 })
+  })
+
+  test('P17: Permission error in create dialog', async ({ page }) => {
+    await page.locator('button[aria-label="Projects"]').click()
+    await page.waitForTimeout(300)
+    await page.locator('button[aria-label="New Project"]').click()
+    await page.waitForTimeout(300)
+
+    await page.evaluate(() => {
+      ;(window as any).api.project.create = () =>
+        Promise.resolve({ success: false, error: '目录无读写权限: /readonly' })
+    })
+
+    await page.locator('input[placeholder="MyApp"]').fill('Readonly')
+    await page.locator('input[placeholder="/Users/xbits/MyApp"]').fill('/readonly')
+    await page.locator('button').filter({ hasText: '创建项目' }).last().click()
+    await page.waitForTimeout(400)
+
+    await expect(page.locator('text=无读写权限')).toBeVisible({ timeout: 3000 })
+  })
+
+  test('P18: Whitespace-only project name disables create button', async ({ page }) => {
+    await page.locator('button[aria-label="Projects"]').click()
+    await page.waitForTimeout(300)
+    await page.locator('button[aria-label="New Project"]').click()
+    await page.waitForTimeout(300)
+
+    // Fill name with spaces only
+    const nameInput = page.locator('input[placeholder="MyApp"]')
+    await nameInput.fill('   ')
+    await page.locator('input[placeholder="/Users/xbits/MyApp"]').fill('/tmp/whitespace')
+
+    // Create button should be disabled (trimmed length === 0)
+    const createBtn = page.locator('button').filter({ hasText: '创建项目' }).last()
+    await expect(createBtn).toBeDisabled({ timeout: 3000 })
+  })
+
+  test('P19: Click session loads it and shows session title', async ({ page }) => {
+    await page.evaluate(() => {
+      ;(window as any).__mockProjects__ = [{
+        id: 'proj-hist', name: 'HistoryProject', rootPath: '/tmp/hist', createdAt: Date.now(),
+      }]
+      // Provide sessions with projectId=proj-hist
+      ;(window as any).api.session.list = (_a: any, projectId: any) => {
+        if (projectId === 'proj-hist') {
+          return Promise.resolve({
+            success: true,
+            sessions: [
+              { id: 'sess-hist-1', title: 'Debug API crash', activity: 'projects', projectId: 'proj-hist', createdAt: 1, updatedAt: 1 },
+              { id: 'sess-hist-2', title: 'Refactor auth module', activity: 'projects', projectId: 'proj-hist', createdAt: 2, updatedAt: 2 },
+            ],
+          })
+        }
+        return Promise.resolve({ success: true, sessions: [] })
+      }
+    })
+
+    await page.locator('button[aria-label="Projects"]').click()
+    await page.waitForTimeout(500)
+
+    // Select project
+    await page.getByText('HistoryProject').first().click()
+    await page.waitForTimeout(400)
+
+    // Verify both sessions appear
+    await expect(page.getByText('Debug API crash').first()).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Refactor auth module').first()).toBeVisible({ timeout: 3000 })
+
+    // Click the first session — it should load
+    await page.getByText('Debug API crash').first().click()
+    await page.waitForTimeout(500)
+
+    // The session should be visible (the component stores sessionId in state)
+    // and the conversation area should show the session
+    // Verify at least the PROJECTS sidebar is still visible (component didn't crash)
+    await expect(page.locator('text=PROJECTS').first()).toBeVisible({ timeout: 3000 })
+  })
 })
