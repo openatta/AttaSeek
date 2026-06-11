@@ -23,7 +23,8 @@ interface Props {
 }
 
 function isImage(mime?: string): boolean {
-  return !!mime && mime.startsWith('image/') && !mime.includes('svg')
+  // SVG rendered via <img> for XSS safety (inline SVG can contain <script>)
+  return !!mime && mime.startsWith('image/')
 }
 
 function isPdf(mime?: string): boolean {

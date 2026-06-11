@@ -3,7 +3,7 @@
  *
  * Filters by:
  * - Context: CHATS vs project (requireProject constraint)
- * - Single-instance: browser doesn't appear if already open
+ * - Single-instance: file/browser/review filtered out if already open
  *
  * Used by ApEmptyState (big buttons) and ApTabBar ([+] menu).
  */

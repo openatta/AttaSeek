@@ -12,7 +12,7 @@
  * FileSubHeader deleted — path bar removed, tab bar takes its place.
  */
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback } from 'react'
 import { useAtomValue } from 'jotai'
 import { projectRootAtom } from '../../ApAtoms'
 import { X, PanelRightClose, PanelRightOpen } from 'lucide-react'
@@ -36,10 +36,7 @@ export default function FilePane(_props: PaneProps) {
   const [openTabs, setOpenTabs] = useState<FileTab[]>([])
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
 
-  const activeTab = useMemo(
-    () => openTabs.find((t) => t.id === activeTabId) || null,
-    [openTabs, activeTabId],
-  )
+  const activeTab = activeTabId ? openTabs.find((t) => t.id === activeTabId) || null : null
 
   const openFile = useCallback((filePath: string) => {
     const existing = openTabs.find((t) => t.path === filePath)
@@ -59,12 +56,14 @@ export default function FilePane(_props: PaneProps) {
   const closeTab = useCallback((tabId: string) => {
     setOpenTabs((prev) => {
       const filtered = prev.filter((t) => t.id !== tabId)
-      if (activeTabId === tabId && filtered.length > 0) {
+      // Determine next active tab BEFORE returning (avoids stale closure)
+      if (filtered.length === 0) {
+        // Defer setActiveTabId via microtask to avoid nesting setState calls
+        queueMicrotask(() => setActiveTabId(null))
+      } else if (activeTabId === tabId) {
         const idx = prev.findIndex((t) => t.id === tabId)
         const nextIdx = Math.min(idx, filtered.length - 1)
-        setActiveTabId(filtered[nextIdx].id)
-      } else if (filtered.length === 0) {
-        setActiveTabId(null)
+        queueMicrotask(() => setActiveTabId(filtered[nextIdx].id))
       }
       return filtered
     })

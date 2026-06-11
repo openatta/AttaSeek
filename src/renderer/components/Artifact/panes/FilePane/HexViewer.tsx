@@ -5,7 +5,7 @@
  * in three-column layout: offset | hex values | ASCII.
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { getApi } from '../../../../utils/api'
 
 const BYTES_PER_ROW = 16
@@ -29,7 +29,6 @@ export default function HexViewer({ filePath }: Props) {
 
   useEffect(() => {
     let cancelled = false
-    const name = filePath.split('/').pop() || filePath
     const api = getApi()
 
     api?.fs.readFile(filePath, MAX_HEX_SIZE, 'base64').then((result) => {
@@ -71,15 +70,18 @@ export default function HexViewer({ filePath }: Props) {
     )
   }
 
-  const rows: { offset: number; hex: string[]; ascii: string }[] = []
-  for (let i = 0; i < bytes.length; i += BYTES_PER_ROW) {
-    const chunk = bytes.slice(i, Math.min(i + BYTES_PER_ROW, bytes.length))
-    rows.push({
-      offset: i,
-      hex: Array.from(chunk).map(toHex),
-      ascii: Array.from(chunk).map(toAscii).join(''),
-    })
-  }
+  const rows = useMemo(() => {
+    const result: { offset: number; hex: string[]; ascii: string }[] = []
+    for (let i = 0; i < bytes.length; i += BYTES_PER_ROW) {
+      const chunk = bytes.slice(i, Math.min(i + BYTES_PER_ROW, bytes.length))
+      result.push({
+        offset: i,
+        hex: Array.from(chunk).map(toHex),
+        ascii: Array.from(chunk).map(toAscii).join(''),
+      })
+    }
+    return result
+  }, [bytes])
 
   return (
     <div className="h-full overflow-auto bg-[#1e1e1e] font-mono text-xs">
