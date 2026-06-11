@@ -87,12 +87,20 @@ export function registerProjectHandlers(): void {
       } catch (err) { console.warn('[project:remove] failed to remove .atta/seek/:', err instanceof Error ? err.message : String(err)) }
       try {
         const attaDir = resolve(project.rootPath, '.atta')
-        const files = await stat(attaDir).then(() => true).catch(() => false)
-        if (files) {
-          // Check if .atta is empty (rmdir fails if not empty)
-          await rmdir(attaDir)
+        const exists = await stat(attaDir).then(() => true).catch(() => false)
+        if (exists) {
+          // Try to remove .atta/ if empty; if it has other content (e.g.,
+          // .atta/memories/ from FileMemory, or user files), leave it.
+          const { readdir } = await import('fs/promises')
+          const remaining = await readdir(attaDir).catch(() => [] as string[])
+          if (remaining.length === 0) {
+            await rmdir(attaDir)
+          } else {
+            console.warn('[project:remove] .atta/ not empty, leaving:', remaining.join(', '))
+          }
         }
-      } catch (err) { console.warn('[project:remove] failed to remove .atta/ (may not be empty):', err instanceof Error ? err.message : String(err)) }
+      } catch (err) { console.warn('[project:remove] failed to clean .atta/:',
+        err instanceof Error ? err.message : String(err)) }
 
       return { success: true, deletedSessions, cancelledTasks: cancelledCount }
     })

@@ -141,4 +141,37 @@ describe('ProjectStore', () => {
     const list = await ProjectStore.listProjects()
     expect(list).toEqual([])
   })
+
+  // ── Unicode names and paths ──
+
+  it('accepts CJK project names', async () => {
+    const p = await ProjectStore.createProject('我的项目', '/tmp/cjk')
+    expect(p.name).toBe('我的项目')
+  })
+
+  it('accepts emoji in project names', async () => {
+    const p = await ProjectStore.createProject('🚀 Launch', '/tmp/emoji')
+    expect(p.name).toBe('🚀 Launch')
+  })
+
+  it('accepts Arabic project names', async () => {
+    const p = await ProjectStore.createProject('مشروع', '/tmp/arabic')
+    expect(p.name).toBe('مشروع')
+  })
+
+  it('accepts combining characters (café)', async () => {
+    const p = await ProjectStore.createProject('café résumé', '/tmp/combining')
+    expect(p.name).toBe('café résumé')
+  })
+
+  it('accepts long project names (up to 256 chars)', async () => {
+    const long = 'a'.repeat(256)
+    const p = await ProjectStore.createProject(long, '/tmp/long')
+    expect(p.name).toBe(long)
+  })
+
+  it('accepts non-ASCII root paths', async () => {
+    const p = await ProjectStore.createProject('Test', '/tmp/路径/项目')
+    expect(p.rootPath).toBe('/tmp/路径/项目')
+  })
 })
