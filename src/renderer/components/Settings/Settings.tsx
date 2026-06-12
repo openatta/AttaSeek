@@ -8,6 +8,7 @@ import PermissionsSettings from './pages/PermissionsSettings'
 import MemorySettings from './pages/MemorySettings'
 import NotificationsSettings from './pages/NotificationsSettings'
 import KeyboardSettings from './pages/KeyboardSettings'
+import UpdateSettings from './pages/UpdateSettings'
 
 const PAGE_MAP: Record<string, React.ComponentType> = {
   general: GeneralSettings,
@@ -18,6 +19,7 @@ const PAGE_MAP: Record<string, React.ComponentType> = {
   memory: MemorySettings,
   keyboard: KeyboardSettings,
   notifications: NotificationsSettings,
+  updates: UpdateSettings,
 }
 
 export default function Settings() {

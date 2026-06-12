@@ -24,12 +24,17 @@ import type { PluginManifest } from '../shared/types/Plugin'
 import type { SkillManifest } from '../shared/types/Skill'
 import type { ToolManifest } from '../shared/types/Tool'
 import type { ModelConfig, CreateModelConfig, ModelConfigPatch, ModelTestResult, UsageStats } from '../shared/types/model'
+import type { UpdateStatus, UpdateManifest, UpdateProgress, UpdateEvent, UpdateSettings } from '../shared/types/update'
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const pkg = require('../../package.json') as { version: string }
 
 const api = {
   platform: process.platform,
   isMac: process.platform === 'darwin',
   isWindows: process.platform === 'win32',
   isLinux: process.platform === 'linux',
+  version: pkg.version,
 
   theme: {
     get: (): Promise<{ theme: string }> => ipcRenderer.invoke('theme:get'),
@@ -241,6 +246,29 @@ const api = {
       const listener = (_event: Electron.IpcRendererEvent, data: { terminalId: string; data: string }) => cb(data)
       ipcRenderer.on('terminal:output', listener)
       return () => ipcRenderer.removeListener('terminal:output', listener)
+    },
+  },
+
+  // Update API
+  update: {
+    check: (): Promise<{ success: boolean; manifest?: UpdateManifest; error?: string }> =>
+      ipcRenderer.invoke('update:check'),
+    download: (): Promise<{ success: boolean; manifest?: UpdateManifest; error?: string }> =>
+      ipcRenderer.invoke('update:download'),
+    install: (): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('update:install'),
+    skipVersion: (version: string): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('update:skip-version', { version }),
+    getStatus: (): Promise<{ success: boolean; status?: UpdateStatus }> =>
+      ipcRenderer.invoke('update:get-status'),
+    getSettings: (): Promise<{ success: boolean; settings?: UpdateSettings }> =>
+      ipcRenderer.invoke('update:get-settings'),
+    setSettings: (patch: Partial<UpdateSettings>): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('update:set-settings', patch),
+    onEvent: (cb: (event: UpdateEvent) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: UpdateEvent) => cb(data)
+      ipcRenderer.on('update:event', listener)
+      return () => ipcRenderer.removeListener('update:event', listener)
     },
   },
 

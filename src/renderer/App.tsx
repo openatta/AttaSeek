@@ -4,6 +4,7 @@ import { I18nProvider, useTranslation } from './i18n'
 import ThemeProvider from './components/ThemeProvider'
 import ErrorBoundary from './components/ErrorBoundary'
 import Shell from './layouts/Shell'
+import UpdateNotification from './components/UpdateNotification'
 import {
   sessionEventsAtom, agentTasksAtom, streamingBuffersAtom,
   sessionTitleStoreAtom, handleAgentEvent, debugLogsAtom,
@@ -111,6 +112,7 @@ function AppContent() {
       <TestHookInjector />
       <ErrorBoundary>
         <Shell />
+        <UpdateNotification />
       </ErrorBoundary>
     </I18nProvider>
   )

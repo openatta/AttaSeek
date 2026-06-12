@@ -20,7 +20,7 @@ export const DEFAULTS: AttaSeekSettings = {
   permissions: { autoReviewMode: 'off' },
   editor: { mode: 'normal', tabSize: 2, wordWrap: true },
   notifications: { taskComplete: true, inputNeeded: true, soundEnabled: false },
-  update: { channel: 'stable', checkOnStartup: true },
+  update: { channel: 'stable', autoDownload: true, checkOnStartup: true },
   import: { fromClaudeCode: true, fromCodexDesktop: true },
   keybindingsPath: '',
 }

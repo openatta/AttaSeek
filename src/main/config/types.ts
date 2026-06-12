@@ -17,7 +17,7 @@ export interface ProjectConfig { defaultTrustLevel: 'untrusted' | 'trusted' }
 export interface PermissionsConfig { autoReviewMode: 'off' | 'read_only' | 'full' }
 export interface EditorConfig { mode: 'normal' | 'vim'; tabSize: number; wordWrap: boolean }
 export interface NotificationsConfig { taskComplete: boolean; inputNeeded: boolean; soundEnabled: boolean }
-export interface UpdateConfig { channel: 'stable' | 'latest' | 'none'; checkOnStartup: boolean }
+export interface UpdateConfig { channel: 'stable' | 'beta' | 'nightly'; autoDownload: boolean; checkOnStartup: boolean }
 export interface ImportConfig { fromClaudeCode: boolean; fromCodexDesktop: boolean }
 
 export interface AttaSeekSettings {

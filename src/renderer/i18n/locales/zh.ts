@@ -5,7 +5,7 @@ export const zh: Record<string, string> = {
 
   'settings.general': '常规', 'settings.appearance': '外观', 'settings.model': '模型',
   'settings.agent': '智能体', 'settings.permissions': '权限', 'settings.memory': '记忆',
-  'settings.keyboard': '快捷键', 'settings.notifications': '通知',
+  'settings.keyboard': '快捷键', 'settings.notifications': '通知', 'settings.updates': '更新',
 
   'general.title': '常规', 'general.language': '语言',
   'general.permissionMode': '权限模式', 'general.permissionMode.desc': '默认的工具审批行为',
@@ -59,6 +59,18 @@ export const zh: Record<string, string> = {
   'notifications.taskComplete': '任务完成', 'notifications.taskComplete.desc': '智能体完成任务时通知',
   'notifications.inputNeeded': '需要输入', 'notifications.inputNeeded.desc': '智能体需要您的输入时通知',
   'notifications.sound': '声音', 'notifications.sound.desc': '通知时播放声音',
+
+  // Updates
+  'updates.title': '更新',
+  'updates.currentVersion': '当前版本',
+  'updates.channel': '更新通道',
+  'updates.channel.desc': '选择要跟随的发布轨道',
+  'updates.autoDownload': '自动下载',
+  'updates.autoDownload.desc': '在后台下载更新',
+  'updates.checkOnStartup': '启动时检查',
+  'updates.checkOnStartup.desc': '启动 AttaSeek 时检查更新',
+  'updates.checking': '检查中…',
+  'updates.checkNow': '检查更新',
 
   'composer.placeholder': '输入任何内容…',
   'composer.send': '发送', 'composer.stop': '停止生成',

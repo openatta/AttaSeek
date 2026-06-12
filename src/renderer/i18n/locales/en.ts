@@ -7,7 +7,7 @@ export const en: Record<string, string> = {
   // Settings sidebar
   'settings.general': 'General', 'settings.appearance': 'Appearance', 'settings.model': 'Model',
   'settings.agent': 'Agent', 'settings.permissions': 'Permissions', 'settings.memory': 'Memory',
-  'settings.keyboard': 'Keyboard', 'settings.notifications': 'Notifications',
+  'settings.keyboard': 'Keyboard', 'settings.notifications': 'Notifications', 'settings.updates': 'Updates',
 
   // General
   'general.title': 'General', 'general.language': 'Language',
@@ -69,6 +69,18 @@ export const en: Record<string, string> = {
   'notifications.taskComplete': 'Task Complete', 'notifications.taskComplete.desc': 'Notify when agent finishes a task',
   'notifications.inputNeeded': 'Input Needed', 'notifications.inputNeeded.desc': 'Notify when agent needs your input',
   'notifications.sound': 'Sound', 'notifications.sound.desc': 'Play sound with notifications',
+
+  // Updates
+  'updates.title': 'Updates',
+  'updates.currentVersion': 'Current version',
+  'updates.channel': 'Update channel',
+  'updates.channel.desc': 'Choose which release track to follow',
+  'updates.autoDownload': 'Auto-download',
+  'updates.autoDownload.desc': 'Download updates in the background',
+  'updates.checkOnStartup': 'Check on startup',
+  'updates.checkOnStartup.desc': 'Check for updates when AttaSeek starts',
+  'updates.checking': 'Checking…',
+  'updates.checkNow': 'Check for updates',
 
   // Composer
   'composer.placeholder': 'Ask anything…',

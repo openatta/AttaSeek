@@ -19,6 +19,8 @@ import { registerFilesystemHandlers } from './ipc/filesystem'
 import { registerGitHandlers } from './ipc/git'
 import { registerTerminalHandlers, setTerminalWindow } from './ipc/terminal'
 import { registerProjectHandlers } from './ipc/project'
+import { registerUpdateHandlers, setUpdateWindow } from './ipc/update'
+import { updateManager } from './update/UpdateManager'
 import { boot } from './boot'
 import { agentEventBus } from './agent/AgentEventBus'
 import { permissionBridge } from './permission/PermissionBridge'
@@ -104,6 +106,7 @@ registerFilesystemHandlers()
 registerGitHandlers()
 registerTerminalHandlers()
 registerProjectHandlers()
+registerUpdateHandlers()
 
 // ── Window management ──
 
@@ -132,7 +135,7 @@ function createWindow(): BrowserWindow {
   mainWindow = win
 
   // Wire agent event bus to this window
-  setAgentWindow(win); setSessionWindow(win); setTerminalWindow(win)
+  setAgentWindow(win); setSessionWindow(win); setTerminalWindow(win); setUpdateWindow(win)
 
   win.on('ready-to-show', () => {
     win.show()
@@ -157,6 +160,9 @@ function createWindow(): BrowserWindow {
 
 app.whenReady().then(() => {
   createWindow()
+
+  // Start update manager after window is created so push events reach the renderer
+  updateManager.start().catch((err) => console.warn('[update] start failed:', err))
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

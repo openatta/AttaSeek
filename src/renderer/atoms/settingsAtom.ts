@@ -3,7 +3,7 @@ import { atomWithStorage } from 'jotai/utils'
 
 export type SettingsSection =
   | 'general' | 'appearance' | 'model' | 'agent'
-  | 'permissions' | 'memory' | 'keyboard' | 'notifications'
+  | 'permissions' | 'memory' | 'keyboard' | 'notifications' | 'updates'
 
 export const SETTINGS_SECTIONS: { id: SettingsSection; label: string; i18nKey: string }[] = [
   { id: 'general', label: 'General', i18nKey: 'settings.general' },
@@ -14,6 +14,7 @@ export const SETTINGS_SECTIONS: { id: SettingsSection; label: string; i18nKey: s
   { id: 'memory', label: 'Memory', i18nKey: 'settings.memory' },
   { id: 'keyboard', label: 'Keyboard', i18nKey: 'settings.keyboard' },
   { id: 'notifications', label: 'Notifications', i18nKey: 'settings.notifications' },
+  { id: 'updates', label: 'Updates', i18nKey: 'settings.updates' },
 ]
 
 export const settingsSectionAtom = atom<SettingsSection>('general')
