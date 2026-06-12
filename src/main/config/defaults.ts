@@ -22,5 +22,6 @@ export const DEFAULTS: AttaSeekSettings = {
   notifications: { taskComplete: true, inputNeeded: true, soundEnabled: false },
   update: { channel: 'stable', autoDownload: true, checkOnStartup: true },
   import: { fromClaudeCode: true, fromCodexDesktop: true },
+  tray: { minimizeToTray: true, autoLaunch: false, startMinimized: false, firstMinimizeNotified: false },
   keybindingsPath: '',
 }

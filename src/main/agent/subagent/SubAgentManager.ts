@@ -554,7 +554,9 @@ export class SubAgentManager {
         : `Agent "${profile.name}" failed: ${entry.info.errorMessage || 'Unknown error'}`,
       result: entry.info.status === 'completed' ? goal : (entry.info.errorMessage || 'Unknown error'),
       usage: {
-        totalTokens: 0, // TODO: track actual usage from engine
+        totalTokens: engine.getTotalUsage().inputTokens + engine.getTotalUsage().outputTokens,
+        inputTokens: engine.getTotalUsage().inputTokens,
+        outputTokens: engine.getTotalUsage().outputTokens,
         toolUses: toolUseCount,
         durationMs: Date.now() - startedAt,
       },

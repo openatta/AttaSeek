@@ -25,6 +25,7 @@ import type { SkillManifest } from '../shared/types/Skill'
 import type { ToolManifest } from '../shared/types/Tool'
 import type { ModelConfig, CreateModelConfig, ModelConfigPatch, ModelTestResult, UsageStats } from '../shared/types/model'
 import type { UpdateStatus, UpdateManifest, UpdateProgress, UpdateEvent, UpdateSettings } from '../shared/types/update'
+import type { TrayConfig, TraySettingsPatch, TrayNavigateEvent } from '../shared/types/tray'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const pkg = require('../../package.json') as { version: string }
@@ -269,6 +270,29 @@ const api = {
       const listener = (_event: Electron.IpcRendererEvent, data: UpdateEvent) => cb(data)
       ipcRenderer.on('update:event', listener)
       return () => ipcRenderer.removeListener('update:event', listener)
+    },
+  },
+
+  // Window API
+  window: {
+    openSideChat: (sessionId: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('window:open-side-chat', { sessionId }),
+    isSideChat: (): Promise<{ isSideChat: boolean }> =>
+      ipcRenderer.invoke('window:is-side-chat'),
+  },
+
+  // Tray API
+  tray: {
+    getSettings: (): Promise<{ success: boolean; settings?: TrayConfig }> =>
+      ipcRenderer.invoke('tray:get-settings'),
+    setSettings: (patch: TraySettingsPatch): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('tray:set-settings', patch),
+    getPlatformInfo: (): Promise<{ trayAvailable: boolean; platform: NodeJS.Platform }> =>
+      ipcRenderer.invoke('tray:platform-info'),
+    onNavigate: (cb: (data: TrayNavigateEvent) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: TrayNavigateEvent) => cb(data)
+      ipcRenderer.on('tray:navigate', listener)
+      return () => ipcRenderer.removeListener('tray:navigate', listener)
     },
   },
 

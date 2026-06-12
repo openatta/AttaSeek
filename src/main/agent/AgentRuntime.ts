@@ -101,6 +101,16 @@ export class AgentRuntime {
     return Array.from(this.tasks.values()).filter((t) => t.sessionId === sessionId)
   }
 
+  /** Count tasks that are still running (not in a terminal state). */
+  countActiveTasks(): number {
+    const terminal = new Set(['completed', 'failed', 'cancelled', 'denied'])
+    let count = 0
+    for (const task of this.tasks.values()) {
+      if (!terminal.has(task.status)) count++
+    }
+    return count
+  }
+
   /** Get (or create) the QueryEngine for a session. */
   getEngine(sessionId: string): QueryEngine | undefined {
     return this.sessionEngines.get(sessionId)

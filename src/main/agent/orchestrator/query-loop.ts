@@ -671,10 +671,70 @@ export async function* queryLoop(
     // Resolve model for this call
     const resolveModel = (): string | undefined => {
       if (state.maxOutputTokensOverride) return undefined
-      const raw = task.modelName || (params.modelSlot === 'subagent' ? slotResolver?.subagent() : slotResolver?.main())
+
+      // Determine base model from slot
+      let baseModel: string | undefined
+      if (params.modelSlot === 'subagent') {
+        baseModel = slotResolver?.subagent()
+      } else {
+        baseModel = slotResolver?.main()
+      }
+
+      // ── Auto-routing: complexity-based upgrade ──
+      // On the first turn of a user message, check if the query is complex
+      // enough to warrant a stronger model. Only upgrades — never downgrades.
+      if (params.modelSlot !== 'subagent' && state.turnCount <= 1 && slotResolver) {
+        const lastUserMsg = [...state.messages].reverse().find(m => m.role === 'user')
+        const userText = typeof lastUserMsg?.content === 'string'
+          ? lastUserMsg.content
+          : Array.isArray(lastUserMsg?.content)
+            ? lastUserMsg.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join(' ')
+            : ''
+
+        if (shouldUpgradeToStrong(userText, state.messages.length)) {
+          const strongModel = slotResolver.strong()
+          if (strongModel && strongModel !== baseModel) {
+            baseModel = strongModel
+          }
+        }
+      }
+
+      const raw = task.modelName || baseModel
       // Defensive strip: remove ANSI escape suffix (e.g., "[1m") that may leak
       // from stale session data or malformed config imports
       return raw?.replace(/\[\d+m\]?$/g, '')
+    }
+
+    // ── Quick-tool-call routing ──
+    // When the previous turn was a simple read-only tool result, use smallFast
+    const resolveToolResultModel = (): string | undefined => {
+      if (params.modelSlot === 'subagent') return resolveModel()
+      if (!slotResolver) return resolveModel()
+
+      // Only downgrade after the first turn (user message already processed)
+      if (state.turnCount < 2) return undefined // undefined = use default resolveModel
+
+      // Check if the last assistant message was a single simple tool_use
+      const lastAssistant = [...state.messages].reverse().find(m => m.role === 'assistant')
+      if (!lastAssistant || !Array.isArray(lastAssistant.content)) return undefined
+
+      const toolUseBlocks = lastAssistant.content.filter((b: any) => b.type === 'tool_use')
+      if (toolUseBlocks.length !== 1) return undefined // Only downgrade for single-tool turns
+
+      const toolUseBlock = toolUseBlocks[0] as any
+      const toolName = toolUseBlock?.name as string | undefined
+      // List of tools considered "light" — deterministic, read-only, fast
+      const LIGHT_TOOLS = new Set([
+        'FileRead', 'read_file', 'Bash', 'bash',
+        'Grep', 'grep', 'Glob', 'glob',
+        'WebSearch', 'web_search', 'WebFetch', 'web_fetch',
+        'LSP', 'lsp_diagnostic', 'lsp_definition', 'lsp_references',
+      ])
+      if (!toolName || !LIGHT_TOOLS.has(toolName)) return undefined
+
+      const smallFast = slotResolver.smallFast()
+      if (!smallFast) return undefined
+      return smallFast.replace(/\[\d+m\]?$/g, '')
     }
 
     let fallbackAttempted = false
@@ -685,6 +745,11 @@ export async function* queryLoop(
     // Inner fallback loop — retries with model fallback + max_output escalation
     while (true) {
       try {
+        // Apply quick-tool-call routing: use smallFast model for processing
+        // simple read-only tool results (saves cost + latency)
+        const toolResultModel = !fallbackAttempted ? resolveToolResultModel() : undefined
+        const effectiveModel = toolResultModel ?? modelName
+
         result = await deps.callModel(
           {
             systemPrompt: state.systemPrompt,
@@ -695,7 +760,7 @@ export async function* queryLoop(
               input_schema: t.input_schema as Record<string, unknown>,
             })),
             signal,
-            model: modelName,
+            model: effectiveModel,
             maxOutputTokens: state.maxOutputTokensOverride,
             taskBudget: { total: budget.remaining },
           },
@@ -1298,4 +1363,25 @@ export type AgentExecutionDeps = QueryLoopDeps
 export type AgentExecutionResult = QueryLoopResult
 /** @alias queryLoop */
 export { queryLoop as executeLoop }
+
+// ── Auto-routing heuristics ──
+
+/**
+ * Heuristic check: should this user message be routed to a stronger model?
+ *
+ * Factors (OR logic — any one triggers upgrade):
+ *   1. Long messages (> 500 chars) — likely complex instructions
+ *   2. Complexity keywords — design, architecture, refactor, implement, debug, audit
+ *   3. Long conversation (> 8 messages) — deep multi-turn reasoning
+ *
+ * Conservative: only upgrades, never downgrades. False positives cost extra
+ * tokens but don't break functionality; false negatives lose quality.
+ */
+function shouldUpgradeToStrong(userText: string, messageCount: number): boolean {
+  if (messageCount > 8) return true
+  if (userText.length > 500) return true
+
+  const complexityPattern = /\b(design|architect|refactor|implement|debug|audit|migrate|optimize|investigate|restructure)\b/i
+  return complexityPattern.test(userText)
+}
 

@@ -3,10 +3,12 @@
  *
  * Uses node-pty to spawn pseudo-terminal processes in the main process.
  * Each terminal has a unique ID; output is pushed to the renderer via events.
+ * Terminal sessions, profiles, and bookmarks are persisted via TerminalStore.
  */
 
 import { ipcMain, type BrowserWindow } from 'electron'
 import { ipcWrapAsync, validateRequiredString } from '../store/util'
+import { terminalStore } from '../store/TerminalStore'
 import * as os from 'os'
 import * as path from 'path'
 
@@ -123,17 +125,139 @@ export function registerTerminalHandlers(): void {
     })
   })
 
-  // terminal:destroy → kill PTY and clean up
-  ipcMain.handle('terminal:destroy', async (_e, p: { terminalId: string }) => {
+  // terminal:destroy → kill PTY, save session, and clean up
+  ipcMain.handle('terminal:destroy', async (_e, p: { terminalId: string; cwd?: string }) => {
     return ipcWrapAsync(async () => {
       validateRequiredString(p, 'terminalId', 'terminalId')
       const instance = terminals.get(p.terminalId)
       if (instance) {
+        // Save terminal session before destroying
+        if (p.cwd) {
+          const shell = getShell()
+          terminalStore.saveSession({
+            cwd: p.cwd,
+            label: `Terminal at ${path.basename(p.cwd)}`,
+            lastActiveAt: Date.now(),
+            isAlive: false,
+            shell,
+          }).catch(() => {})
+        }
+
         // Remove from map first to prevent onExit double-delete
         terminals.delete(p.terminalId)
         instance.pty.kill()
       }
       return { success: true }
+    })
+  })
+
+  // ── Terminal session persistence ──
+
+  // terminal:save-session → save current terminal state
+  ipcMain.handle('terminal:save-session', async (_e, p: { cwd: string; label?: string }) => {
+    return ipcWrapAsync(async () => {
+      const session = await terminalStore.saveSession({
+        cwd: p.cwd,
+        label: p.label || `Terminal at ${path.basename(p.cwd)}`,
+        lastActiveAt: Date.now(),
+        isAlive: true,
+        shell: getShell(),
+      })
+      return session as unknown as Record<string, unknown>
+    })
+  })
+
+  // terminal:list-sessions → list recent terminal sessions
+  ipcMain.handle('terminal:list-sessions', async () => {
+    return ipcWrapAsync(async () => {
+      const sessions = await terminalStore.listSessions()
+      return { sessions } as Record<string, unknown>
+    })
+  })
+
+  // terminal:delete-session → delete a session record
+  ipcMain.handle('terminal:delete-session', async (_e, p: { sessionId: string }) => {
+    return ipcWrapAsync(async () => {
+      validateRequiredString(p, 'sessionId', 'sessionId')
+      const deleted = await terminalStore.deleteSession(p.sessionId)
+      return { deleted } as Record<string, unknown>
+    })
+  })
+
+  // ── Terminal profiles ──
+
+  // terminal:list-profiles
+  ipcMain.handle('terminal:list-profiles', async () => {
+    return ipcWrapAsync(async () => {
+      const profiles = await terminalStore.listProfiles()
+      return { profiles } as Record<string, unknown>
+    })
+  })
+
+  // terminal:save-profile
+  ipcMain.handle('terminal:save-profile', async (_e, p: { name: string; cwd: string; initialCommand?: string; shell?: string; env?: Record<string, string>; order?: number }) => {
+    return ipcWrapAsync(async () => {
+      const profile = await terminalStore.saveProfile({
+        name: p.name,
+        cwd: p.cwd,
+        initialCommand: p.initialCommand,
+        shell: p.shell,
+        env: p.env,
+        order: p.order || 0,
+      })
+      return profile as unknown as Record<string, unknown>
+    })
+  })
+
+  // terminal:update-profile
+  ipcMain.handle('terminal:update-profile', async (_e, p: { id: string; name?: string; cwd?: string; initialCommand?: string; shell?: string; env?: Record<string, string>; order?: number }) => {
+    return ipcWrapAsync(async () => {
+      const profile = await terminalStore.updateProfile(p.id, {
+        name: p.name,
+        cwd: p.cwd,
+        initialCommand: p.initialCommand,
+        shell: p.shell,
+        env: p.env,
+        order: p.order,
+      })
+      return (profile ?? {}) as Record<string, unknown>
+    })
+  })
+
+  // terminal:delete-profile
+  ipcMain.handle('terminal:delete-profile', async (_e, p: { id: string }) => {
+    return ipcWrapAsync(async () => {
+      const deleted = await terminalStore.deleteProfile(p.id)
+      return { deleted } as Record<string, unknown>
+    })
+  })
+
+  // ── Terminal bookmarks ──
+
+  // terminal:list-bookmarks
+  ipcMain.handle('terminal:list-bookmarks', async () => {
+    return ipcWrapAsync(async () => {
+      const bookmarks = await terminalStore.listBookmarks()
+      return { bookmarks } as Record<string, unknown>
+    })
+  })
+
+  // terminal:save-bookmark
+  ipcMain.handle('terminal:save-bookmark', async (_e, p: { cwd: string; label: string }) => {
+    return ipcWrapAsync(async () => {
+      const bookmark = await terminalStore.saveBookmark({
+        cwd: p.cwd,
+        label: p.label,
+      })
+      return bookmark as unknown as Record<string, unknown>
+    })
+  })
+
+  // terminal:delete-bookmark
+  ipcMain.handle('terminal:delete-bookmark', async (_e, p: { id: string }) => {
+    return ipcWrapAsync(async () => {
+      const deleted = await terminalStore.deleteBookmark(p.id)
+      return { deleted } as Record<string, unknown>
     })
   })
 

@@ -14,6 +14,7 @@ import { useAtom } from 'jotai'
 import { updateStatusAtom } from '../../../atoms/updateAtom'
 import { useTranslation } from '../../../i18n'
 import { ProgressBar } from '../../UpdateNotification'
+import ToggleSwitch from '../../common/ToggleSwitch'
 import type { UpdateChannel, UpdateStatus } from '../../../../shared/types/update'
 
 function Row({ label, desc, children }: { label: string; desc?: string; children: React.ReactNode }) {
@@ -112,25 +113,11 @@ export default function UpdateSettings() {
       </Row>
 
       <Row label={t('updates.autoDownload', 'Auto-download')} desc={t('updates.autoDownload.desc', 'Download updates in the background')}>
-        <button
-          onClick={() => handleAutoDownloadChange(!autoDownload)}
-          aria-label={t('updates.autoDownload', 'Auto-download')}
-          aria-pressed={autoDownload}
-          className={`w-9 h-5 rounded-full transition-colors ${autoDownload ? 'bg-[var(--app-accent)]' : 'bg-[var(--app-border)]'}`}
-        >
-          <div className={`w-3.5 h-3.5 mt-0.5 rounded-full bg-white transition-transform ${autoDownload ? 'translate-x-[18px]' : 'translate-x-[3px]'}`} />
-        </button>
+        <ToggleSwitch pressed={autoDownload} onChange={handleAutoDownloadChange} aria-label={t('updates.autoDownload', 'Auto-download')} />
       </Row>
 
       <Row label={t('updates.checkOnStartup', 'Check on startup')} desc={t('updates.checkOnStartup.desc', 'Check for updates when AttaSeek starts')}>
-        <button
-          onClick={() => handleCheckStartupChange(!checkOnStartup)}
-          aria-label={t('updates.checkOnStartup', 'Check on startup')}
-          aria-pressed={checkOnStartup}
-          className={`w-9 h-5 rounded-full transition-colors ${checkOnStartup ? 'bg-[var(--app-accent)]' : 'bg-[var(--app-border)]'}`}
-        >
-          <div className={`w-3.5 h-3.5 mt-0.5 rounded-full bg-white transition-transform ${checkOnStartup ? 'translate-x-[18px]' : 'translate-x-[3px]'}`} />
-        </button>
+        <ToggleSwitch pressed={checkOnStartup} onChange={handleCheckStartupChange} aria-label={t('updates.checkOnStartup', 'Check on startup')} />
       </Row>
 
       <div className="pt-2">

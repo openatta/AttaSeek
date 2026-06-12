@@ -97,4 +97,8 @@ export const en: Record<string, string> = {
   'common.save': 'Save', 'common.cancel': 'Cancel', 'common.delete': 'Delete',
   'common.edit': 'Edit', 'common.close': 'Close', 'common.loading': 'Loading...',
   'common.error': 'Error', 'common.copied': 'Copied!',
+
+  'project.new': 'New Project', 'project.removeConfirm': 'Remove this project? Session records under it will be deleted. This cannot be undone.',
+  'project.directoryMissing': 'Project directory missing or inaccessible', 'project.removeAction': 'Remove project',
+  'project.delete': 'Delete project', 'project.noSessions': 'No sessions',
 }

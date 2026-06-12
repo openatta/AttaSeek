@@ -5,6 +5,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { languageFromPath, languageFromFilename, EXT_TO_LANGUAGE } from '../../../src/renderer/utils/languageMap'
+import { EXT_TO_MIME } from '../../../src/shared/types/mime'
 
 describe('languageMap', () => {
   // ── All extensions should return a valid language ──
@@ -127,5 +128,25 @@ describe('languageMap', () => {
 
   it('handles deeply nested paths', () => {
     expect(languageFromPath('/a/b/c/d/e/src/utils.ts')).toBe('typescript')
+  })
+
+  // ── Cross-module validation ──
+  it('covers all text extensions present in mime.ts', () => {
+    // Binary/image extensions in mime.ts that intentionally have no language mapping
+    const BINARY_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'pdf'])
+    // Pseudo-extensions in languageMap from filename detection (not real extensions)
+    const FILENAME_ONLY = new Set(['dockerfile', 'makefile'])
+
+    const mimeExts = new Set(Object.keys(EXT_TO_MIME).map((e: string) => e.slice(1))) // strip leading '.'
+    const langExts = new Set(Object.keys(EXT_TO_LANGUAGE))
+
+    for (const ext of mimeExts) {
+      if (BINARY_EXTS.has(ext)) continue
+      if (FILENAME_ONLY.has(ext)) continue
+      if (!langExts.has(ext)) {
+        // New text extension in mime.ts without a languageMap entry — add it
+        throw new Error(`mime.ts extension ".${ext}" has no matching entry in languageMap.ts EXT_TO_LANGUAGE`)
+      }
+    }
   })
 })

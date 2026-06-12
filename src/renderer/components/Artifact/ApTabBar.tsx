@@ -13,6 +13,7 @@ import { apTabsAtom, activeApTabAtom, apVisibleAtom, apFullscreenAtom } from './
 import { listPanes, type PaneType } from './PaneRegistry'
 import { useAvailablePanes } from '../../hooks/useAvailablePanes'
 import { useAddTab } from '../../hooks/useAddTab'
+import { useDragReorder } from '../../hooks/useDragReorder'
 import type { ApTab } from './ApAtoms'
 
 const SCROLL_STEP_PX = 150
@@ -34,6 +35,7 @@ export default function ApTabBar() {
 
   const availablePanes = useAvailablePanes()
   const addTab = useAddTab()
+  const { getDragProps } = useDragReorder(tabs, setTabs)
 
   // Resolve icon from registry rather than a hardcoded map
   const getPaneIcon = useCallback((paneType: string) => {
@@ -104,11 +106,14 @@ export default function ApTabBar() {
           ref={tabListRef}
           className="flex items-center gap-0.5 overflow-hidden flex-1 min-w-0"
         >
-          {tabs.map((tab) => (
+          {tabs.map((tab, i) => {
+            const dragProps = getDragProps(tab.id, i)
+            return (
             <div
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              {...dragProps}
+              style={{ WebkitAppRegion: 'no-drag', ...dragProps.style } as React.CSSProperties}
               className={`group flex items-center gap-1 px-2.5 py-1 text-xs rounded cursor-pointer transition-colors whitespace-nowrap select-none flex-shrink-0 ${
                 activeTab === tab.id
                   ? 'bg-[var(--app-bg-primary)] text-[var(--app-text-primary)]'
@@ -126,7 +131,8 @@ export default function ApTabBar() {
               </span>
               <span>{tab.label}</span>
             </div>
-          ))}
+            )
+          })}
         </div>
 
         {showRightScroll && (

@@ -84,4 +84,8 @@ export const zh: Record<string, string> = {
   'common.save': '保存', 'common.cancel': '取消', 'common.delete': '删除',
   'common.edit': '编辑', 'common.close': '关闭', 'common.loading': '加载中...',
   'common.error': '错误', 'common.copied': '已复制！',
+
+  'project.new': '新建项目', 'project.removeConfirm': '确定要移除此项目吗？该项目下的会话记录将被删除。此操作不可撤销。',
+  'project.directoryMissing': '项目目录不存在或无法访问', 'project.removeAction': '移除项目',
+  'project.delete': '删除项目', 'project.noSessions': '暂无会话',
 }

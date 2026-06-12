@@ -34,3 +34,6 @@ export const outputStyleAtom = atomWithStorage<string>('attaseek-output', 'defau
 export const editorModeAtom = atomWithStorage<string>('attaseek-editor', 'normal')
 export const languageAtom = atomWithStorage<string>('attaseek-language', 'en')
 export const instructionsAtom = atomWithStorage<string>('attaseek-instructions', '')
+export const minimizeToTrayAtom = atomWithStorage<boolean>('attaseek-minimize-to-tray', true)
+export const autoLaunchAtom = atomWithStorage<boolean>('attaseek-auto-launch', false)
+export const startMinimizedAtom = atomWithStorage<boolean>('attaseek-start-minimized', false)

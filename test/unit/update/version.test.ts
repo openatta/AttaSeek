@@ -1,22 +1,13 @@
 /**
  * Tests for update-related pure functions.
  *
- * Version parsing is tested through inline logic (extracted from
- * UpdateManager.parseVersion for direct verification). Type-level
- * correctness is validated at compile time; these tests ensure
- * runtime behavior matches expectations.
+ * Tests the shared version utilities (src/main/update/version-utils.ts)
+ * which are the single source of truth used by both UpdateManager and
+ * any other code that needs version comparison.
  */
 
 import { describe, it, expect } from 'vitest'
-
-// ── Replicated parseVersion logic (same algorithm as UpdateManager.parseVersion) ──
-// Tested here to ensure the refactored shared helper is correct without
-// needing to access the private method.
-
-function parseVersion(v: string): number {
-  const parts = v.split('.').map(Number)
-  return parts[0] * 1_000_000 + (parts[1] || 0) * 1_000 + (parts[2] || 0)
-}
+import { parseVersion, toChannel, isNewer } from '../../../src/main/update/version-utils'
 
 describe('parseVersion (version comparison)', () => {
   it('parses a simple major.minor.patch', () => {
@@ -63,12 +54,6 @@ describe('parseVersion (version comparison)', () => {
 
 // ── Channel mapping ──
 
-function toChannel(raw: string): 'stable' | 'beta' | 'nightly' {
-  if (raw === 'beta') return 'beta'
-  if (raw === 'nightly') return 'nightly'
-  return 'stable'
-}
-
 describe('toChannel', () => {
   it('returns "stable" for missing/unknown input', () => {
     expect(toChannel('')).toBe('stable')
@@ -90,10 +75,6 @@ describe('toChannel', () => {
 })
 
 // ── isNewer logic ──
-
-function isNewer(newVersion: string, current: string): boolean {
-  return parseVersion(newVersion) > parseVersion(current)
-}
 
 describe('isNewer', () => {
   it('returns true for a newer version', () => {

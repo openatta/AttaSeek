@@ -19,6 +19,7 @@ export interface EditorConfig { mode: 'normal' | 'vim'; tabSize: number; wordWra
 export interface NotificationsConfig { taskComplete: boolean; inputNeeded: boolean; soundEnabled: boolean }
 export interface UpdateConfig { channel: 'stable' | 'beta' | 'nightly'; autoDownload: boolean; checkOnStartup: boolean }
 export interface ImportConfig { fromClaudeCode: boolean; fromCodexDesktop: boolean }
+export interface TrayConfig { minimizeToTray: boolean; autoLaunch: boolean; startMinimized: boolean; firstMinimizeNotified: boolean }
 
 export interface AttaSeekSettings {
   theme: 'dark' | 'light' | 'system'
@@ -32,6 +33,7 @@ export interface AttaSeekSettings {
   sandbox: SandboxConfig; shell: ShellConfig; session: SessionConfig
   project: ProjectConfig; permissions: PermissionsConfig
   editor: EditorConfig; notifications: NotificationsConfig; update: UpdateConfig; import: ImportConfig
+  tray: TrayConfig
   keybindingsPath: string
   [key: string]: unknown
 }

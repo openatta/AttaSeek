@@ -5,6 +5,10 @@
  * other component that needs syntax highlighting for a given file path.
  * Also supports filename-based detection for files without extensions
  * (Dockerfile, Makefile, etc.).
+ *
+ * ⚠️ When adding a new text/code extension here, also update the matching
+ * entry in src/shared/types/mime.ts (EXT_TO_MIME) for MIME type detection.
+ * The test suite validates that text extension sets stay in sync.
  */
 
 const EXT_TO_LANGUAGE: Record<string, string> = {

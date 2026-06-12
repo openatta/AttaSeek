@@ -4,7 +4,7 @@ import { writeFile, unlink } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-import { verifySha256, verifySignature, verifyUpdate } from '../../../src/main/update/UpdateVerifier'
+import { verifySha256, verifySignature, verifyUpdate, isSignatureStubbed } from '../../../src/main/update/UpdateVerifier'
 
 function sha256Of(content: string): string {
   return createHash('sha256').update(content).digest('hex')
@@ -69,15 +69,27 @@ describe('verifySha256', () => {
 })
 
 describe('verifySignature', () => {
-  it('always passes (reserved — skipped until certificates provisioned)', async () => {
+  it('is currently in stub mode', () => {
+    // When code signing is implemented, delete isSignatureStubbed
+    // and rewrite these tests for the real verification logic.
+    expect(isSignatureStubbed()).toBe(true)
+  })
+
+  it('stub always passes regardless of input', async () => {
+    // Stub mode: any path passes — file existence is not checked.
     const result = await verifySignature('/any/path')
     expect(result.passed).toBe(true)
     expect(result.reason).toBeUndefined()
   })
+
+  it('stub passes for empty path', async () => {
+    const result = await verifySignature('')
+    expect(result.passed).toBe(true)
+  })
 })
 
 describe('verifyUpdate', () => {
-  it('passes when SHA256 matches', async () => {
+  it('passes when SHA256 matches (signature is stubbed)', async () => {
     const content = 'release binary'
     const hash = sha256Of(content)
     const tmp = join(tmpdir(), `attaseek-test-${Date.now()}.tmp`)
@@ -85,6 +97,7 @@ describe('verifyUpdate', () => {
 
     try {
       const result = await verifyUpdate(tmp, hash)
+      // SHA256 passes, and signature is stubbed → overall pass
       expect(result.passed).toBe(true)
     } finally {
       await unlink(tmp).catch(() => {})
@@ -99,6 +112,24 @@ describe('verifyUpdate', () => {
       const result = await verifyUpdate(tmp, SAMPLE_SHA256)
       expect(result.passed).toBe(false)
       expect(result.reason).toContain('SHA256 mismatch')
+    } finally {
+      await unlink(tmp).catch(() => {})
+    }
+  })
+
+  it('full pipeline honors stub mode (SHA256 is the only real gate)', async () => {
+    // When stub mode is active, verifyUpdate is effectively SHA256-only.
+    // This test documents that design decision explicitly.
+    expect(isSignatureStubbed()).toBe(true)
+
+    const content = 'pipeline test'
+    const hash = sha256Of(content)
+    const tmp = join(tmpdir(), `attaseek-test-${Date.now()}.tmp`)
+    await writeFile(tmp, content)
+
+    try {
+      const result = await verifyUpdate(tmp, hash)
+      expect(result.passed).toBe(true)
     } finally {
       await unlink(tmp).catch(() => {})
     }

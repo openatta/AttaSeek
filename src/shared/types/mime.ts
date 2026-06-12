@@ -4,6 +4,11 @@
  *
  * Used to determine file type from extension for display,
  * syntax highlighting, and preview dispatching.
+ *
+ * ⚠️ When adding a new text/code extension here, also update the matching
+ * entry in src/renderer/utils/languageMap.ts (EXT_TO_LANGUAGE) for Monaco
+ * syntax highlighting. Binary extensions (png, jpg, pdf, etc.) are only
+ * needed here. The test suite validates that text extension sets stay in sync.
  */
 
 const EXT_TO_MIME: Record<string, string> = {

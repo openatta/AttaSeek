@@ -12,6 +12,8 @@
  *
  * Session creation uses temp IDs (like CHATS) — only appears in
  * sidebar when the first message is sent and SessionTitleGenerated fires.
+ *
+ * Data-fetching logic is extracted to src/renderer/hooks/useProjectData.ts.
  */
 
 import { useState, useCallback, useEffect } from 'react'
@@ -21,9 +23,11 @@ import { projectsAtom, selectedProjectIdAtom, currentSessionIdAtom, sessionEvent
 import { apContextAtom, apVisibleAtom, projectRootAtom } from '../components/Artifact/ApAtoms'
 import { createTempSessionId } from '../../shared/constants'
 import { getApi } from '../utils/api'
+import { useTranslation } from '../i18n'
+import { useProjectList, useProjectSessions, useProjectDirectoryValidation } from '../hooks/useProjectData'
 import type { ProjectInfo } from '../../shared/types/ipc'
-import type { SessionInfo } from '../../shared/types/AgentTask'
 import ProjectCreateDialog from '../components/Project/ProjectCreateDialog'
+import GitPanel from '../components/Project/GitPanel'
 
 interface Props {
   selectedSessionId: string | null
@@ -31,6 +35,7 @@ interface Props {
 }
 
 export default function ProjectsSidebar({ selectedSessionId, onSelectSession }: Props) {
+  const { t } = useTranslation()
   const [projects, setProjects] = useAtom(projectsAtom)
   const [selectedProjectId, setSelectedProjectId] = useAtom(selectedProjectIdAtom)
   const [, setProjectRoot] = useAtom(projectRootAtom)
@@ -39,69 +44,34 @@ export default function ProjectsSidebar({ selectedSessionId, onSelectSession }: 
   const setCurrentSessionId = useSetAtom(currentSessionIdAtom)
   const setSessionEvents = useSetAtom(sessionEventsAtom)
 
+  const api = getApi()
+
+  // ── Data fetching (extracted to hooks) ──
+  useProjectList(setProjects)
+  const [projectSessions, setProjectSessions] = useProjectSessions(selectedProjectId)
+  const missingDirProjectId = useProjectDirectoryValidation(selectedProjectId, projects)
+
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [projectSessions, setProjectSessions] = useState<Record<string, SessionInfo[]>>({})
   const [projectMenu, setProjectMenu] = useState<{ projectId: string; x: number; y: number } | null>(null)
-  const [missingDirProjectId, setMissingDirProjectId] = useState<string | null>(null)
 
-  // Load projects on mount
-  useEffect(() => {
-    const api = getApi()
-    api.project.list().then((r) => {
-      if (r.success && r.projects) setProjects(r.projects)
-    }).catch((err) => { console.warn('[ProjectsSidebar] failed to load projects:', err) })
-  }, [setProjects])
-
-  // Load sessions for selected project
   const selectedProject = projects.find((p) => p.id === selectedProjectId) || null
 
-  useEffect(() => {
-    if (!selectedProjectId) return
-    let cancelled = false
-    const projectId = selectedProjectId
-    const api = getApi()
-    api.session.list(undefined, projectId).then((r) => {
-      if (cancelled) return
-      if (r.success && r.sessions) {
-        setProjectSessions((prev) => ({ ...prev, [projectId]: r.sessions }))
-      }
-    }).catch((err) => { if (!cancelled) console.warn('[ProjectsSidebar] failed to load sessions:', err) })
-    return () => { cancelled = true }
-  }, [selectedProjectId])
+  // ── Actions ──
 
-  // Validate selected project's directory still exists
-  useEffect(() => {
-    if (!selectedProjectId) { setMissingDirProjectId(null); return }
-    const project = projects.find((p) => p.id === selectedProjectId)
-    if (!project) return
-    const api = getApi()
-    api.project.validate(project.rootPath).then((r) => {
-      if (r.success && !r.valid) {
-        setMissingDirProjectId(project.id)
-      } else {
-        setMissingDirProjectId(null)
-      }
-    }).catch(() => { setMissingDirProjectId(null) })
-  }, [selectedProjectId, projects])
-
-  // Activate project context
   const activateProject = useCallback((project: ProjectInfo) => {
     setSelectedProjectId(project.id)
     setProjectRoot(project.rootPath)
     setApContext('project')
   }, [setSelectedProjectId, setProjectRoot, setApContext])
 
-  // Create new session (temp ID — like CHATS, only persists on first message)
   const handleCreateSession = useCallback((projectId: string) => {
     const tempId = createTempSessionId()
     setCurrentSessionId(tempId)
     setSessionEvents([])
   }, [setCurrentSessionId, setSessionEvents])
 
-  // Remove project
   const handleRemoveProject = useCallback(async (projectId: string) => {
-    if (!confirm('确定要移除此项目吗？该项目下的会话记录将被删除。此操作不可撤销。')) return
-    const api = getApi()
+    if (!confirm(t('project.removeConfirm'))) return
     const result = await api.project.remove(projectId)
     if (result.success) {
       setProjects((prev) => prev.filter((p) => p.id !== projectId))
@@ -113,13 +83,11 @@ export default function ProjectsSidebar({ selectedSessionId, onSelectSession }: 
       }
     }
     setProjectMenu(null)
-  }, [selectedProjectId, setProjects, setSelectedProjectId, setProjectRoot, setApContext, setApVisible])
+  }, [selectedProjectId, setProjects, setSelectedProjectId, setProjectRoot, setApContext, setApVisible, t])
 
   // Subscribe to session updates (new sessions appear when first message is sent)
   useEffect(() => {
-    const api = getApi()
-    const unsubscribe = api.session.onUpdate((data: { id: string; title: string }) => {
-      // Refresh sessions for current project when a session gets its first title
+    const unsubscribe = api.session.onUpdate(() => {
       if (selectedProjectId) {
         api.session.list(undefined, selectedProjectId).then((r) => {
           if (r.success && r.sessions) {
@@ -133,9 +101,11 @@ export default function ProjectsSidebar({ selectedSessionId, onSelectSession }: 
 
   const sessions = selectedProjectId ? (projectSessions[selectedProjectId] || []) : []
 
+  // ── Render ──
+
   return (
     <div className="flex flex-col h-full">
-      {/* Title row — only one [+] for adding projects */}
+      {/* Title row */}
       <div className="flex items-center px-4 pb-2">
         <h2 className="text-xs font-semibold text-[var(--app-text-secondary)] uppercase tracking-wider">
           PROJECTS
@@ -155,12 +125,12 @@ export default function ProjectsSidebar({ selectedSessionId, onSelectSession }: 
       {missingDirProjectId && selectedProject && (
         <div className="px-4 pb-2">
           <div className="text-[10px] text-[var(--app-warning)] bg-[var(--app-warning-bg)] border border-[var(--app-warning-border)] rounded px-2 py-1.5">
-            项目目录不存在或无法访问
+            {t('project.directoryMissing')}
             <button
               onClick={() => handleRemoveProject(missingDirProjectId)}
               className="ml-2 text-[var(--app-error)] hover:underline"
             >
-              移除项目
+              {t('project.removeAction')}
             </button>
           </div>
         </div>
@@ -228,7 +198,7 @@ export default function ProjectsSidebar({ selectedSessionId, onSelectSession }: 
                   <div className="ml-4">
                     {sessions.length === 0 ? (
                       <div className="px-2 py-3 text-[10px] text-[var(--app-text-tertiary)] text-center">
-                        No sessions
+                        {t('project.noSessions')}
                       </div>
                     ) : (
                       sessions.map((s) => (
@@ -246,6 +216,11 @@ export default function ProjectsSidebar({ selectedSessionId, onSelectSession }: 
                       ))
                     )}
                   </div>
+                )}
+
+                {/* Git status panel */}
+                {selectedProjectId === project.id && (
+                  <GitPanel projectRoot={project.rootPath} />
                 )}
               </div>
             ))}
@@ -265,7 +240,7 @@ export default function ProjectsSidebar({ selectedSessionId, onSelectSession }: 
               onClick={() => handleRemoveProject(projectMenu.projectId)}
               className="w-full text-left px-3 py-1.5 text-xs text-[var(--app-error)] hover:bg-[var(--app-bg-hover)] flex items-center gap-2"
             >
-              <Trash2 className="w-3 h-3" /> 删除项目
+              <Trash2 className="w-3 h-3" /> {t('project.delete')}
             </button>
           </div>
         </>
@@ -276,7 +251,7 @@ export default function ProjectsSidebar({ selectedSessionId, onSelectSession }: 
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         onCreated={() => {
-          getApi().project.list().then((r) => {
+          api.project.list().then((r) => {
             if (r.success && r.projects) setProjects(r.projects)
           }).catch(() => {})
         }}

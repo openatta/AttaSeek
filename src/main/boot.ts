@@ -83,11 +83,11 @@ export async function boot(): Promise<void> {
 
   // 6. Boot plugins via PluginLoader
   pluginLoader.registerPack(() => EnterpriseDocPlugin)
-  const result = pluginLoader.boot()
+  const result = await pluginLoader.boot()
   if (result.failed.length > 0) {
     console.warn(`[boot] ${result.failed.length} plugin(s) failed to load`)
   }
-  console.log(`[boot] ${result.loaded.length} plugin(s) active`)
+  console.log(`[boot] ${result.loaded.length} builtin + ${result.isolated?.length || 0} isolated plugin(s) active`)
 
   console.log('[boot] boot sequence complete')
 }

@@ -64,10 +64,67 @@ export const webFetchImpl: ToolImpl = {
   execute: async (input: Record<string, unknown>) => {
     const url = String(input.url || '')
     if (!url) throw new Error('url is required')
+
+    // Optional prompt to extract/answer from page content
+    const prompt = input.prompt ? String(input.prompt) : null
+
     try {
       const resp = await fetch(url)
-      const text = await resp.text()
-      return text.slice(0, 10_000) // Truncate to avoid context overflow
+      let text = await resp.text()
+
+      // Strip HTML tags to plain text for LLM consumption
+      const plainText = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+
+      // For short content, return directly
+      if (plainText.length <= 4000) {
+        return plainText
+      }
+
+      // For long content, attempt LLM summarization using classifier/haiku model
+      try {
+        const { loadLLMConfig } = await import('../../llm/AttaSettingsLoader')
+        const { ModelResolver } = await import('../../llm/ModelResolver')
+        const { modelProviderRegistry } = await import('../../llm/ModelProviderRegistry')
+
+        const config = loadLLMConfig()
+        if (config.provider) {
+          const resolver = new ModelResolver(config.provider)
+          const summaryModel = resolver.haiku() // Use haiku for cheap summarization
+
+          const provider = modelProviderRegistry.getDefault()
+          if (provider) {
+            const truncLen = prompt ? 6000 : 8000
+            const truncatedContent = plainText.slice(0, truncLen)
+
+            const summaryPrompt = prompt
+              ? `URL: ${url}\n\nPage content:\n\n${truncatedContent}\n\nInstruction: ${prompt}`
+              : `Summarize the following web page content concisely (key points only, < 500 words):\n\nURL: ${url}\n\n${truncatedContent}`
+
+            const result = await provider.chat({
+              systemPrompt: 'You are a helpful assistant. Summarize the given content accurately and concisely.',
+              messages: [{ role: 'user', content: summaryPrompt }],
+              tools: [],
+              model: summaryModel,
+              config: { maxTokens: prompt ? 2000 : 500, temperature: 0 },
+            })
+
+            const resultContent = typeof result.content === 'string'
+              ? result.content
+              : Array.isArray(result.content)
+                ? result.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
+                : ''
+
+            if (resultContent) {
+              return `## Content from ${url}\n\n${resultContent}`
+            }
+          }
+        }
+      } catch {
+        // LLM summarization failed — fall through to truncation
+      }
+
+      // Fallback: return truncated content
+      return `## Content from ${url} (truncated)\n\n${plainText.slice(0, 10_000)}`
     } catch (err) {
       throw new Error(`Failed to fetch ${url}: ${err instanceof Error ? err.message : 'Unknown error'}`)
     }

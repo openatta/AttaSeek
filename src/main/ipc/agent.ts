@@ -94,5 +94,12 @@ export function registerAgentHandlers(): void {
     } catch (err) { return { success: false, events: [], error: err instanceof Error ? err.message : 'Internal error' } }
   })
 
+  ipcMain.handle('agent:active-task-count', async () => {
+    try {
+      const count = agentRuntime.countActiveTasks()
+      return { success: true, count }
+    } catch (err) { return { success: false, count: 0, error: err instanceof Error ? err.message : 'Internal error' } }
+  })
+
   console.log('[IPC:agent] handlers registered')
 }

@@ -20,7 +20,14 @@ import { registerGitHandlers } from './ipc/git'
 import { registerTerminalHandlers, setTerminalWindow } from './ipc/terminal'
 import { registerProjectHandlers } from './ipc/project'
 import { registerUpdateHandlers, setUpdateWindow } from './ipc/update'
+import { registerTrayHandlers } from './ipc/tray'
+import { registerWindowHandlers } from './ipc/window'
 import { updateManager } from './update/UpdateManager'
+import { trayManager } from './tray/TrayManager'
+import { AutoLauncher } from './tray/AutoLauncher'
+import { TraySettings } from './tray/TraySettings'
+import { GlobalShortcuts } from './tray/GlobalShortcuts'
+import { WindowState } from './WindowState'
 import { boot } from './boot'
 import { agentEventBus } from './agent/AgentEventBus'
 import { permissionBridge } from './permission/PermissionBridge'
@@ -107,12 +114,14 @@ registerGitHandlers()
 registerTerminalHandlers()
 registerProjectHandlers()
 registerUpdateHandlers()
+registerTrayHandlers()
+registerWindowHandlers()
 
 // ── Window management ──
 
 let mainWindow: BrowserWindow | null = null
 
-function createWindow(): BrowserWindow {
+async function createWindow(): Promise<BrowserWindow> {
   const win = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -134,11 +143,24 @@ function createWindow(): BrowserWindow {
 
   mainWindow = win
 
+  // Restore previous window position/size
+  await WindowState.restore(win)
+
+  // Track window state changes for persistence
+  WindowState.track(win)
+
   // Wire agent event bus to this window
   setAgentWindow(win); setSessionWindow(win); setTerminalWindow(win); setUpdateWindow(win)
 
   win.on('ready-to-show', () => {
     win.show()
+  })
+
+  // Tray: intercept close event for minimize-to-tray behavior
+  win.on('close', (e) => {
+    if (trayManager.handleClose(win)) {
+      e.preventDefault()
+    }
   })
 
   win.webContents.setWindowOpenHandler((details) => {
@@ -158,8 +180,24 @@ function createWindow(): BrowserWindow {
 
 // ── App lifecycle ──
 
-app.whenReady().then(() => {
-  createWindow()
+app.whenReady().then(async () => {
+  // Create tray icon before windows (so it's ready even if windows start hidden)
+  await trayManager.create()
+
+  // Register global shortcuts
+  GlobalShortcuts.register()
+
+  // Determine if we should start minimized (auto-start + startMinimized setting)
+  const autoStarted = AutoLauncher.wasAutoStarted()
+  const settings = await TraySettings.get()
+  const startMinimized = autoStarted && settings.startMinimized
+
+  await createWindow()
+  if (startMinimized) {
+    // Hide windows that were created — they won't show since we haven't called show() yet
+    // but `ready-to-show` fires show(). Prevent this by hiding immediately after create.
+    mainWindow?.hide()
+  }
 
   // Start update manager after window is created so push events reach the renderer
   updateManager.start().catch((err) => console.warn('[update] start failed:', err))
@@ -167,21 +205,41 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow()
+    } else {
+      // On macOS, activate with existing windows → show them all
+      trayManager.showAllWindows()
     }
   })
 })
 
 app.on('window-all-closed', () => {
-  if (!isMac) {
+  // With tray: don't quit — app stays alive in tray
+  // Without tray (or Linux degradation): quit as normal
+  if (!trayManager.isTrayAvailable()) {
     app.quit()
   }
+  // Otherwise: windows are hidden to tray, app stays running
 })
 
 // ── Session persistence: save on quit ──
 
-app.on('before-quit', () => {
+app.on('before-quit', async () => {
+  // Unregister global shortcuts
+  GlobalShortcuts.unregister()
+
+  // Destroy tray icon
+  trayManager.destroy()
+
   // Cleanup task store
   cleanupTaskStore()
+
+  // Shut down isolated plugin processes
+  try {
+    const { pluginLoader } = await import('./plugins/PluginLoader')
+    await pluginLoader.shutdown()
+  } catch (err) {
+    console.warn('[app] plugin shutdown failed:', (err as Error).message)
+  }
 
   // Cancel all pending permission requests and questions
   permissionBridge.cancelAll()

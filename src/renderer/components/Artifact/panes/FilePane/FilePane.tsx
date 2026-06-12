@@ -17,6 +17,7 @@ import { useAtomValue } from 'jotai'
 import { projectRootAtom } from '../../ApAtoms'
 import { X, PanelRightClose, PanelRightOpen } from 'lucide-react'
 import type { PaneProps } from '../../PaneRegistry'
+import { useDragReorder } from '../../../../hooks/useDragReorder'
 import { getMimeType } from '../../../../../shared/types/mime'
 import FileExplorer from './FileExplorer'
 import FilePreviewArea from './FilePreviewArea'
@@ -37,6 +38,7 @@ export default function FilePane(_props: PaneProps) {
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
 
   const activeTab = activeTabId ? openTabs.find((t) => t.id === activeTabId) || null : null
+  const { getDragProps } = useDragReorder(openTabs, setOpenTabs)
 
   const openFile = useCallback((filePath: string) => {
     const existing = openTabs.find((t) => t.path === filePath)
@@ -75,10 +77,14 @@ export default function FilePane(_props: PaneProps) {
       <div className="flex items-center h-[28px] border-b border-[var(--app-border)] flex-shrink-0 bg-[var(--app-bg-secondary)]">
         {/* File tabs */}
         <div className="flex items-center gap-0 overflow-hidden flex-1 min-w-0">
-          {openTabs.map((tab) => (
+          {openTabs.map((tab, i) => {
+            const dragProps = getDragProps(tab.id, i)
+            return (
             <div
               key={tab.id}
               onClick={() => setActiveTabId(tab.id)}
+              {...dragProps}
+              style={dragProps.style}
               className={`group flex items-center gap-1 px-2.5 py-0.5 text-xs cursor-pointer whitespace-nowrap flex-shrink-0 border-r border-[var(--app-border)] transition-colors ${
                 tab.id === activeTabId
                   ? 'bg-[var(--app-bg-primary)] text-[var(--app-text-primary)] border-t border-[var(--app-accent)]'
@@ -94,7 +100,8 @@ export default function FilePane(_props: PaneProps) {
                 <X className="w-2.5 h-2.5" />
               </button>
             </div>
-          ))}
+            )
+          })}
           {openTabs.length === 0 && (
             <span className="px-2 text-[10px] text-[var(--app-text-tertiary)]">No open files</span>
           )}

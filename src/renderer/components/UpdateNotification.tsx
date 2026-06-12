@@ -81,13 +81,15 @@ export default function UpdateNotification() {
     })
 
     // Also query current status on mount
+    let cancelled = false
     window.api?.update?.getStatus().then((res: { success: boolean; status?: UpdateStatus }) => {
+      if (cancelled) return
       if (res.success && res.status) {
         setStatus((prev: UpdateStatus) => ({ ...prev, ...res.status }))
       }
     })
 
-    return unsubscribe
+    return () => { cancelled = true; unsubscribe() }
   }, [])
 
   // Don't render when idle/checking or user dismissed

@@ -114,6 +114,10 @@ class SSETransport implements MCPTransport {
   private connected = false
   private messageHandlers: Array<(msg: unknown) => void> = []
   private abortController: AbortController | null = null
+  private sessionId: string | null = null
+  private reconnectAttempts = 0
+  private maxReconnectAttempts = 5
+  private reconnectDelays = [1000, 2000, 4000, 8000, 16000]
 
   constructor(private config: MCPTransportConfig) {}
 
@@ -121,22 +125,115 @@ class SSETransport implements MCPTransport {
 
   async connect(): Promise<void> {
     if (!this.config.url) throw new Error('SSE transport requires a URL')
+
+    this.abortController = new AbortController()
+    const signal = this.abortController.signal
+
+    const sseUrl = this.config.url.endsWith('/sse')
+      ? this.config.url
+      : `${this.config.url}/sse`
+
+    let response: Response
+    try {
+      response = await fetch(sseUrl, {
+        headers: { Accept: 'text/event-stream', ...this.config.headers },
+        signal,
+      })
+    } catch (err) {
+      throw new Error(`SSE connection failed: ${(err as Error).message}`)
+    }
+
+    if (!response.ok) throw new Error(`SSE connection failed: HTTP ${response.status}`)
+    if (!response.body) throw new Error('SSE: no response body')
+
     this.connected = true
-    console.warn('[MCP:SSE] SSE transport not fully implemented — using stub')
+    this.reconnectAttempts = 0
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    const readLoop = async (): Promise<void> => {
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) {
+            this.connected = false
+            this.attemptReconnect()
+            return
+          }
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+
+          let eventType = ''
+          let data = ''
+          for (const line of lines) {
+            if (line.startsWith('event: ')) {
+              eventType = line.slice(7).trim()
+            } else if (line.startsWith('data: ')) {
+              data += line.slice(6)
+            } else if (line === '') {
+              // Empty line = event delimiter
+              if (data) {
+                try {
+                  const parsed = JSON.parse(data)
+                  // First event is the endpoint event carrying sessionId
+                  if (eventType === 'endpoint') {
+                    this.sessionId = typeof parsed === 'string' ? parsed : (parsed.sessionId || parsed.uri || parsed)
+                  }
+                  for (const h of this.messageHandlers) h(parsed)
+                } catch { /* skip non-JSON data lines */ }
+              }
+              eventType = ''
+              data = ''
+            }
+          }
+        }
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          console.warn('[MCP:SSE] read loop error:', (err as Error).message)
+        }
+        this.connected = false
+        this.attemptReconnect()
+      }
+    }
+
+    // Start background read loop (don't await — it runs until disconnected)
+    readLoop()
+  }
+
+  private attemptReconnect(): void {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.warn('[MCP:SSE] max reconnect attempts reached, giving up')
+      return
+    }
+    const delay = this.reconnectDelays[this.reconnectAttempts] ?? 16000
+    this.reconnectAttempts++
+    console.warn(`[MCP:SSE] reconnecting in ${delay}ms (${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
+    setTimeout(() => { this.connect().catch(() => {}) }, delay)
   }
 
   async disconnect(): Promise<void> {
     this.abortController?.abort()
     this.connected = false
+    this.sessionId = null
   }
 
   async send(message: unknown): Promise<void> {
     if (!this.config.url) throw new Error('Not connected')
-    await fetch(this.config.url, {
+    const postUrl = this.sessionId
+      ? `${this.config.url}/messages?sessionId=${encodeURIComponent(this.sessionId)}`
+      : `${this.config.url}/messages`
+
+    const resp = await fetch(postUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...this.config.headers },
       body: JSON.stringify(message),
     })
+    if (!resp.ok) {
+      throw new Error(`SSE POST failed: HTTP ${resp.status}`)
+    }
   }
 
   onMessage(handler: (message: unknown) => void): void {

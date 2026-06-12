@@ -7,10 +7,12 @@ import Shell from './layouts/Shell'
 import UpdateNotification from './components/UpdateNotification'
 import {
   sessionEventsAtom, agentTasksAtom, streamingBuffersAtom,
-  sessionTitleStoreAtom, handleAgentEvent, debugLogsAtom,
+  sessionTitleStoreAtom, handleAgentEvent, debugLogsAtom, currentSessionIdAtom,
 } from './atoms/sessionAtom'
 import { modelConfigsAtom } from './atoms/modelConfigAtom'
 import { languageAtom } from './atoms/settingsAtom'
+import { activeActivityAtom } from './atoms/activityAtom'
+import { createTempSessionId } from '../shared/constants'
 import TestHookInjector from './components/Artifact/TestHookInjector'
 
 
@@ -104,8 +106,32 @@ function LanguageSync() {
   return null
 }
 
+/**
+ * Tray navigation listener — when user clicks a conversation in the tray menu,
+ * navigate to that session in the main window.
+ */
+function useTrayNavigate() {
+  const setActiveActivity = useSetAtom(activeActivityAtom)
+  const setCurrentSessionId = useSetAtom(currentSessionIdAtom)
+
+  useEffect(() => {
+    if (!window.api?.tray?.onNavigate) return
+    const unsub = window.api.tray.onNavigate(({ sessionId }) => {
+      setActiveActivity('chat')
+      if (sessionId) {
+        setCurrentSessionId(sessionId)
+      } else {
+        // Empty sessionId = create new chat
+        setCurrentSessionId(createTempSessionId('chat'))
+      }
+    })
+    return unsub
+  }, [setActiveActivity, setCurrentSessionId])
+}
+
 function AppContent() {
   useAgentEventBridge()
+  useTrayNavigate()
   return (
     <I18nProvider initialLocale="en">
       <LanguageSync />

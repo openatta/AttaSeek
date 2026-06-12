@@ -20,11 +20,12 @@ import { join } from 'path'
 import { CompositeUpdateSource, GitHubReleaseSource, AttaCloudSource } from './UpdateSource'
 import { verifyUpdate } from './UpdateVerifier'
 import { installUpdate } from './UpdateInstaller'
+import { parseVersion, isNewer, toChannel } from './version-utils'
 import { dataDir } from '../store/paths'
 import { JSONStore } from '../store/FileStore'
 import type {
   UpdateState, UpdateStatus, UpdateManifest, UpdateProgress,
-  UpdateEvent, UpdateChannel, UpdateErrorCode, UpdateSettings,
+  UpdateEvent, UpdateErrorCode, UpdateSettings,
 } from '../../shared/types/update'
 
 // ── Constants ──
@@ -49,15 +50,9 @@ const stateStore = new JSONStore<UpdatePersistedState>(
   join(dataDir(), 'update_state.json'),
 )
 
-function toChannel(raw: string): UpdateChannel {
-  if (raw === 'beta') return 'beta'
-  if (raw === 'nightly') return 'nightly'
-  return 'stable'
-}
-
 // ── UpdateManager singleton ──
 
-class UpdateManagerImpl {
+class UpdateManager {
   private state: UpdateState = 'idle'
   private manifest: UpdateManifest | null = null
   private progress: UpdateProgress | null = null
@@ -145,8 +140,8 @@ class UpdateManagerImpl {
 
       // Check minimum upgradable version
       if (manifest.minUpgradableVersion) {
-        const curVer = this.parseVersion(currentVersion)
-        const minVer = this.parseVersion(manifest.minUpgradableVersion)
+        const curVer = parseVersion(currentVersion)
+        const minVer = parseVersion(manifest.minUpgradableVersion)
         if (curVer < minVer) {
           console.log(`[update] version ${manifest.version} requires at least ${manifest.minUpgradableVersion}`)
           this.emit({ type: 'no-update' })
@@ -156,7 +151,7 @@ class UpdateManagerImpl {
       }
 
       // Check if newer than current
-      if (!this.isNewer(manifest.version, currentVersion)) {
+      if (!isNewer(manifest.version, currentVersion)) {
         this.emit({ type: 'no-update' })
         this.transition('idle')
         return this.getStatus()
@@ -248,10 +243,10 @@ class UpdateManagerImpl {
     const p = await this.loadPersisted()
     return {
       state: this.state,
-      manifest: this.manifest || undefined,
-      progress: this.progress || undefined,
-      lastChecked: p.lastChecked || undefined,
-      error: this.error || undefined,
+      manifest: this.manifest ?? undefined,
+      progress: this.progress ?? undefined,
+      lastChecked: p.lastChecked ?? undefined,
+      error: this.error ?? undefined,
       errorCode: this.errorCode ?? undefined,
       canRetry: this.canRetry,
       retryCount: this.retryCount,
@@ -430,14 +425,7 @@ class UpdateManagerImpl {
     }
   }
 
-  private parseVersion(v: string): number {
-    const parts = v.split('.').map(Number)
-    return parts[0] * 1_000_000 + (parts[1] || 0) * 1_000 + (parts[2] || 0)
-  }
-
-  private isNewer(newVersion: string, current: string): boolean {
-    return this.parseVersion(newVersion) > this.parseVersion(current)
-  }
+  // parseVersion, isNewer, toChannel are imported from ./version-utils
 
   private async loadPersisted(): Promise<UpdatePersistedState> {
     const data = await stateStore.read()
@@ -458,4 +446,4 @@ class UpdateManagerImpl {
 }
 
 /** Singleton instance. Created eagerly so IPC handlers can reference it. */
-export const updateManager = new UpdateManagerImpl()
+export const updateManager = new UpdateManager()
